@@ -1,0 +1,61 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {"ckpt_name": "placeholder-checkpoint-a.safetensors"}
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder positive prompt", "clip": ["1", 1]}
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder negative prompt", "clip": ["1", 1]}
+  },
+  "4": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 4}
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 77777,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["1", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["4", 0]
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["5", 0], "vae": ["1", 2]}
+  },
+  "7": {
+    "class_type": "SaveImage",
+    "inputs": {"filename_prefix": "SimpleUI/fixture", "images": ["6", 0]},
+    "_meta": {"title": "Saved image branch"}
+  },
+  "8": {
+    "class_type": "PreviewImage",
+    "inputs": {"images": ["6", 0]},
+    "_meta": {"title": "Ephemeral preview branch (type temp)"}
+  },
+  "9": {
+    "class_type": "CreateVideo",
+    "inputs": {"images": ["6", 0], "fps": 8.0}
+  },
+  "10": {
+    "class_type": "SaveVideo",
+    "inputs": {"video": ["9", 0], "filename_prefix": "SimpleUI/fixture-video", "format": "mp4", "codec": "h264"},
+    "_meta": {"title": "Saved video branch"}
+  },
+  "11": {
+    "class_type": "SaveWEBM",
+    "inputs": {"images": ["6", 0], "filename_prefix": "SimpleUI/fixture-webm", "codec": "vp9", "fps": 8.0, "crf": 32.0},
+    "_meta": {"title": "Second saved video branch, different descriptor path"}
+  }
+}

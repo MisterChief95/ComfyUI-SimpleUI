@@ -1,0 +1,6 @@
+{"type": "execution_start", "data": {"prompt_id": "00000000-0000-4000-8000-0000000000ff", "timestamp": 6000}}
+{"type": "executing", "data": {"node": "5", "display_node": "5", "prompt_id": "00000000-0000-4000-8000-0000000000ff"}}
+{"type": "progress", "data": {"value": 3, "max": 20, "prompt_id": "00000000-0000-4000-8000-0000000000ff", "node": "5"}}
+{"type": "b_preview", "data": {"binary": true, "bytes": 0, "prompt_id": null, "note": "Binary preview frames arrive without a prompt_id on some builds. An event whose owner cannot be proven must be dropped, never broadcast."}}
+{"type": "executed", "data": {"node": "7", "display_node": "7", "output": {"images": [{"filename": "OtherOwner_00001_.png", "subfolder": "", "type": "output"}]}, "prompt_id": "00000000-0000-4000-8000-0000000000ff"}}
+{"type": "execution_success", "data": {"prompt_id": "00000000-0000-4000-8000-0000000000ff", "timestamp": 6800}}

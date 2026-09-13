@@ -1,0 +1,119 @@
+.coord/
+data/
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
+# ==========================================
+# SvelteKit & JavaScript / Node
+# ==========================================
+.svelte-kit/
+build/
+dist/
+node_modules/
+
+# Environment files (keep local secrets private)
+.env
+.env.*
+!.env.example
+
+# Tooling and log caches
+.eslintcache
+.stylelintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite / SvelteKit outputs
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# ==========================================
+# Python
+# ==========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.pyo
+.hypothesis/
+.pytest_cache/
+
+# Type checking
+.mypy_cache/
+.pytype/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# ==========================================
+# IDE & Operating System
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.lsfactorypath
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthmb.db
+Desktop.ini
+
+# VS Code / JetBrains / Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

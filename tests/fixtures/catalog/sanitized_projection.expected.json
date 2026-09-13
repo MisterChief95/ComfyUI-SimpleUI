@@ -1,0 +1,143 @@
+{
+  "_comment": "Expected sanitized client projection of object_info.synthetic.json, per docs/ARCHITECTURE.md 'Profiles and privacy' and docs/WORKFLOW_MAPPING.md 'Catalog lifecycle'. The raw catalog stays server-side. Every path-bearing or shared-filename choice list is replaced by an owned-input reference or withheld. Only the fields a client needs are projected. Keys beginning with an underscore are fixture commentary.",
+  "catalog_revision": "synthetic-1",
+  "nodes": {
+    "CheckpointLoaderSimple": {
+      "inputs": {
+        "ckpt_name": {
+          "logical_type": "COMBO",
+          "choices_source": "server_model_catalog",
+          "choices": ["placeholder-checkpoint-a.safetensors", "placeholder-checkpoint-b.safetensors"],
+          "_note": "Model names are not user media and are projected as-is. If a deployment classifies model names as private, this is the single place to withhold them."
+        }
+      },
+      "outputs": ["MODEL", "CLIP", "VAE"],
+      "output_node": false
+    },
+    "CLIPTextEncode": {
+      "inputs": {
+        "text": {"logical_type": "STRING", "multiline": true, "dynamic_prompts_hint": true},
+        "clip": {"logical_type": "LINK", "socket_type": "CLIP"}
+      },
+      "outputs": ["CONDITIONING"],
+      "output_node": false
+    },
+    "EmptyLatentImage": {
+      "inputs": {
+        "width": {"logical_type": "INT", "min": 16, "max": 16384, "step": 8, "default": 512},
+        "height": {"logical_type": "INT", "min": 16, "max": 16384, "step": 8, "default": 512},
+        "batch_size": {"logical_type": "INT", "min": 1, "max": 4096, "default": 1, "_note": "Batch size is a node input, never a count of separate submissions."}
+      },
+      "outputs": ["LATENT"],
+      "output_node": false
+    },
+    "KSampler": {
+      "inputs": {
+        "model": {"logical_type": "LINK", "socket_type": "MODEL"},
+        "seed": {"logical_type": "INT_EXACT", "min": "0", "max": "18446744073709551615", "default": "0", "transport": "decimal_string", "seed_like": true, "slider_allowed": false},
+        "steps": {"logical_type": "INT", "min": 1, "max": 10000, "default": 20},
+        "cfg": {"logical_type": "FLOAT", "min": 0.0, "max": 100.0, "step": 0.1, "default": 8.0},
+        "sampler_name": {"logical_type": "COMBO", "choices": ["euler", "euler_ancestral", "dpmpp_2m", "ddim", "uni_pc"]},
+        "scheduler": {"logical_type": "COMBO", "choices": ["normal", "karras", "exponential", "simple", "beta"]},
+        "positive": {"logical_type": "LINK", "socket_type": "CONDITIONING"},
+        "negative": {"logical_type": "LINK", "socket_type": "CONDITIONING"},
+        "latent_image": {"logical_type": "LINK", "socket_type": "LATENT"},
+        "denoise": {"logical_type": "FLOAT", "min": 0.0, "max": 1.0, "step": 0.01, "default": 1.0}
+      },
+      "outputs": ["LATENT"],
+      "output_node": false
+    },
+    "SaveImage": {
+      "inputs": {
+        "images": {"logical_type": "LINK", "socket_type": "IMAGE"},
+        "filename_prefix": {"logical_type": "STRING", "managed": true, "_note": "The application assigns a unique per-generation prefix; the user label is a suffix, never an arbitrary directory."}
+      },
+      "outputs": [],
+      "output_node": true,
+      "output_role": "image"
+    },
+    "PreviewImage": {
+      "inputs": {"images": {"logical_type": "LINK", "socket_type": "IMAGE"}},
+      "outputs": [],
+      "output_node": true,
+      "output_role": "image_ephemeral"
+    },
+    "LoadImage": {
+      "inputs": {
+        "image": {
+          "logical_type": "OWNED_INPUT_REF",
+          "media_kind": "image",
+          "choices": [],
+          "choices_withheld": true,
+          "loader_adapter": "comfy_input_dir_filename",
+          "_note": "The raw list contained shared ComfyUI input-directory filenames. It is withheld; the client picks from its own uploads and the backend stages the file and substitutes the real filename at submission."
+        }
+      },
+      "outputs": ["IMAGE", "MASK"],
+      "output_node": false
+    },
+    "CreateVideo": {
+      "inputs": {
+        "images": {"logical_type": "LINK", "socket_type": "IMAGE"},
+        "fps": {"logical_type": "FLOAT", "min": 1.0, "max": 120.0, "step": 1.0, "default": 30.0},
+        "audio": {"logical_type": "LINK", "socket_type": "AUDIO", "optional": true, "present_in_graph_required": false}
+      },
+      "outputs": ["VIDEO"],
+      "output_node": false
+    },
+    "SaveVideo": {
+      "inputs": {
+        "video": {"logical_type": "LINK", "socket_type": "VIDEO"},
+        "filename_prefix": {"logical_type": "STRING", "managed": true},
+        "format": {"logical_type": "COMBO", "choices": ["auto", "mp4", "webm"], "default": "auto"},
+        "codec": {"logical_type": "COMBO", "choices": ["auto", "h264", "vp9"], "default": "auto"}
+      },
+      "outputs": [],
+      "output_node": true,
+      "output_role": "video"
+    },
+    "SaveWEBM": {
+      "inputs": {
+        "images": {"logical_type": "LINK", "socket_type": "IMAGE"},
+        "filename_prefix": {"logical_type": "STRING", "managed": true},
+        "codec": {"logical_type": "COMBO", "choices": ["vp9", "av1"]},
+        "fps": {"logical_type": "FLOAT", "min": 0.01, "max": 1000.0, "step": 0.01, "default": 24.0},
+        "crf": {"logical_type": "FLOAT", "min": 0, "max": 63.0, "step": 1, "default": 32.0}
+      },
+      "outputs": [],
+      "output_node": true,
+      "output_role": "video"
+    },
+    "ForceInputSteps": {
+      "inputs": {
+        "model": {"logical_type": "LINK", "socket_type": "MODEL"},
+        "steps": {"logical_type": "INT", "min": 1, "max": 10000, "default": 20, "force_input_hint": true, "editable": true, "_note": "forceInput is a presentation hint. An exported literal remains valid, editable, and submittable."}
+      },
+      "outputs": ["MODEL"],
+      "output_node": false
+    },
+    "AnySwitchWildcard": {
+      "inputs": {
+        "select": {"logical_type": "INT", "min": 1, "max": 8, "default": 1},
+        "input_1": {"logical_type": "WILDCARD", "socket_type": "*", "optional": true}
+      },
+      "outputs": ["*"],
+      "output_node": false,
+      "flexible_inputs": true,
+      "_note": "Graph inputs matching a dynamic naming pattern (input_2, input_3, ...) are not enumerated by object_info and must not be rejected by exact-name matching."
+    },
+    "OpaqueConfigNode": {
+      "inputs": {
+        "config": {"logical_type": "UNSUPPORTED", "socket_type": "SIMPLEUI_OPAQUE_CONFIG", "editable": false, "diagnostic": "adapter_required", "value_preserved": true}
+      },
+      "outputs": ["SIMPLEUI_OPAQUE_CONFIG"],
+      "output_node": false
+    }
+  },
+  "must_not_appear_in_projection": [
+    "placeholder-input-a.png",
+    "placeholder-input-b.png",
+    "placeholder-shared-mask.png"
+  ],
+  "_must_not_appear_note": "These are the shared ComfyUI input-directory filenames from LoadImage in the raw catalog. A projection test asserts none of them occur anywhere in the client payload."
+}

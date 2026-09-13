@@ -1,0 +1,5 @@
+{"type": "execution_start", "data": {"prompt_id": "00000000-0000-4000-8000-000000000005", "timestamp": 5000}}
+{"type": "executing", "data": {"node": "5", "display_node": "5", "prompt_id": "00000000-0000-4000-8000-000000000005"}}
+{"type": "progress", "data": {"value": 4, "max": 20, "prompt_id": "00000000-0000-4000-8000-000000000005", "node": "5"}}
+{"type": "execution_interrupted", "data": {"prompt_id": "00000000-0000-4000-8000-000000000005", "node_id": "5", "node_type": "KSampler", "executed": ["1", "2", "3", "4"], "timestamp": 5200}}
+{"type": "status", "data": {"status": {"exec_info": {"queue_remaining": 0}}}}

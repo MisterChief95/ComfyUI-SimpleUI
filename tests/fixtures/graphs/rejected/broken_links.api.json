@@ -1,0 +1,43 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {"ckpt_name": "placeholder-checkpoint-a.safetensors"}
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder positive prompt", "clip": ["99", 1]},
+    "_meta": {"title": "Link target node 99 does not exist"}
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "", "clip": ["1", 7]},
+    "_meta": {"title": "Output index 7 is out of range for CheckpointLoaderSimple, which has three outputs"}
+  },
+  "4": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 1}
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 1,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["1", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["4", 0]
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["5", 0], "vae": ["1", 2]}
+  },
+  "7": {
+    "class_type": "SaveImage",
+    "inputs": {"filename_prefix": "SimpleUI/fixture", "images": ["6", 0]}
+  }
+}

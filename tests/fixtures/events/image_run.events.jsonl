@@ -1,0 +1,12 @@
+{"type": "status", "data": {"status": {"exec_info": {"queue_remaining": 1}}, "sid": "SYNTHETIC-CLIENT-ID"}}
+{"type": "execution_start", "data": {"prompt_id": "00000000-0000-4000-8000-000000000001", "timestamp": 1000}}
+{"type": "execution_cached", "data": {"nodes": ["1"], "prompt_id": "00000000-0000-4000-8000-000000000001", "timestamp": 1010}}
+{"type": "executing", "data": {"node": "2", "display_node": "2", "prompt_id": "00000000-0000-4000-8000-000000000001"}}
+{"type": "executing", "data": {"node": "5", "display_node": "5", "prompt_id": "00000000-0000-4000-8000-000000000001"}}
+{"type": "progress", "data": {"value": 1, "max": 20, "prompt_id": "00000000-0000-4000-8000-000000000001", "node": "5"}}
+{"type": "progress", "data": {"value": 20, "max": 20, "prompt_id": "00000000-0000-4000-8000-000000000001", "node": "5"}}
+{"type": "executing", "data": {"node": "6", "display_node": "6", "prompt_id": "00000000-0000-4000-8000-000000000001"}}
+{"type": "executed", "data": {"node": "7", "display_node": "7", "output": {"images": [{"filename": "SimpleUI_fixture_00001_.png", "subfolder": "SimpleUI", "type": "output"}]}, "prompt_id": "00000000-0000-4000-8000-000000000001"}}
+{"type": "executing", "data": {"node": null, "prompt_id": "00000000-0000-4000-8000-000000000001"}}
+{"type": "execution_success", "data": {"prompt_id": "00000000-0000-4000-8000-000000000001", "timestamp": 1500}}
+{"type": "status", "data": {"status": {"exec_info": {"queue_remaining": 0}}}}

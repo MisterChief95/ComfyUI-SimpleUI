@@ -1,0 +1,71 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {"ckpt_name": "placeholder-checkpoint-a.safetensors"}
+  },
+  "2": {
+    "class_type": "ForceInputSteps",
+    "inputs": {"model": ["1", 0], "steps": 28},
+    "_meta": {"title": "forceInput INT carrying a valid exported literal"}
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder positive prompt", "clip": ["1", 1]}
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder negative prompt", "clip": ["1", 1]}
+  },
+  "5": {
+    "class_type": "AnySwitchWildcard",
+    "inputs": {
+      "select": 2,
+      "input_1": ["3", 0],
+      "input_2": ["4", 0],
+      "input_3": ["3", 0]
+    },
+    "_meta": {"title": "Flexible node: input_2 and input_3 are not enumerated by object_info"}
+  },
+  "6": {
+    "class_type": "OpaqueConfigNode",
+    "inputs": {"config": {"schema": "simpleui-opaque-v1", "opaque_payload": [1, 2, 3], "nested": {"keep": true}}},
+    "_meta": {"title": "Custom object literal with no editing contract; must be preserved untouched"}
+  },
+  "7": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 1}
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 8080,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["2", 0],
+      "positive": ["5", 0],
+      "negative": ["4", 0],
+      "latent_image": ["7", 0]
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["8", 0], "vae": ["1", 2]}
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "inputs": {"filename_prefix": "SimpleUI/fixture", "images": ["9", 0]}
+  },
+  "11": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": ["not", "a", "link"], "clip": ["1", 1]},
+    "_meta": {"title": "Literal array of three strings; must not be rewritten as a link"}
+  },
+  "12": {
+    "class_type": "AnySwitchWildcard",
+    "inputs": {"select": 1, "input_1": ["11", 0], "literal_pair": ["alpha", 0]},
+    "_meta": {"title": "Two-element literal array whose first element is not a known node ID; must not be read as a link"}
+  }
+}

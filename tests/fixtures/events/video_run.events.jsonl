@@ -1,0 +1,9 @@
+{"type": "status", "data": {"status": {"exec_info": {"queue_remaining": 1}}, "sid": "SYNTHETIC-CLIENT-ID"}}
+{"type": "execution_start", "data": {"prompt_id": "00000000-0000-4000-8000-000000000002", "timestamp": 2000}}
+{"type": "executing", "data": {"node": "5", "display_node": "5", "prompt_id": "00000000-0000-4000-8000-000000000002"}}
+{"type": "progress", "data": {"value": 10, "max": 20, "prompt_id": "00000000-0000-4000-8000-000000000002", "node": "5"}}
+{"type": "executing", "data": {"node": "6", "display_node": "6", "prompt_id": "00000000-0000-4000-8000-000000000002"}}
+{"type": "executing", "data": {"node": "7", "display_node": "7", "prompt_id": "00000000-0000-4000-8000-000000000002"}}
+{"type": "executed", "data": {"node": "8", "display_node": "8", "output": {"images": [{"filename": "SimpleUI_fixture-video_00001_.mp4", "subfolder": "SimpleUI", "type": "output"}]}, "prompt_id": "00000000-0000-4000-8000-000000000002"}}
+{"type": "executing", "data": {"node": null, "prompt_id": "00000000-0000-4000-8000-000000000002"}}
+{"type": "execution_success", "data": {"prompt_id": "00000000-0000-4000-8000-000000000002", "timestamp": 2900}}

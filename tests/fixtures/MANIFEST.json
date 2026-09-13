@@ -1,0 +1,224 @@
+{
+  "fixture_set_version": 1,
+  "task": "COMPAT-001",
+  "live_gate": "blocked",
+  "live_gate_reason": "No ComfyUI installation was reachable on the development host when this set was built. Every fixture below is synthetic. See docs/COMPATIBILITY.md.",
+  "provenance_values": {
+    "synthetic": "Hand-authored to match documented ComfyUI contracts. Not observed from a running installation. Cannot support a release claim about image or video generation.",
+    "live": "Captured from a recorded ComfyUI installation, with its revision and node pack list in catalog/capabilities.*.json."
+  },
+  "files": [
+    {
+      "path": "catalog/object_info.synthetic.json",
+      "provenance": "synthetic",
+      "kind": "object_info",
+      "covers": ["core literals", "combo choices", "seed bounds", "file loader contract", "forceInput literals", "flexible inputs", "custom/dynamic shapes", "image outputs", "video outputs", "hidden inputs", "optional inputs"]
+    },
+    {
+      "path": "catalog/object_info.legacy-shape.json",
+      "provenance": "synthetic",
+      "kind": "object_info",
+      "covers": ["older metadata shape", "bare combo lists", "absent hint keys"]
+    },
+    {
+      "path": "catalog/sanitized_projection.expected.json",
+      "provenance": "synthetic",
+      "kind": "expectation",
+      "covers": ["sanitized catalog choices", "withheld shared input filenames", "exact integer transport", "managed filename prefix", "unsupported type diagnostics"]
+    },
+    {
+      "path": "catalog/capabilities.synthetic.json",
+      "provenance": "synthetic",
+      "kind": "capabilities",
+      "covers": ["revision and node packs", "route contract", "submission contract", "cancellation capabilities", "output descriptor contract", "loader contracts", "release blockers"]
+    },
+    {
+      "path": "graphs/image_basic.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["core literals", "link and literal distinction", "image outputs", "untouched round trip"]
+    },
+    {
+      "path": "graphs/image_repeated_stages.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["repeated nodes", "base and refiner suffixes", "positive and negative inference by link tracing", "identical values that must not be merged"]
+    },
+    {
+      "path": "graphs/image_large_seed.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["large seeds"]
+    },
+    {
+      "path": "graphs/video_basic.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["video outputs", "omitted optional input", "fps and frame count inputs"]
+    },
+    {
+      "path": "graphs/multi_output_branches.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["multiple output branches", "ephemeral preview branch", "image outputs", "video outputs"]
+    },
+    {
+      "path": "graphs/inactive_controls.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["inactive controls"]
+    },
+    {
+      "path": "graphs/force_input_and_flexible.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["forceInput literals", "flexible inputs", "custom/dynamic shapes", "literal arrays that are not links"]
+    },
+    {
+      "path": "graphs/latent_batch_size.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["latent batch size"]
+    },
+    {
+      "path": "graphs/image_loader_input.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["loader contracts", "mask input", "sanitized catalog choices"]
+    },
+    {
+      "path": "graphs/missing_class.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph",
+      "covers": ["missing classes"]
+    },
+    {
+      "path": "graphs/rejected/non_finite_values.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph_rejected",
+      "covers": ["non-finite-value rejection"]
+    },
+    {
+      "path": "graphs/rejected/broken_links.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph_rejected",
+      "covers": ["broken link targets", "out-of-range output index"]
+    },
+    {
+      "path": "graphs/rejected/duplicate_keys.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph_rejected",
+      "covers": ["duplicate object keys"]
+    },
+    {
+      "path": "graphs/rejected/ui_export_not_api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph_rejected",
+      "covers": ["regular UI export instead of API JSON"]
+    },
+    {
+      "path": "graphs/rejected/no_output_node.api.json",
+      "provenance": "synthetic",
+      "kind": "api_graph_rejected",
+      "covers": ["no recognized executable output"]
+    },
+    {
+      "path": "events/image_run.events.jsonl",
+      "provenance": "synthetic",
+      "kind": "execution_events",
+      "covers": ["execution events", "cached node with no fresh execution event", "image outputs"]
+    },
+    {
+      "path": "events/video_run.events.jsonl",
+      "provenance": "synthetic",
+      "kind": "execution_events",
+      "covers": ["execution events", "video outputs"]
+    },
+    {
+      "path": "events/fully_cached_run.events.jsonl",
+      "provenance": "synthetic",
+      "kind": "execution_events",
+      "covers": ["fully cached run", "terminal state without executed events"]
+    },
+    {
+      "path": "events/partial_failure.events.jsonl",
+      "provenance": "synthetic",
+      "kind": "execution_events",
+      "covers": ["multiple output branches", "accepted prompt with a failing branch"]
+    },
+    {
+      "path": "events/cancelled_run.events.jsonl",
+      "provenance": "synthetic",
+      "kind": "execution_events",
+      "covers": ["cancellation capabilities"]
+    },
+    {
+      "path": "events/foreign_and_preview.events.jsonl",
+      "provenance": "synthetic",
+      "kind": "execution_events",
+      "covers": ["unowned events", "preview frame without provable owner"]
+    },
+    {
+      "path": "outputs/history_image.json",
+      "provenance": "synthetic",
+      "kind": "output_descriptors",
+      "covers": ["image outputs", "output descriptors"]
+    },
+    {
+      "path": "outputs/history_video.json",
+      "provenance": "synthetic",
+      "kind": "output_descriptors",
+      "covers": ["video outputs", "output descriptors", "unknown descriptor key"]
+    },
+    {
+      "path": "outputs/history_edge_cases.json",
+      "provenance": "synthetic",
+      "kind": "output_descriptors",
+      "covers": ["completion with no saved media", "ephemeral temp output", "partial outputs", "interrupted run", "submission node_errors"]
+    },
+    {
+      "path": "expectations/rejections.json",
+      "provenance": "synthetic",
+      "kind": "expectation",
+      "covers": ["non-finite-value rejection", "missing classes", "inactive controls", "forceInput literals", "flexible inputs", "multiple output branches"]
+    },
+    {
+      "path": "expectations/seed_and_transport.json",
+      "provenance": "synthetic",
+      "kind": "expectation",
+      "covers": ["large seeds", "seed retry policies", "latent batch size", "non-finite-value rejection"]
+    }
+  ],
+  "required_coverage": [
+    "core literals",
+    "large seeds",
+    "repeated nodes",
+    "missing classes",
+    "custom/dynamic shapes",
+    "image outputs",
+    "video outputs",
+    "multiple output branches",
+    "inactive controls",
+    "forceInput literals",
+    "flexible inputs",
+    "non-finite-value rejection",
+    "seed retry policies",
+    "latent batch size",
+    "sanitized catalog choices",
+    "execution events",
+    "output descriptors",
+    "loader contracts",
+    "cancellation capabilities",
+    "revision and node packs"
+  ],
+  "forbidden_substrings": [
+    "brendan",
+    "brend",
+    "C:\\Users",
+    "/home/",
+    "api_key",
+    "Authorization:",
+    "password"
+  ],
+  "_forbidden_note": "A self-check asserts none of these appear in any fixture file, so no personal prompt, host path, or credential can be committed here. Prompts in these graphs are deliberately the word 'placeholder' plus generic words."
+}

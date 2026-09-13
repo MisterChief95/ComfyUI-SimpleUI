@@ -1,0 +1,50 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {"ckpt_name": "placeholder-checkpoint-b.safetensors"}
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder motion prompt", "clip": ["1", 1]},
+    "_meta": {"title": "Positive Prompt"}
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder negative prompt", "clip": ["1", 1]},
+    "_meta": {"title": "Negative Prompt"}
+  },
+  "4": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 16},
+    "_meta": {"title": "Frame latents (batch_size is the frame count for this graph)"}
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 4242424242,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "beta",
+      "denoise": 1.0,
+      "model": ["1", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["4", 0]
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["5", 0], "vae": ["1", 2]}
+  },
+  "7": {
+    "class_type": "CreateVideo",
+    "inputs": {"images": ["6", 0], "fps": 24.0},
+    "_meta": {"title": "Create Video (optional audio input omitted, not null)"}
+  },
+  "8": {
+    "class_type": "SaveVideo",
+    "inputs": {"video": ["7", 0], "filename_prefix": "SimpleUI/fixture-video", "format": "auto", "codec": "auto"},
+    "_meta": {"title": "Save Video"}
+  }
+}

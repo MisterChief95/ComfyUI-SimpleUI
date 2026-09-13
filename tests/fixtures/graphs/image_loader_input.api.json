@@ -1,0 +1,51 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {"ckpt_name": "placeholder-checkpoint-a.safetensors"}
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "placeholder-input-a.png"},
+    "_meta": {"title": "Reference image; the literal is a bare filename relative to the ComfyUI input directory"}
+  },
+  "3": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "placeholder-shared-mask.png"},
+    "_meta": {"title": "Mask source; MASK is output index 1 of LoadImage"}
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder positive prompt", "clip": ["1", 1]}
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "", "clip": ["1", 1]}
+  },
+  "6": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 1}
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 909090,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 0.6,
+      "model": ["1", 0],
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "latent_image": ["6", 0]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["7", 0], "vae": ["1", 2]}
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {"filename_prefix": "SimpleUI/fixture", "images": ["8", 0]}
+  }
+}

@@ -1,0 +1,25 @@
+# Exact dependency lock for the backend (Python 3.13).
+# Regenerate: python -m venv .venv && .venv/Scripts/python -m pip install fastapi uvicorn httpx websockets && .venv/Scripts/python -m pip freeze
+# httpx is required by starlette's TestClient (backend smoke tests) only.
+# websockets is required by uvicorn to accept a real WebSocket upgrade
+# (app/events/routes.py's /api/events); Starlette's TestClient talks to the
+# ASGI app in-process and does not need it, which is why its absence was not
+# caught by the test suite.
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+certifi==2026.7.22
+click==8.5.0
+fastapi==0.141.1
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.19
+pillow==12.3.0
+pydantic==2.13.5
+pydantic_core==2.46.5
+starlette==1.6.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+uvicorn==0.52.4
+websockets==17.1

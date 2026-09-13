@@ -1,0 +1,78 @@
+{
+  "_comment": "Terminal histories that are not a plain success with saved media. Keys beginning with an underscore are fixture commentary.",
+  "00000000-0000-4000-8000-000000000006": {
+    "_case": "Completed with no saved media. This is valid and must be shown explicitly, not treated as a failure or as a pending result.",
+    "prompt": [0, "00000000-0000-4000-8000-000000000006", {}, {"client_id": "SYNTHETIC-CLIENT-ID"}, ["8"]],
+    "outputs": {},
+    "status": {"status_str": "success", "completed": true, "messages": []}
+  },
+  "00000000-0000-4000-8000-000000000007": {
+    "_case": "Preview-only result. type 'temp' is ephemeral; it becomes a gallery item only after a verified private capture.",
+    "prompt": [0, "00000000-0000-4000-8000-000000000007", {}, {"client_id": "SYNTHETIC-CLIENT-ID"}, ["8"]],
+    "outputs": {
+      "8": {"images": [{"filename": "SimpleUI_temp_abcde_00001_.png", "subfolder": "", "type": "temp"}]}
+    },
+    "status": {"status_str": "success", "completed": true, "messages": []}
+  },
+  "00000000-0000-4000-8000-000000000004": {
+    "_case": "Accepted prompt whose video branch failed while the image branch saved. Execution status and output availability are tracked separately: status failed, outputs partial.",
+    "prompt": [0, "00000000-0000-4000-8000-000000000004", {}, {"client_id": "SYNTHETIC-CLIENT-ID"}, ["7", "10"]],
+    "outputs": {
+      "7": {"images": [{"filename": "SimpleUI_fixture_00002_.png", "subfolder": "SimpleUI", "type": "output"}]}
+    },
+    "status": {
+      "status_str": "error",
+      "completed": false,
+      "messages": [
+        ["execution_start", {"prompt_id": "00000000-0000-4000-8000-000000000004", "timestamp": 4000}],
+        ["execution_error", {"prompt_id": "00000000-0000-4000-8000-000000000004", "node_id": "10", "node_type": "SaveVideo", "exception_message": "synthetic failure in the video output branch", "timestamp": 4500}]
+      ]
+    }
+  },
+  "00000000-0000-4000-8000-000000000005": {
+    "_case": "Interrupted run. Partially executed, no saved media, terminal state cancelled.",
+    "prompt": [0, "00000000-0000-4000-8000-000000000005", {}, {"client_id": "SYNTHETIC-CLIENT-ID"}, ["7"]],
+    "outputs": {},
+    "status": {
+      "status_str": "error",
+      "completed": false,
+      "messages": [
+        ["execution_start", {"prompt_id": "00000000-0000-4000-8000-000000000005", "timestamp": 5000}],
+        ["execution_interrupted", {"prompt_id": "00000000-0000-4000-8000-000000000005", "node_id": "5", "node_type": "KSampler", "timestamp": 5200}]
+      ]
+    }
+  },
+  "_submission_rejected": {
+    "_case": "Not a history entry. This is the POST /prompt response shape for an accepted prompt that still reports per-node validation errors, plus the fully rejected shape. A prompt_id in the response is not proof that the whole workflow will execute.",
+    "accepted_with_node_errors": {
+      "prompt_id": "00000000-0000-4000-8000-000000000004",
+      "number": 4,
+      "node_errors": {
+        "10": {
+          "errors": [
+            {"type": "value_not_in_list", "message": "Value not in list", "details": "codec: 'h264' not in ['auto', 'vp9']", "extra_info": {"input_name": "codec", "received_value": "h264"}}
+          ],
+          "dependent_outputs": ["10"],
+          "class_type": "SaveVideo"
+        }
+      }
+    },
+    "fully_rejected": {
+      "error": {
+        "type": "prompt_outputs_failed_validation",
+        "message": "Prompt outputs failed validation",
+        "details": "",
+        "extra_info": {}
+      },
+      "node_errors": {
+        "4": {
+          "errors": [
+            {"type": "required_input_missing", "message": "Required input is missing", "details": "model", "extra_info": {"input_name": "model"}}
+          ],
+          "dependent_outputs": ["7"],
+          "class_type": "SimpleUIAbsentCustomNode"
+        }
+      }
+    }
+  }
+}

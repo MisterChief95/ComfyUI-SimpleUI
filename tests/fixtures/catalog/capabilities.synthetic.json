@@ -1,0 +1,89 @@
+{
+  "provenance": "synthetic",
+  "captured_at": null,
+  "live_gate": "blocked",
+  "live_gate_reason": "No ComfyUI installation was reachable on this development host when COMPAT-001 ran. Every value below is a contract expectation derived from documented ComfyUI behavior, not an observation.",
+  "installation": {
+    "comfyui_revision": null,
+    "comfyui_version": null,
+    "python_version": null,
+    "torch_version": null,
+    "device": null,
+    "node_packs": [],
+    "_note": "CATALOG-001 must fill these from /system_stats and the installed custom_nodes listing once a live installation is configured. Record the exact commit, not a branch name."
+  },
+  "discovery": {
+    "method": "explicit_configuration_only",
+    "checked_on_this_host": [
+      "environment variables matching COMFY* (none present)",
+      "http://127.0.0.1:8188/system_stats (connection refused)",
+      "http://localhost:8188/system_stats (connection refused)",
+      "http://127.0.0.1:8000/system_stats (connection refused)",
+      "http://127.0.0.1:8189/system_stats (connection refused)",
+      "directory scan for names containing 'comfy' under the user profile, Program Files, Program Files (x86), and drive roots (only this repository matched)"
+    ],
+    "_note": "The repository defines no configuration convention yet; backend/ does not exist. FOUNDATION-001 owns the real config surface (ComfyUI URL plus input/output/temp roots). Nothing here may be treated as an auto-discovery fallback: a guessed path is not explicit configuration."
+  },
+  "routes_expected": {
+    "GET /object_info": {"purpose": "node metadata discovery", "verified": false},
+    "GET /system_stats": {"purpose": "revision and device report", "verified": false},
+    "POST /prompt": {"purpose": "submission; returns prompt_id, number, node_errors", "verified": false},
+    "GET /history/{prompt_id}": {"purpose": "completed results and output descriptors", "verified": false},
+    "GET /queue": {"purpose": "reconciliation of running and pending jobs", "verified": false},
+    "WS /ws?clientId=...": {"purpose": "execution events and previews", "verified": false},
+    "POST /upload/image": {"purpose": "image and mask upload into the input directory", "verified": false},
+    "POST /interrupt": {"purpose": "global interrupt of the RUNNING job", "verified": false},
+    "POST /queue": {"purpose": "body {\"delete\": [prompt_id]} removes a PENDING job", "verified": false}
+  },
+  "submission_contract": {
+    "request_shape": {"prompt": "<node map>", "client_id": "<opaque>", "extra_data": {"extra_pnginfo": "optional"}},
+    "accepted_response": {"prompt_id": "<uuid>", "number": 0, "node_errors": {}},
+    "partial_acceptance": "A 200 response with a prompt_id may still carry node_errors for individual output branches. A successful submission is not proof the whole workflow will execute. See events/partial_failure.events.jsonl.",
+    "rejected_response": {"error": {"type": "prompt_outputs_failed_validation", "message": "...", "details": "...", "extra_info": {}}, "node_errors": {}},
+    "idempotency": "UNVERIFIED. Do not assume supplying a prompt_id makes submission idempotent, even where a newer server accepts one. GEN-001 must reserve a profile-scoped request key locally and enter submission_unknown on a lost response rather than resubmitting.",
+    "verified": false
+  },
+  "cancellation": {
+    "model": "capability_probe_required",
+    "pending_job": {
+      "mechanism": "POST /queue with {\"delete\": [prompt_id]}",
+      "targets_specific_job": true,
+      "verified": false
+    },
+    "running_job": {
+      "mechanism": "POST /interrupt",
+      "targets_specific_job": false,
+      "risk": "Interrupt stops whichever job is currently RUNNING. Between a queue read and the interrupt call, another profile's job can become the running job, so a stale queue check is not a safe guard.",
+      "required_behavior": "Only offer running-job cancellation when the installation exposes a per-job cancel that names the prompt_id and a probe confirms it. Otherwise disable running cancellation and state the unavailable capability. Never expose global queue or history clearing.",
+      "verified": false
+    },
+    "expected_event_on_cancel": "execution_interrupted, followed by history carrying status.status_str 'error' with an interruption marker. See events/cancelled_run.events.jsonl."
+  },
+  "output_descriptor_contract": {
+    "images_key": "Core SaveImage returns ui.images entries of {filename, subfolder, type}, where type is 'output' or 'temp'.",
+    "video_key": "Core SaveVideo and SaveWEBM also report under ui.images with a video container filename; some third-party packs report under 'gifs' or a pack-specific key instead.",
+    "rule": "UNVERIFIED against a live installation. MEDIA-001 must key media classification off the actual descriptor plus file extension and treat an unknown descriptor key as an unresolved output, not as an empty result.",
+    "temp_outputs": "type 'temp' is ephemeral. It becomes a saved gallery item only after a verified private capture.",
+    "verified": false
+  },
+  "loader_contract": {
+    "LoadImage": {
+      "binding": "A bare filename relative to the configured ComfyUI input directory; subfolders appear as 'sub/name.png'.",
+      "upload_route": "POST /upload/image (multipart: image, optional subfolder, optional type, optional overwrite)",
+      "application_rule": "Stage uploads under an application-owned subfolder and substitute the staged filename at submission. Never expose the shared input-directory listing as a cross-profile dropdown.",
+      "verified": false
+    },
+    "video_upload": {
+      "binding": null,
+      "application_rule": "There is no universal video-upload route. INPUT-001 must establish the actual loader filename contract for whichever video loader the installation provides, and show an actionable diagnostic when no adapter exists.",
+      "verified": false
+    }
+  },
+  "release_blockers": [
+    "No live ComfyUI revision, node pack list, or device report recorded.",
+    "No real image generation captured.",
+    "No real video generation captured.",
+    "Output descriptor shapes for video are assumed from upstream source, not observed.",
+    "Cancellation capability is unprobed; per-job running cancellation must be treated as unavailable until proven."
+  ]
+}

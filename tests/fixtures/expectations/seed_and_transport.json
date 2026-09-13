@@ -1,0 +1,74 @@
+{
+  "_comment": "Exact-integer transport and seed policy expectations for MAPPING-001 and GEN-001. Seed policy is application state and is never written into the stored graph. Derived from docs/WORKFLOW_MAPPING.md 'Primitive control mapping'.",
+  "exact_integer_transport": {
+    "rule": "Python parses the original graph bytes and keeps the integer exactly. Values outside JavaScript's safe integer range travel to the browser as decimal strings in typed descriptors and come back as strings. Python converts the validated string back to an integer for the upstream JSON. The browser never JSON.parses the raw imported graph.",
+    "cases": [
+      {
+        "fixture": "graphs/image_large_seed.api.json",
+        "node": "5",
+        "input": "seed",
+        "graph_value": 18446744073709551557,
+        "descriptor_value": "18446744073709551557",
+        "submitted_value": 18446744073709551557,
+        "note": "Near the 64-bit ceiling of 18446744073709551615. A round trip through a JavaScript number would corrupt this."
+      },
+      {
+        "fixture": "graphs/image_large_seed.api.json",
+        "node": "6",
+        "input": "seed",
+        "graph_value": 9007199254740993,
+        "descriptor_value": "9007199254740993",
+        "submitted_value": 9007199254740993,
+        "note": "2^53 + 1, the smallest integer a JavaScript number cannot represent; it would silently become 9007199254740992."
+      }
+    ],
+    "slider_allowed_for_unsafe_integers": false,
+    "overflow_behavior": "Report overflow as an error. Never wrap, truncate, or clamp implicitly."
+  },
+  "seed_policies": [
+    {
+      "policy": "fixed",
+      "default_for_imported_seeds": true,
+      "behavior": "The submitted seed equals the stored value on every submission, including retries."
+    },
+    {
+      "policy": "random",
+      "behavior": "Resolve one new value within the input's declared bounds at the moment a new local request is accepted. Persist the resolved value with the generation.",
+      "retry_behavior": "A retry of the same client request key reuses the already persisted resolved seed. It never draws a new one."
+    },
+    {
+      "policy": "increment",
+      "behavior": "Advance exactly once per newly accepted local request.",
+      "retry_behavior": "A retry of the same client request key, a UI re-render, a reconnect, or a resubmission after submission_unknown must not advance the counter.",
+      "overflow_behavior": "Report overflow at the declared maximum instead of wrapping to zero."
+    }
+  ],
+  "retry_scenarios": [
+    {
+      "scenario": "Identical payload resubmitted with the same client request key",
+      "expected": "Return the existing generation, including its already resolved seed. No second upstream submission, no new seed."
+    },
+    {
+      "scenario": "Changed payload reusing a previous client request key",
+      "expected": "Conflict. Do not resolve a new seed and do not submit."
+    },
+    {
+      "scenario": "Submission response lost, state submission_unknown",
+      "expected": "Query the upstream queue and history for correlation evidence. Never automatically resubmit, and never re-resolve the seed."
+    }
+  ],
+  "batch_versus_request_count": {
+    "fixture": "graphs/latent_batch_size.api.json",
+    "node": "4",
+    "input": "batch_size",
+    "value": 8,
+    "expected_submissions": 1,
+    "expected_images": 8,
+    "note": "Latent batch size stays a node input. One Generate action submits one graph; it is never expanded into eight separate requests, and the seed policy resolves once for that single request."
+  },
+  "non_finite_rejection": {
+    "fixture": "graphs/rejected/non_finite_values.api.json",
+    "expected": "Reject at parse time. Python's json module accepts NaN and Infinity by default, so the parser must be configured to refuse them.",
+    "note": "Imported finite values are never silently clamped or rounded either; out-of-range finite values produce a correction prompt, not a rewrite."
+  }
+}

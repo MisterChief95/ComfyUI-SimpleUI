@@ -1,0 +1,46 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {"ckpt_name": "placeholder-checkpoint-a.safetensors"}
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "placeholder positive prompt", "clip": ["1", 1]}
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "", "clip": ["1", 1]}
+  },
+  "4": {
+    "class_type": "SimpleUIAbsentCustomNode",
+    "inputs": {"strength": 1.25, "mode": "balanced", "model": ["1", 0]},
+    "_meta": {"title": "Class absent from the catalog; produces a node-specific compatibility error, never an automatic plugin install"}
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 1}
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 606,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0,
+      "model": ["4", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["5", 0]
+    }
+  },
+  "7": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["6", 0], "vae": ["1", 2]}
+  },
+  "8": {
+    "class_type": "SaveImage",
+    "inputs": {"filename_prefix": "SimpleUI/fixture", "images": ["7", 0]}
+  }
+}

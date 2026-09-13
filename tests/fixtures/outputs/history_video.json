@@ -1,0 +1,36 @@
+{
+  "_comment": "Three video descriptor shapes the media adapter must classify. Only the SaveVideo/SaveWEBM shapes come from core nodes; the 'gifs' shape represents a common third-party pack. None of these is verified against a live installation. Keys beginning with an underscore are fixture commentary.",
+  "00000000-0000-4000-8000-000000000002": {
+    "prompt": [0, "00000000-0000-4000-8000-000000000002", {}, {"client_id": "SYNTHETIC-CLIENT-ID"}, ["8"]],
+    "outputs": {
+      "8": {
+        "images": [
+          {"filename": "SimpleUI_fixture-video_00001_.mp4", "subfolder": "SimpleUI", "type": "output"}
+        ]
+      },
+      "11": {
+        "images": [
+          {"filename": "SimpleUI_fixture-webm_00001_.webm", "subfolder": "SimpleUI", "type": "output"}
+        ]
+      },
+      "12": {
+        "gifs": [
+          {"filename": "SimpleUI_thirdparty_00001_.mp4", "subfolder": "SimpleUI", "type": "output", "format": "video/h264-mp4", "frame_rate": 8.0, "fullpath": "<withheld: third-party packs may return an absolute host path>"}
+        ]
+      },
+      "13": {
+        "simpleui_unknown_descriptor_key": [
+          {"filename": "SimpleUI_unknown_00001_.bin", "subfolder": "SimpleUI", "type": "output"}
+        ]
+      }
+    },
+    "status": {
+      "status_str": "success",
+      "completed": true,
+      "messages": [
+        ["execution_start", {"prompt_id": "00000000-0000-4000-8000-000000000002", "timestamp": 2000}],
+        ["execution_success", {"prompt_id": "00000000-0000-4000-8000-000000000002", "timestamp": 2900}]
+      ]
+    }
+  }
+}

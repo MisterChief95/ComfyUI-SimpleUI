@@ -1,0 +1,64 @@
+{
+  "_comment": "Each entry names a fixture and the outcome the importer must produce. 'blocking' means submission is refused. 'diagnostic' means the graph is stored and shown with an actionable message. 'warning' means presentation only: the graph stays submittable. Derived from docs/WORKFLOW_MAPPING.md 'Import and normalization' and 'Required verification'.",
+  "cases": [
+    {
+      "fixture": "graphs/rejected/non_finite_values.api.json",
+      "outcome": "blocking",
+      "reason": "cfg is NaN and denoise is Infinity. JSON parsing must refuse the non-finite constants rather than accepting Python's permissive defaults. Do not clamp, round, or substitute a default; report the offending node and input.",
+      "must_not": ["clamp to the declared min/max", "round to a finite value", "silently drop the input"]
+    },
+    {
+      "fixture": "graphs/rejected/broken_links.api.json",
+      "outcome": "blocking",
+      "reason": "Node 2 references missing node 99; node 3 requests output index 7 of a three-output node. Both are broken link targets.",
+      "must_not": ["repair the link", "delete the node", "treat the pair as a literal array"]
+    },
+    {
+      "fixture": "graphs/rejected/duplicate_keys.api.json",
+      "outcome": "blocking",
+      "reason": "Node key '2' appears twice and input 'width' appears twice inside node 3. A last-wins parse silently discards user data, so duplicate object keys must be detected at parse time and refused.",
+      "must_not": ["accept the last occurrence", "accept the first occurrence"]
+    },
+    {
+      "fixture": "graphs/rejected/ui_export_not_api.json",
+      "outcome": "blocking",
+      "reason": "This is a regular ComfyUI workflow export with nodes and links arrays, not API format. The message must tell the user to export API format; this is a recognizable shape, not a generic parse failure.",
+      "must_not": ["attempt to convert the UI export into an API graph"]
+    },
+    {
+      "fixture": "graphs/rejected/no_output_node.api.json",
+      "outcome": "blocking",
+      "reason": "No node has output_node true, so the graph has no recognized executable output. This is a compatibility diagnostic, not a mapping problem.",
+      "must_not": ["invent a SaveImage node", "submit anyway"]
+    },
+    {
+      "fixture": "graphs/missing_class.api.json",
+      "outcome": "blocking",
+      "reason": "SimpleUIAbsentCustomNode is not in the catalog. Report the specific node and class; every other control still renders.",
+      "must_not": ["install a plugin automatically", "drop the node from the graph", "block the whole import from being stored"]
+    },
+    {
+      "fixture": "graphs/force_input_and_flexible.api.json",
+      "outcome": "warning",
+      "reason": "Node 2 carries a literal for a forceInput-declared INT, node 5 uses dynamically named inputs absent from object_info, node 6 holds an opaque custom object, and nodes 11 and 12 hold literal arrays. All are valid and submittable. Node 6's config is preserved untouched and is not editable without a typed adapter.",
+      "must_not": [
+        "reject the forceInput literal as invalid",
+        "reject input_2 and input_3 by exact-name matching against object_info",
+        "rewrite the literal arrays in nodes 11 and 12 as links",
+        "offer a generic editor for the opaque config value"
+      ]
+    },
+    {
+      "fixture": "graphs/inactive_controls.api.json",
+      "outcome": "warning",
+      "reason": "Nodes 90 and 91 are unreachable from any output node. Collapse their controls into an Inactive group and leave the graph data intact.",
+      "must_not": ["prune the nodes from the stored or submitted graph", "block submission"]
+    },
+    {
+      "fixture": "graphs/multi_output_branches.api.json",
+      "outcome": "warning",
+      "reason": "Four output nodes: one saved image, one ephemeral preview, and two saved video branches using different descriptor paths. Show every branch with its role.",
+      "must_not": ["keep only the last output node", "assume a single final image"]
+    }
+  ]
+}

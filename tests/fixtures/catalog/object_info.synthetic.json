@@ -1,0 +1,313 @@
+{
+  "CheckpointLoaderSimple": {
+    "input": {
+      "required": {
+        "ckpt_name": [["placeholder-checkpoint-a.safetensors", "placeholder-checkpoint-b.safetensors"], {"tooltip": "The name of the checkpoint to load."}]
+      }
+    },
+    "input_order": {"required": ["ckpt_name"]},
+    "output": ["MODEL", "CLIP", "VAE"],
+    "output_is_list": [false, false, false],
+    "output_name": ["MODEL", "CLIP", "VAE"],
+    "name": "CheckpointLoaderSimple",
+    "display_name": "Load Checkpoint",
+    "description": "Loads a diffusion model checkpoint.",
+    "python_module": "nodes",
+    "category": "loaders",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "CLIPTextEncode": {
+    "input": {
+      "required": {
+        "text": ["STRING", {"multiline": true, "dynamicPrompts": true, "tooltip": "The text to be encoded."}],
+        "clip": ["CLIP", {"tooltip": "The CLIP model used for encoding the text."}]
+      }
+    },
+    "input_order": {"required": ["text", "clip"]},
+    "output": ["CONDITIONING"],
+    "output_is_list": [false],
+    "output_name": ["CONDITIONING"],
+    "name": "CLIPTextEncode",
+    "display_name": "CLIP Text Encode (Prompt)",
+    "description": "Encodes a text prompt using a CLIP model into an embedding.",
+    "python_module": "nodes",
+    "category": "conditioning",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "EmptyLatentImage": {
+    "input": {
+      "required": {
+        "width": ["INT", {"default": 512, "min": 16, "max": 16384, "step": 8, "tooltip": "The width of the latent images in pixels."}],
+        "height": ["INT", {"default": 512, "min": 16, "max": 16384, "step": 8}],
+        "batch_size": ["INT", {"default": 1, "min": 1, "max": 4096, "tooltip": "The number of latent images in the batch."}]
+      }
+    },
+    "input_order": {"required": ["width", "height", "batch_size"]},
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "name": "EmptyLatentImage",
+    "display_name": "Empty Latent Image",
+    "description": "Create a new batch of empty latent images to be denoised via sampling.",
+    "python_module": "nodes",
+    "category": "latent",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "KSampler": {
+    "input": {
+      "required": {
+        "model": ["MODEL", {"tooltip": "The model used for denoising."}],
+        "seed": ["INT", {"default": 0, "min": 0, "max": 18446744073709551615, "control_after_generate": true, "tooltip": "The random seed used for creating the noise."}],
+        "steps": ["INT", {"default": 20, "min": 1, "max": 10000}],
+        "cfg": ["FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}],
+        "sampler_name": [["euler", "euler_ancestral", "dpmpp_2m", "ddim", "uni_pc"], {"tooltip": "The algorithm used when sampling."}],
+        "scheduler": [["normal", "karras", "exponential", "simple", "beta"], {}],
+        "positive": ["CONDITIONING", {}],
+        "negative": ["CONDITIONING", {}],
+        "latent_image": ["LATENT", {}],
+        "denoise": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}]
+      }
+    },
+    "input_order": {"required": ["model", "seed", "steps", "cfg", "sampler_name", "scheduler", "positive", "negative", "latent_image", "denoise"]},
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "name": "KSampler",
+    "display_name": "KSampler",
+    "description": "Uses the provided model, positive and negative conditioning to denoise the latent image.",
+    "python_module": "nodes",
+    "category": "sampling",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "VAEDecode": {
+    "input": {
+      "required": {
+        "samples": ["LATENT", {}],
+        "vae": ["VAE", {}]
+      }
+    },
+    "input_order": {"required": ["samples", "vae"]},
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "VAEDecode",
+    "display_name": "VAE Decode",
+    "description": "Decodes latent images back into pixel space images.",
+    "python_module": "nodes",
+    "category": "latent",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "SaveImage": {
+    "input": {
+      "required": {
+        "images": ["IMAGE", {"tooltip": "The images to save."}],
+        "filename_prefix": ["STRING", {"default": "ComfyUI", "tooltip": "The prefix for the file to save."}]
+      },
+      "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}
+    },
+    "input_order": {"required": ["images", "filename_prefix"]},
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "SaveImage",
+    "display_name": "Save Image",
+    "description": "Saves the input images to your ComfyUI output directory.",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": true,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "PreviewImage": {
+    "input": {
+      "required": {"images": ["IMAGE", {}]},
+      "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}
+    },
+    "input_order": {"required": ["images"]},
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "PreviewImage",
+    "display_name": "Preview Image",
+    "description": "Saves the input images to a temporary directory for preview.",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": true,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "LoadImage": {
+    "input": {
+      "required": {
+        "image": [["placeholder-input-a.png", "placeholder-input-b.png", "placeholder-shared-mask.png"], {"image_upload": true, "tooltip": "Filename inside the ComfyUI input directory."}]
+      }
+    },
+    "input_order": {"required": ["image"]},
+    "output": ["IMAGE", "MASK"],
+    "output_is_list": [false, false],
+    "output_name": ["IMAGE", "MASK"],
+    "name": "LoadImage",
+    "display_name": "Load Image",
+    "description": "Loads an image from the ComfyUI input directory.",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "CreateVideo": {
+    "input": {
+      "required": {
+        "images": ["IMAGE", {"tooltip": "The images to create a video from."}],
+        "fps": ["FLOAT", {"default": 30.0, "min": 1.0, "max": 120.0, "step": 1.0}]
+      },
+      "optional": {
+        "audio": ["AUDIO", {"tooltip": "The audio to add to the video."}]
+      }
+    },
+    "input_order": {"required": ["images", "fps"], "optional": ["audio"]},
+    "output": ["VIDEO"],
+    "output_is_list": [false],
+    "output_name": ["VIDEO"],
+    "name": "CreateVideo",
+    "display_name": "Create Video",
+    "description": "Create a video from images.",
+    "python_module": "comfy_extras.nodes_video",
+    "category": "image/video",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "SaveVideo": {
+    "input": {
+      "required": {
+        "video": ["VIDEO", {"tooltip": "The video to save."}],
+        "filename_prefix": ["STRING", {"default": "video/ComfyUI"}],
+        "format": [["auto", "mp4", "webm"], {"default": "auto"}],
+        "codec": [["auto", "h264", "vp9"], {"default": "auto"}]
+      },
+      "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}
+    },
+    "input_order": {"required": ["video", "filename_prefix", "format", "codec"]},
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "SaveVideo",
+    "display_name": "Save Video",
+    "description": "Saves the input images to your ComfyUI output directory.",
+    "python_module": "comfy_extras.nodes_video",
+    "category": "image/video",
+    "output_node": true,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "SaveWEBM": {
+    "input": {
+      "required": {
+        "images": ["IMAGE", {}],
+        "filename_prefix": ["STRING", {"default": "ComfyUI"}],
+        "codec": [["vp9", "av1"], {}],
+        "fps": ["FLOAT", {"default": 24.0, "min": 0.01, "max": 1000.0, "step": 0.01}],
+        "crf": ["FLOAT", {"default": 32.0, "min": 0, "max": 63.0, "step": 1, "tooltip": "Higher crf means lower quality with a smaller file size."}]
+      },
+      "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}
+    },
+    "input_order": {"required": ["images", "filename_prefix", "codec", "fps", "crf"]},
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "SaveWEBM",
+    "display_name": "Save WEBM",
+    "description": "Saves the input images as a WEBM video.",
+    "python_module": "comfy_extras.nodes_video",
+    "category": "image/video",
+    "output_node": true,
+    "deprecated": false,
+    "experimental": true,
+    "api_node": false
+  },
+  "ForceInputSteps": {
+    "input": {
+      "required": {
+        "model": ["MODEL", {}],
+        "steps": ["INT", {"default": 20, "min": 1, "max": 10000, "forceInput": true}]
+      }
+    },
+    "input_order": {"required": ["model", "steps"]},
+    "output": ["MODEL"],
+    "output_is_list": [false],
+    "output_name": ["MODEL"],
+    "name": "ForceInputSteps",
+    "display_name": "Force Input Steps (synthetic)",
+    "description": "Synthetic node whose INT input declares forceInput. An exported literal for this input must still be preserved and submitted.",
+    "python_module": "custom_nodes.simpleui_synthetic_pack",
+    "category": "synthetic/presentation",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "api_node": false
+  },
+  "AnySwitchWildcard": {
+    "input": {
+      "required": {
+        "select": ["INT", {"default": 1, "min": 1, "max": 8}]
+      },
+      "optional": {
+        "input_1": ["*", {}]
+      }
+    },
+    "input_order": {"required": ["select"], "optional": ["input_1"]},
+    "output": ["*"],
+    "output_is_list": [false],
+    "output_name": ["selected"],
+    "name": "AnySwitchWildcard",
+    "display_name": "Any Switch (synthetic wildcard)",
+    "description": "Synthetic node with a wildcard type and dynamically named optional inputs (input_1..input_n) that object_info does not fully enumerate.",
+    "python_module": "custom_nodes.simpleui_synthetic_pack",
+    "category": "synthetic/flexible",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "api_node": false
+  },
+  "OpaqueConfigNode": {
+    "input": {
+      "required": {
+        "config": ["SIMPLEUI_OPAQUE_CONFIG", {}]
+      }
+    },
+    "input_order": {"required": ["config"]},
+    "output": ["SIMPLEUI_OPAQUE_CONFIG"],
+    "output_is_list": [false],
+    "output_name": ["config"],
+    "name": "OpaqueConfigNode",
+    "display_name": "Opaque Config (synthetic)",
+    "description": "Synthetic node whose required input is a custom object type with no described editing contract. Requires a typed adapter; the literal must be preserved untouched.",
+    "python_module": "custom_nodes.simpleui_synthetic_pack",
+    "category": "synthetic/opaque",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "api_node": false
+  }
+}
