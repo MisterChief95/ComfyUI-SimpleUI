@@ -1,0 +1,104 @@
+/* Visual tokens for the whole app. Imported once from routes/+layout.svelte.
+   Native color-scheme + prefers-color-scheme; no theme JS is needed for the
+   system option. The profile "theme" setting (light/dark override) is applied
+   by toggling data-theme on <html>; see routes/+layout.svelte. */
+
+:root {
+	color-scheme: light dark;
+	--color-bg: #ffffff;
+	--color-bg-elevated: #f2f2f5;
+	--color-text: #1a1a1e;
+	--color-text-muted: #5b5b63;
+	--color-border: #d9d9de;
+	--color-accent: #2f6fed;
+	--color-accent-text: #ffffff;
+	--color-danger: #b3241d;
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 1rem;
+	--space-4: 1.5rem;
+	--space-5: 2rem;
+	--radius: 0.5rem;
+	--font-sans:
+		system-ui, -apple-system, 'Segoe UI', sans-serif;
+	/* Minimum comfortable touch target (~44 CSS px). */
+	--touch-target: 2.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-bg: #17181c;
+		--color-bg-elevated: #212226;
+		--color-text: #f1f1f3;
+		--color-text-muted: #a9a9b2;
+		--color-border: #35363c;
+		--color-accent: #6f9bff;
+		--color-accent-text: #0a0a0a;
+	}
+}
+
+:root[data-theme='light'] {
+	color-scheme: light;
+	--color-bg: #ffffff;
+	--color-bg-elevated: #f2f2f5;
+	--color-text: #1a1a1e;
+	--color-text-muted: #5b5b63;
+	--color-border: #d9d9de;
+	--color-accent: #2f6fed;
+	--color-accent-text: #ffffff;
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--color-bg: #17181c;
+	--color-bg-elevated: #212226;
+	--color-text: #f1f1f3;
+	--color-text-muted: #a9a9b2;
+	--color-border: #35363c;
+	--color-accent: #6f9bff;
+	--color-accent-text: #0a0a0a;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+}
+
+body {
+	background: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-sans);
+	/* No horizontal page scrolling regardless of what a child does wrong. */
+	overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+	}
+}
