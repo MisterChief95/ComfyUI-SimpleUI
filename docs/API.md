@@ -159,6 +159,8 @@ and are discarded when they cannot be attributed to a prompt. They exist only if
 produces them: start it with `--preview-method auto` (or `latent2rgb`/`taesd`); the
 default `none` sends no previews. Previews never replace the saved output.
 
+`executed` frames are relayed without their `output` payload (only the node id and prompt id).
+
 `POST /api/generations/{id}/cancel` -> `204`. A queued job is removed from ComfyUI's
 queue; a running job is stopped with a **targeted** `POST /interrupt {"prompt_id"}` that
 ComfyUI ignores unless that prompt is the running one (verified on ComfyUI 0.38.0; the

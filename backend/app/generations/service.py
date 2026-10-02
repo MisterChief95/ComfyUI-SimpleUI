@@ -144,7 +144,10 @@ class GenerationService:
             self.store.update(owner_id, generation_id, status="failed", error={"execution": data})
         # execution_success is advisory. History is the terminal authority,
         # including fully cached jobs with no executed-node events.
-        self.events.publish(owner_id, {"generation_id": generation_id, "type": kind, "data": data})
+        # The UI only needs which node finished; node output (e.g. Show Text prompt
+        # text) is never displayed, so it is not sent to the browser.
+        relayed = {k: v for k, v in data.items() if k != "output"} if kind == "executed" else data
+        self.events.publish(owner_id, {"generation_id": generation_id, "type": kind, "data": relayed})
         return True
 
     async def reconcile(self, *, history_retention: dict[str, bool] | None = None) -> None:

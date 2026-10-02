@@ -177,6 +177,15 @@ class EventTests(GenerationTestCase):
         self.assertTrue(other.queue.empty())
         self.assertEqual(self.store.get("default", row["id"])["status"], "running")
 
+    async def test_executed_output_payload_is_not_relayed(self) -> None:
+        row = await self.submit()
+        mine = self.broker.subscribe("default")
+        data = {"prompt_id": PROMPTS["image"], "node": "62", "output": {"text": ["secret prompt"]}}
+        self.assertTrue(self.service.process_event({"type": "executed", "data": data}))
+        sent = await mine.receive()
+        self.assertEqual(sent["data"], {"prompt_id": PROMPTS["image"], "node": "62"})
+        self.assertIn("output", data)  # the source frame is not mutated
+
     async def test_foreign_and_unattributable_previews_are_dropped(self) -> None:
         await self.submit()
         subscription = self.broker.subscribe("default")
