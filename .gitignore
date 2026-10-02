@@ -117,3 +117,6 @@ Desktop.ini
 *.njsproj
 *.sln
 *.swp
+
+# Local agent coordination state (tokens, handoffs)
+.dibs/

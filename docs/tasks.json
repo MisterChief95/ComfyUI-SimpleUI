@@ -2,8 +2,9 @@
   "source": {
     "version": "coordination-bootstrap-1",
     "documents": ["docs/TASKS.md", "docs/ARCHITECTURE.md", "docs/WORKFLOW_MAPPING.md", "docs/AGENT_COORDINATION.md"],
-    "note": "Reviewed structured import; acceptance arrays include the architecture/mapping review additions. Live status is in .coord/tasks.sqlite3."
+    "note": "Reviewed structured import; acceptance arrays include the architecture/mapping review additions. Live status is in the dibs plugin's SQLite store (this note's original .coord/tasks.sqlite3 path is superseded)."
   },
+  "reconciliation_note_2026_09_16": "DOCS-001: this payload is left exactly as originally imported, per this project's own rule not to rewrite import payloads after the fact. PWA-001 was cancelled by explicit user request (see docs/TASKS.md's reconciliation notes) and RELEASE-001's live depends_on/acceptance were amended to drop it -- neither edit is reflected in the entries below. Current, evidence-backed status for every task lives in docs/RELEASE_REVIEW.md and the dibs task database, not here.",
   "tasks": [
     {
       "id": "COORD-001", "title": "Bootstrap local coordination CLI", "priority": "P0", "depends_on": [],

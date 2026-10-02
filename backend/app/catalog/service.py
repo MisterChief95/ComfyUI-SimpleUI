@@ -148,6 +148,7 @@ class CatalogService:
         self._last_attempt_ms = now_ms()
         try:
             raw = await self._client.get_json("/object_info")
+            await self._fill_remote_combos(raw)
             normalized = normalize(raw)
         except ComfyUnavailable as exc:
             return await self._record_failure(exc.as_detail())
@@ -185,6 +186,35 @@ class CatalogService:
         await self._load_cache()
         LOGGER.info("Catalog refreshed: %d classes, revision %s", len(normalized.nodes), normalized.revision)
         return self._build_snapshot()
+
+    async def _fill_remote_combos(self, raw: Any) -> None:
+        """Fetch lists that object_info only points at (``remote.route``), in place.
+
+        Same-host routes only; a failed or malformed route leaves the combo empty.
+        """
+        fetched: dict[str, Any] = {}
+        for node in raw.values() if isinstance(raw, dict) else ():
+            inputs = node.get("input") if isinstance(node, dict) else None
+            for section in ("required", "optional"):
+                for spec in ((inputs or {}).get(section) or {}).values():
+                    if not (isinstance(spec, list) and len(spec) > 1 and spec[0] == "COMBO" and isinstance(spec[1], dict)):
+                        continue
+                    opts = spec[1]
+                    remote = opts.get("remote")
+                    route = remote.get("route") if isinstance(remote, dict) else None
+                    if opts.get("options") or not isinstance(route, str) or not route.startswith("/") or route.startswith("//"):
+                        continue
+                    if route not in fetched:
+                        try:
+                            fetched[route] = await self._client.get_json(route)
+                        except ComfyUnavailable:
+                            fetched[route] = None
+                    data = fetched[route]
+                    key = remote.get("response_key")
+                    if isinstance(data, dict) and isinstance(key, str):
+                        data = data.get(key)
+                    if isinstance(data, list):
+                        opts["options"] = data
 
     async def _record_failure(self, error: dict[str, Any]) -> CatalogSnapshot:
         self._failures += 1

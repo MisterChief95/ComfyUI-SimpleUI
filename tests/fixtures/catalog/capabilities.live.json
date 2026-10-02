@@ -1,0 +1,76 @@
+{
+  "provenance": "live",
+  "captured_at": "2026-09-16",
+  "live_gate": "open_for_image_and_video",
+  "live_gate_reason": "RELEASE-001/GEN-003: a real ComfyUI installation was reachable and exercised end to end through the running application itself (not curl alone): one real image generation and one real video generation each reached output_state 'ready' with the produced file correctly indexed into the gallery and rendered inline. The claims below are limited to what was actually exercised; upload, live-websocket, and running-job cancellation remain unverified and are called out explicitly rather than assumed working.",
+  "installation": {
+    "comfyui_revision": null,
+    "comfyui_version": "0.35.0",
+    "python_version": "3.13.13",
+    "torch_version": "2.13.0+cu132",
+    "device": "cuda (consumer NVIDIA GPU, ~34GB VRAM class)",
+    "node_packs": [
+      "ComfyUI-Custom-Scripts", "ComfyUI-INT8-Fast", "ComfyUI-Krea2-NAG", "ComfyUI-MAINodes",
+      "ComfyUI-MiniMax-H3-Turbo", "ComfyUI-PlagueKind-Nodes", "ComfyUI-SolAttn_triton", "ComfyUI-YOLO",
+      "ComfyUI-krea2-negpip", "ComfyUI_IPAdapter_plus", "ComfyUI_TiledKSampler", "Nvidia_RTX_Nodes_ComfyUI",
+      "RES4LYF", "comfy-image-saver", "comfyui-easy-use", "comfyui-frame-interpolation",
+      "comfyui-impact-pack", "comfyui-impact-subpack", "comfyui-inpaint-nodes", "comfyui-int-and-float",
+      "comfyui-kjnodes", "comfyui-ollama", "comfyui-prompt-control", "comfyui-spectrum-sdxl",
+      "comfyui-tooling-nodes", "comfyui-videohelpersuite", "comfyui_controlnet_aux", "comfyui_essentials",
+      "comfyui_starnodes", "deno-custom-nodes", "rgthree-comfy", "seedvr2_videoupscaler", "was-ns",
+      "websocket_image_save"
+    ],
+    "node_class_count": 2673,
+    "_note": "GPU model and exact revision/commit are intentionally not recorded (not needed for a compatibility claim and closer to identifying information than a version number); comfyui_revision stays null because /system_stats does not expose a git commit and the git-diagnostic route was not probed. node_packs is the directory-name list derived from object_info's python_module field, not a curated/approved list -- their presence proves nothing about that pack's own behavior beyond the specific node classes actually exercised below."
+  },
+  "routes_expected": {
+    "GET /object_info": {"purpose": "node metadata discovery", "verified": true, "note": "Used by the app's catalog service; returned 2673 node classes."},
+    "GET /system_stats": {"purpose": "revision and device report", "verified": true},
+    "POST /prompt": {"purpose": "submission; returns prompt_id, number, node_errors", "verified": true, "note": "Exercised both directly and through the app's own submit path for an image and a video graph."},
+    "GET /history/{prompt_id}": {"purpose": "completed results and output descriptors", "verified": true},
+    "GET /queue": {"purpose": "reconciliation of running and pending jobs", "verified": true, "note": "Exercised through the app's GenerationService.reconcile() and directly for the cancellation probe below."},
+    "WS /ws?clientId=...": {"purpose": "execution events and previews", "verified": false, "note": "IMPORTANT: the application never opens this connection at all (grepped; nothing in backend/app calls it). GenerationService.process_event(), which would consume it, is only ever called from tests. All real-world state transitions go through history/queue reconciliation instead (see GEN-003's handoff). This is not a gap this capture closes; it is a confirmed architectural fact worth carrying into the release review."},
+    "POST /upload/image": {"purpose": "image and mask upload into the input directory", "verified": false, "note": "Not exercised this session; INPUT-001's own tests are the only coverage."},
+    "POST /interrupt": {"purpose": "global interrupt of the RUNNING job", "verified": false, "note": "Not probed. The app correctly never calls it: GenerationService.cancel() only offers running-job cancellation when the upstream client exposes a per-job cancel_job, which ComfyClient does not define, so running cancellation stays disabled by construction, matching the required safe default."},
+    "POST /queue": {"purpose": "body {\"delete\": [prompt_id]} removes a PENDING job", "verified": true, "note": "See cancellation below."}
+  },
+  "submission_contract": {
+    "request_shape": {"prompt": "<node map>", "client_id": "<opaque>", "extra_data": {"extra_pnginfo": "optional"}},
+    "accepted_response": {"prompt_id": "<uuid>", "number": "<int>", "node_errors": {}},
+    "partial_acceptance": "Not exercised live this session (no rejected output branch was submitted); still resting on the synthetic history_edge_cases.json fixture and backend/tests/generations coverage.",
+    "verified": true,
+    "verified_note": "A minimal image graph (CheckpointLoaderSimple -> CLIPTextEncode x2 -> EmptyLatentImage -> KSampler -> VAEDecode -> SaveImage) and a video-shaped graph (same, ending in SaveWEBM with a 2-frame batch) were both submitted and returned the documented accepted-response shape with an empty node_errors."
+  },
+  "cancellation": {
+    "pending_job": {
+      "mechanism": "POST /queue with {\"delete\": [prompt_id]}",
+      "verified": true,
+      "evidence": "Three attempts. Two lost the race on this fast CUDA GPU: a job promoted from pending to running (or fully cache-hit and completed) before the delete call landed, and the delete was silently a no-op -- the job still ran to completion. The third attempt, with two heavier jobs queued ahead of the target, succeeded cleanly: the queue listing dropped the deleted prompt_id immediately and GET /history/{that_id} returned {} (empty) afterward, confirming it never ran. This empirically confirms docs/ARCHITECTURE.md's documented risk -- 'a queue read before the call does not make it safe, because the running job can change in between' -- rather than contradicting it."
+    },
+    "running_job": {
+      "mechanism": "POST /interrupt",
+      "verified": false,
+      "note": "Not probed; correctly never offered by the app regardless (see the WS/interrupt route notes above)."
+    }
+  },
+  "output_descriptor_contract": {
+    "images_key": "Confirmed live: SaveImage's history entry is {\"7\": {\"images\": [{\"filename\", \"subfolder\", \"type\"}]}}.",
+    "video_key": "Confirmed live: SaveWEBM's history entry is ALSO under 'images' (not 'videos' or 'gifs'), but carries an additional sibling key 'animated': [true] that no synthetic fixture modeled. GenerationService._apply_history mis-scanned that boolean list as a malformed output and downgraded a fully successful save from 'ready' to 'partial' -- fixed as part of GEN-003 (see history_video.live.json and the updated synthetic history_video.json).",
+    "verified": true
+  },
+  "loader_contract": {
+    "LoadImage": {"verified": false, "note": "Not exercised live this session; INPUT-001's own tests are the only coverage."},
+    "video_upload": {"verified": false, "note": "Not exercised live this session."}
+  },
+  "release_blockers_resolved": [
+    "No live ComfyUI revision, node pack list, or device report recorded. -- RESOLVED: version/python/torch/device and a 34-pack node_packs list are recorded above.",
+    "No real image generation captured. -- RESOLVED: history_image.live.json, reproduced through the running app end to end.",
+    "No real video generation captured. -- RESOLVED: history_video.live.json, reproduced through the running app end to end, and it caught a real bug (the 'animated' key) that the synthetic fixture missed.",
+    "Video output descriptor shapes are assumed from upstream source, not observed. -- RESOLVED for SaveImage and SaveWEBM specifically; other video-capable packs (e.g. VideoHelperSuite, present in node_packs above) were not exercised and remain assumed."
+  ],
+  "release_blockers_remaining": [
+    "Cancellation capability is now probed for the pending-job path (confirmed working, with a documented and now empirically-observed race risk on fast pipelines); running-job cancellation remains correctly unavailable by construction and unprobed by design.",
+    "No real loader contract confirmed for image/mask/video inputs; POST /upload/image was not exercised this session.",
+    "The application never opens a live WebSocket to ComfyUI's own /ws endpoint at all -- this is confirmed application behavior, not a missing capture, and should be recorded as a known architectural fact rather than a blocker to resolve."
+  ]
+}

@@ -186,8 +186,8 @@ def _project_input(
     """Return ``(projection, withheld_choices)`` for one declared input."""
     type_spec, opts = _split_input(raw_input)
 
-    if isinstance(type_spec, list):
-        return _project_combo(name, type_spec, opts)
+    if isinstance(type_spec, list) or type_spec == "COMBO":
+        return _project_combo(name, _combo_choices(type_spec, opts), opts)
 
     if not isinstance(type_spec, str):
         return (
@@ -301,9 +301,32 @@ def _project_int(name: str, opts: dict[str, Any]) -> dict[str, Any]:
     return {"logical_type": "INT", **{k: projected[k] for k in ordered if k in projected}}
 
 
+def _combo_choices(type_spec: Any, opts: dict[str, Any]) -> list[Any]:
+    """Newer ``["COMBO", {"options": [...]}]`` first, else the legacy ``[[...]]`` list."""
+    newer = opts.get("options") if type_spec == "COMBO" else None
+    if isinstance(newer, list) and newer:
+        return newer
+    if isinstance(type_spec, list):
+        return type_spec
+    return newer if isinstance(newer, list) else []
+
+
+def is_scalar(value: Any) -> bool:
+    return isinstance(value, (str, int, float, bool))
+
+
+def same_choice(a: Any, b: Any) -> bool:
+    """Option equality that keeps ``True`` apart from ``1``; 1 and 1.0 are the same number."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return isinstance(a, bool) and isinstance(b, bool) and a == b
+    return is_scalar(a) and is_scalar(b) and a == b
+
+
 def _project_combo(name: str, choices: list[Any], opts: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Classify an enumerated choice list, withholding anything shared or path-like."""
-    values = [c for c in choices if isinstance(c, str)]
+    # Options keep the JSON type ComfyUI sent (numbers and booleans are not stringified).
+    options = [c for c in choices if is_scalar(c)]
+    values = [c for c in options if isinstance(c, str)]
     upload_hint = any(str(key).endswith("_upload") and opts[key] for key in opts)
     media_kind = _media_kind(values)
 
@@ -344,8 +367,8 @@ def _project_combo(name: str, choices: list[Any], opts: dict[str, Any]) -> tuple
     projected = {"logical_type": "COMBO"}
     if any(value.lower().endswith(MODEL_EXTENSIONS) for value in values):
         projected["choices_source"] = "server_model_catalog"
-    projected["choices"] = values
-    if isinstance(opts.get("default"), str):
+    projected["choices"] = options
+    if is_scalar(opts.get("default")):
         projected["default"] = opts["default"]
     return projected, []
 
@@ -428,9 +451,9 @@ def evaluate_selections(
             continue
 
         logical = spec.get("logical_type")
-        if logical in ("COMBO",) and isinstance(value, str):
+        if logical in ("COMBO",) and is_scalar(value):
             choices = spec.get("choices") or []
-            if choices and value not in choices:
+            if choices and not any(same_choice(value, c) for c in choices):
                 issues.append({
                     **common,
                     "severity": "blocking",

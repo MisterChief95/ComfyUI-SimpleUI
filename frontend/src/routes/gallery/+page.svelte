@@ -1,193 +1,319 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { GalleryState } from '$lib/media/gallery.svelte';
+	import { workflowNames } from '$lib/media/workflowNames.svelte';
+	import { settingsState } from '$lib/settings.svelte';
+	import Compare from '$lib/media/Compare.svelte';
+	import type { MediaInfo } from '$lib/contracts';
+	import Viewer from '$lib/media/Viewer.svelte';
+	import Star from '$lib/media/Star.svelte';
+	import Icon from '$lib/ui/Icon.svelte';
+	import Sheet from '$lib/ui/Sheet.svelte';
 
 	const gallery = new GalleryState();
+	const wide = new MediaQuery('min-width: 768px');
+
+	let panelOpen = $state(false);
+	let sheetOpen = $state(false);
+	let comparing = $state(false);
+	let picked = $state<MediaInfo[]>([]);
+	let showCompare = $state(false);
+
+	function open(item: MediaInfo): void {
+		if (!comparing) return void gallery.select(item);
+		picked = picked.some((p) => p.id === item.id) ? picked.filter((p) => p.id !== item.id) : [...picked, item].slice(-2);
+	}
+	function toggleCompare(): void {
+		comparing = !comparing;
+		picked = [];
+	}
+
+	// Thumbnail size is a profile setting; it only changes the grid's minimum column width.
+	const tile = $derived(
+		{ small: '7.5rem', large: '13rem' }[String(settingsState.data?.profile.thumbnail_size)] ?? '10rem'
+	);
 
 	onMount(() => {
-		gallery.apply();
-		gallery.connect();
+		let disposed = false;
+		async function load(): Promise<void> {
+			if (!settingsState.data) await settingsState.load();
+			if (disposed) return;
+			await gallery.apply();
+			if (!disposed) gallery.connect();
+		}
+		void load();
+		workflowNames.load();
+		return () => { disposed = true; };
 	});
 	onDestroy(() => gallery.dispose());
 
-	function formatDate(value: number): string {
-		return new Date(value).toLocaleString();
+	function toggleFilters(): void {
+		if (wide.current) panelOpen = !panelOpen;
+		else sheetOpen = true;
+	}
+
+	async function apply(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		sheetOpen = false;
+		await gallery.apply();
+	}
+
+	async function reset(): Promise<void> {
+		sheetOpen = false;
+		await gallery.resetFilters();
 	}
 </script>
 
-<h1>Gallery</h1>
+{#snippet fields()}
+	<form id="gallery-filters" class="fields" onsubmit={apply}>
+		<label>
+			<span>Type</span>
+			<select bind:value={gallery.mediaKind}>
+				<option value="">All media</option>
+				<option value="image">Images</option>
+				<option value="video">Videos</option>
+				<option value="other">Other</option>
+			</select>
+		</label>
+		<label>
+			<span>Favorite</span>
+			<select bind:value={gallery.favorite}>
+				<option value="">All</option>
+				<option value="true">Favorites</option>
+				<option value="false">Not favorites</option>
+			</select>
+		</label>
+		<label>
+			<span>Workflow</span>
+			<select bind:value={gallery.workflowId}>
+				<option value="">Any workflow</option>
+				{#each workflowNames.list as workflow (workflow.id)}
+					<option value={workflow.id}>{workflow.name}</option>
+				{/each}
+			</select>
+		</label>
+		<label>
+			<span>From</span>
+			<input type="date" bind:value={gallery.createdAfter} />
+		</label>
+		<label>
+			<span>Through</span>
+			<input type="date" bind:value={gallery.createdBefore} />
+		</label>
+		<label class="prompt">
+			<span>Known prompt</span>
+			<input bind:value={gallery.prompt} maxlength="500" placeholder="Search saved prompt values" />
+		</label>
+	</form>
+{/snippet}
 
-<form class="filters" onsubmit={(event) => { event.preventDefault(); gallery.apply(); }}>
-	<label>
-		Type
-		<select bind:value={gallery.mediaKind}>
-			<option value="">All media</option>
-			<option value="image">Images</option>
-			<option value="video">Videos</option>
-			<option value="other">Other</option>
-		</select>
-	</label>
-	<label>
-		Favorite
-		<select bind:value={gallery.favorite}>
-			<option value="">All</option>
-			<option value="true">Favorites</option>
-			<option value="false">Not favorites</option>
-		</select>
-	</label>
-	<label>
-		Workflow ID
-		<input bind:value={gallery.workflowId} placeholder="Any workflow" />
-	</label>
-	<label>
-		From
-		<input type="date" bind:value={gallery.createdAfter} />
-	</label>
-	<label>
-		Through
-		<input type="date" bind:value={gallery.createdBefore} />
-	</label>
-	<label class="prompt">
-		Known prompt
-		<input bind:value={gallery.prompt} maxlength="500" placeholder="Search saved prompt values" />
-	</label>
-	<button type="submit" disabled={gallery.loading}>Apply filters</button>
-</form>
-
-{#if gallery.error}<p class="error" role="alert">{gallery.error}</p>{/if}
-
-{#if gallery.selected}
-	{@const item = gallery.selected}
-	<section class="viewer" aria-label="Selected media">
-		<div class="viewer-header">
-			<div>
-				<h2>{item.filename}</h2>
-				<p>{formatDate(item.created_ms)} · {item.state}</p>
-			</div>
-			<button type="button" onclick={() => gallery.close()}>Close</button>
-		</div>
-		{#if gallery.isUnavailable(item)}
-			<p class="missing" role="status">The file is unavailable. Its gallery and generation records are preserved.</p>
-		{:else if item.media_kind === 'image'}
-			<img src={`/api/media/${item.id}/file`} alt={item.filename} onerror={() => gallery.markUnavailable(item.id)} />
-		{:else if item.media_kind === 'video'}
-			<video controls preload="metadata" src={`/api/media/${item.id}/file`} onerror={() => gallery.markUnavailable(item.id)}>
-				<track kind="captions" />
-			</video>
-		{:else}
-			<p>Preview is not available for this file type.</p>
+<div class="page stack" style:--gap="var(--space-2)">
+	<div class="row">
+		<h1 class="grow">Gallery</h1>
+		{#if comparing && picked.length === 2}
+			<button type="button" class="btn btn-primary" onclick={() => (showCompare = true)}>Compare</button>
 		{/if}
-		<div class="actions">
-			<button type="button" onclick={() => gallery.toggleFavorite(item)}>
-				{item.favorite ? 'Remove favorite' : 'Add favorite'}
-			</button>
-			{#if !gallery.isUnavailable(item)}
-				<a href={`/api/media/${item.id}/download`} download>Download original</a>
-			{/if}
-		</div>
+		<button type="button" class="btn" aria-pressed={comparing} onclick={toggleCompare}>
+			{comparing ? `Cancel compare (${picked.length}/2)` : 'Compare'}
+		</button>
+		<button
+			type="button"
+			class="btn"
+			aria-expanded={wide.current ? panelOpen : undefined}
+			aria-haspopup={wide.current ? undefined : 'dialog'}
+			onclick={toggleFilters}
+		>
+			Filters
+			{#if gallery.activeCount > 0}<span class="badge badge-accent">{gallery.activeCount}</span>{/if}
+		</button>
+	</div>
 
-		<section class="details">
-			<h3>Generation details</h3>
-			{#if !item.generation_id}
-				<p>Workflow and prompt are unknown for this imported media.</p>
-			{:else if gallery.detailLoading}
-				<p>Loading generation…</p>
-			{:else if gallery.detailError}
-				<p class="error" role="alert">{gallery.detailError}</p>
-			{:else if gallery.detail}
-				<p>Status: <strong>{gallery.detail.status}</strong></p>
-				<p>Output: {gallery.detail.output_state}</p>
-				{#if gallery.detail.error}
-					<pre class="error">{JSON.stringify(gallery.detail.error, null, 2)}</pre>
-				{/if}
-				{#if gallery.detail.effective_values}
-					<details>
-						<summary>Saved prompt and input values</summary>
-						<pre>{JSON.stringify(gallery.detail.effective_values, null, 2)}</pre>
-					</details>
-					{#if gallery.detail.workflow_id}
-						<a class="reuse" href={`/generation/${gallery.detail.workflow_id}?reuse=${gallery.detail.id}`}>Reuse as draft</a>
-					{/if}
-				{:else}
-					<p>Saved prompt and workflow inputs are unavailable. The media and generation status remain.</p>
-				{/if}
-			{/if}
-		</section>
-	</section>
+	{#if wide.current && panelOpen}
+		<div class="card panel">
+			{@render fields()}
+			<div class="row actions">
+				<button type="submit" form="gallery-filters" class="btn btn-primary" disabled={gallery.loading}>Apply filters</button>
+				<button type="button" class="btn btn-ghost" onclick={reset} disabled={gallery.loading}>Reset</button>
+			</div>
+		</div>
+	{/if}
+
+	{#if !wide.current}
+		<Sheet bind:open={sheetOpen} title="Filters" variant="sheet">
+			{@render fields()}
+			{#snippet footer()}
+				<div class="row">
+					<button type="button" class="btn grow" onclick={reset} disabled={gallery.loading}>Reset</button>
+					<button type="submit" form="gallery-filters" class="btn btn-primary grow" disabled={gallery.loading}>Apply filters</button>
+				</div>
+			{/snippet}
+		</Sheet>
+	{/if}
+
+	{#if gallery.error}<p class="error" role="alert">{gallery.error}</p>{/if}
+
+	{#if gallery.loading && gallery.items.length === 0}
+		<p class="muted">Loading…</p>
+	{:else if gallery.items.length === 0}
+		<p class="muted">No media matches these filters.</p>
+	{:else}
+		<ul class="grid" style:--tile={tile}>
+			{#each gallery.items as item (item.id)}
+				{@const unavailable = gallery.isUnavailable(item)}
+				<li class="tile" class:unavailable class:picked={picked.some((p) => p.id === item.id)}>
+					<button class="preview" type="button" aria-label={`Open ${item.filename}`} title={item.filename} onclick={() => open(item)}>
+						{#if unavailable}
+							<span class="placeholder">File unavailable</span>
+						{:else if item.media_kind === 'image' && !gallery.thumbnailMissing[item.id]}
+							<img src={`/api/media/${item.id}/thumbnail`} alt="" loading="lazy" onerror={() => gallery.markThumbnailMissing(item.id)} />
+						{:else}
+							<span class="placeholder">{item.media_kind === 'video' ? 'Video' : 'File'}</span>
+						{/if}
+						{#if item.media_kind === 'video'}
+							<span class="badge video-badge"><Icon name="video" size={14} /> Video</span>
+						{/if}
+					</button>
+					<button
+						class="favorite btn-icon"
+						class:on={item.favorite}
+						type="button"
+						aria-pressed={!!item.favorite}
+						aria-label={item.favorite ? `Remove ${item.filename} from favorites` : `Add ${item.filename} to favorites`}
+						onclick={() => gallery.toggleFavorite(item)}
+					>
+						<Star filled={!!item.favorite} />
+					</button>
+				</li>
+			{/each}
+		</ul>
+		{#if gallery.nextCursor}
+			<button class="btn more" type="button" onclick={() => gallery.load(false)} disabled={gallery.loading}>
+				{gallery.loading ? 'Loading…' : 'Load more'}
+			</button>
+		{/if}
+	{/if}
+</div>
+
+{#if showCompare && picked.length === 2}
+	<Compare items={[picked[0], picked[1]]} onclose={() => { showCompare = false; comparing = false; picked = []; }} />
 {/if}
 
-{#if gallery.loading && gallery.items.length === 0}
-	<p>Loading…</p>
-{:else if gallery.items.length === 0}
-	<p>No media matches these filters.</p>
-{:else}
-	<div class="grid">
-		{#each gallery.items as item (item.id)}
-			<article class:unavailable={gallery.isUnavailable(item)}>
-				<button class="preview" type="button" onclick={() => gallery.select(item)}>
-					{#if gallery.isUnavailable(item)}
-						<span class="placeholder">File unavailable</span>
-					{:else if item.media_kind === 'image' && !gallery.thumbnailMissing[item.id]}
-						<img src={`/api/media/${item.id}/thumbnail`} alt="" loading="lazy" onerror={() => gallery.markThumbnailMissing(item.id)} />
-					{:else}
-						<span class="placeholder">{item.media_kind === 'video' ? 'Video' : 'File'}</span>
-					{/if}
-					<span class="filename">{item.filename}</span>
-				</button>
-				<button class="favorite" type="button" aria-label={item.favorite ? `Remove ${item.filename} from favorites` : `Add ${item.filename} to favorites`} onclick={() => gallery.toggleFavorite(item)}>
-					{item.favorite ? '★' : '☆'}
-				</button>
-			</article>
-		{/each}
-	</div>
-	{#if gallery.nextCursor}
-		<button class="more" type="button" onclick={() => gallery.load(false)} disabled={gallery.loading}>
-			{gallery.loading ? 'Loading…' : 'Load more'}
-		</button>
-	{/if}
+{#if gallery.selected}
+	<Viewer {gallery} />
 {/if}
 
 <style>
-	.filters {
+	h1 {
+		margin: 0;
+	}
+
+	.fields {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-		gap: var(--space-2);
-		margin-bottom: var(--space-4);
-		padding: var(--space-3);
-		background: var(--color-bg-elevated);
-		border-radius: var(--radius);
+		gap: var(--space-2) var(--space-3);
+	}
+	.fields label {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+	}
+	.fields .prompt {
+		grid-column: 1 / -1;
+	}
+	/* Inside the phone sheet: single column. */
+	:global(dialog) .fields {
+		grid-template-columns: 1fr;
+	}
+	.actions {
+		margin-top: var(--space-3);
 	}
 
-	.filters label { display: flex; flex-direction: column; gap: var(--space-1); font-size: 0.875rem; }
-	.filters .prompt { grid-column: span 2; }
-	.filters input, .filters select, .filters button, .viewer button, .viewer a, .more {
-		min-height: var(--touch-target);
-		padding: 0 var(--space-3);
+	.grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(var(--tile, 10rem), 1fr));
+		gap: var(--space-2);
+	}
+	.tile {
+		position: relative;
+		min-width: 0;
+		overflow: hidden;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
-		background: var(--color-bg);
+		background: var(--color-surface-2);
 	}
-	.filters button, .more { align-self: end; background: var(--color-accent); color: var(--color-accent-text); border: none; cursor: pointer; }
+	.tile.picked {
+		outline: 3px solid var(--color-accent);
+	}
+	.tile.unavailable {
+		border-color: var(--color-danger);
+	}
+	.preview {
+		display: block;
+		position: relative;
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+	}
+	.preview img,
+	.placeholder {
+		display: flex;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: cover;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		padding: var(--space-2);
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
+	}
+	.preview:hover img {
+		filter: brightness(1.08);
+	}
+	.video-badge {
+		position: absolute;
+		left: var(--space-1);
+		bottom: var(--space-1);
+		color: #fff;
+		background: rgb(0 0 0 / 0.65);
+	}
+	.favorite {
+		position: absolute;
+		top: var(--space-1);
+		right: var(--space-1);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: var(--control-h);
+		height: var(--control-h);
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		color: #fff;
+		background: rgb(0 0 0 / 0.5);
+		cursor: pointer;
+		backdrop-filter: blur(4px);
+	}
+	.favorite.on {
+		color: var(--color-accent);
+		background: rgb(0 0 0 / 0.7);
+	}
 
-	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: var(--space-3); }
-	.grid article { position: relative; min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; background: var(--color-bg-elevated); }
-	.grid article.unavailable { border-color: var(--color-danger); }
-	.preview { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
-	.preview img, .placeholder { display: flex; width: 100%; aspect-ratio: 1; object-fit: cover; align-items: center; justify-content: center; background: var(--color-bg); color: var(--color-text-muted); }
-	.filename { display: block; padding: var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.favorite { position: absolute; top: var(--space-1); right: var(--space-1); min-width: var(--touch-target); min-height: var(--touch-target); border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-bg); cursor: pointer; font-size: 1.25rem; }
-
-	.viewer { margin-bottom: var(--space-4); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); }
-	.viewer-header, .actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
-	.viewer-header h2, .viewer-header p { margin: 0; }
-	.viewer-header p { color: var(--color-text-muted); font-size: 0.875rem; }
-	.viewer > img, .viewer > video { display: block; max-width: 100%; max-height: 70dvh; margin: var(--space-3) auto; }
-	.actions { justify-content: flex-start; margin: var(--space-3) 0; }
-	.actions a, .reuse { display: inline-flex; align-items: center; color: inherit; text-decoration: none; }
-	.details { border-top: 1px solid var(--color-border); }
-	.details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-	.missing, .error { color: var(--color-danger); }
-	.more { display: block; margin: var(--space-4) auto 0; }
-
-	@media (max-width: 520px) { .filters .prompt { grid-column: span 1; } }
+	.more {
+		align-self: center;
+		margin-top: var(--space-3);
+	}
+	.error {
+		color: var(--color-danger);
+	}
 </style>

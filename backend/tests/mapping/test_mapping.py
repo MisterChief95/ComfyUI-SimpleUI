@@ -27,6 +27,7 @@ from app.mapping import (
     parse_graph,
     resolve_seed,
 )
+from app.contracts import EnumOption
 from app.mapping.submission import SubmissionError
 from app.storage import Database
 from app.storage.repository import Repository
@@ -364,6 +365,28 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
         with self.assertRaises(SubmissionError) as caught:
             build_submission_graph(graph, schema, {"5:cfg": 1000.0})
         self.assertEqual(caught.exception.detail.code, "value_out_of_range")
+
+    def test_enum_without_options_rejects_edits(self) -> None:
+        graph, schema = schema_for("image_basic.api.json")
+        enum = next(c for c in schema.controls if c.logical_type == "enum" and c.options)
+        with self.assertRaises(SubmissionError):
+            build_submission_graph(graph, schema, {enum.binding_id: "not-a-choice"})
+        enum.options = []
+        with self.assertRaises(SubmissionError):
+            build_submission_graph(graph, schema, {enum.binding_id: "typed.model"})
+        build_submission_graph(graph, schema)  # unedited value still passes through
+
+    def test_typed_combo_options_are_submitted_as_listed(self) -> None:
+        graph, schema = schema_for("image_basic.api.json")
+        enum = next(c for c in schema.controls if c.logical_type == "enum" and c.options)
+        enum.options = [EnumOption(value=v, label=str(v), available=True) for v in (4, 8.5, "x", True)]
+        node, name = enum.binding_id.split(":", 1)
+        for sent, expected in ((8.5, 8.5), (4.0, 4), ("x", "x"), (True, True)):
+            got = build_submission_graph(graph, schema, {enum.binding_id: sent})[node]["inputs"][name]
+            self.assertEqual((got, type(got)), (expected, type(expected)))
+        for bad in ("4", 1, False, "8.5"):  # text is not the number; True is not 1
+            with self.assertRaises(SubmissionError):
+                build_submission_graph(graph, schema, {enum.binding_id: bad})
 
     def test_non_finite_submitted_value_is_refused(self) -> None:
         graph, schema = schema_for("image_basic.api.json")

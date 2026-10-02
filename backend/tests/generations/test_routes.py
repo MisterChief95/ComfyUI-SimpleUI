@@ -163,12 +163,72 @@ class OwnershipIsolationTest(GenerationRouteTestCase):
 
         self.assertEqual(bee.get("/api/generations").json()["items"], [])
         self.assertEqual(bee.get(f"/api/generations/{generation_id}").status_code, 404)
+        self.assertEqual(bee.get("/api/generations?status=active").json()["items"], [])
+        self.assertEqual(self.post(bee, f"/api/generations/{generation_id}/retry",
+                                   json={"request_key": "foreign-retry"}).status_code, 404)
 
     def test_submission_requires_a_session(self) -> None:
         self.enable_multi_user(PASSWORD)
         anonymous = self.local_client()
         response = self.submit(anonymous, "whatever", "req-1")
         self.assertEqual(response.status_code, 401)
+
+
+class QueueAndRetryTest(GenerationRouteTestCase):
+    def test_active_filter_excludes_terminal_rows_and_paginates(self) -> None:
+        client = self.local_client()
+        workflow = self.import_graph(client)
+        ids = [self.submit(client, workflow, f"queue-{i}").json()["id"] for i in range(3)]
+        self.app.state.generations.store.update("default", ids[0], status="failed", output_state="unavailable")
+        self.upstream.queue["queue_pending"] = [[0, "prompt-1"]]
+        first = client.get("/api/generations?status=active&limit=1").json()
+        second = client.get("/api/generations?status=active&limit=1&cursor=" + first["next_cursor"]).json()
+        self.assertEqual({first["items"][0]["id"], second["items"][0]["id"]}, set(ids[1:]))
+        self.assertIsNone(second["next_cursor"])
+        self.assertEqual(client.get("/api/generations?status=anything").status_code, 422)
+
+    def test_retry_copies_the_execution_snapshot_and_is_idempotent(self) -> None:
+        client = self.local_client()
+        workflow = self.import_graph(client)
+        source = self.submit(client, workflow, "source", edits={
+            "2:text": "the original prompt", "5:seed": "9007199254740993"
+        }).json()
+        store = self.app.state.generations.store
+        store.update("default", source["id"], status="cancelled", output_state="unavailable")
+        original = store.get("default", source["id"])
+        sent = []
+
+        async def recording(graph, **kwargs):
+            sent.append(graph)
+            self.upstream.submit_count += 1
+            return {"prompt_id": "retry-prompt"}
+
+        self.upstream.submit_prompt = recording
+        path = f"/api/generations/{source['id']}/retry"
+        first = self.post(client, path, json={"request_key": "retry-key"})
+        again = self.post(client, path, json={"request_key": "retry-key"})
+        self.assertEqual(first.status_code, 201, first.text)
+        self.assertNotEqual(first.json()["id"], source["id"])
+        self.assertEqual(first.json()["id"], again.json()["id"])
+        self.assertEqual(sent, [original["graph"]])
+        self.assertEqual(first.json()["effective_values"], original["effective_values"])
+        self.assertEqual(self.upstream.submit_count, 2)
+
+    def test_retry_refuses_active_uncertain_or_purged_snapshots(self) -> None:
+        client = self.local_client()
+        workflow = self.import_graph(client)
+        source = self.submit(client, workflow, "source").json()
+        path = f"/api/generations/{source['id']}/retry"
+        store = self.app.state.generations.store
+        self.upstream.queue["queue_pending"] = [[0, "prompt-1"]]
+        for status in ("queued", "running", "submission_unknown", "unknown"):
+            store.update("default", source["id"], status=status)
+            response = self.post(client, path, json={"request_key": "refused-" + status})
+            self.assertEqual(response.status_code, 409, response.text)
+        store.update("default", source["id"], status="cancelled", output_state="unavailable")
+        store.purge_snapshot("default", source["id"])
+        self.assertEqual(self.post(client, path, json={"request_key": "purged"}).status_code, 409)
+        self.assertEqual(self.upstream.submit_count, 1)
 
 
 class CancellationTest(GenerationRouteTestCase):
@@ -227,6 +287,135 @@ class EventStreamTest(GenerationRouteTestCase):
         with self.assertRaises(Exception):
             with client.websocket_connect("/api/events"):
                 pass
+
+    def test_an_open_socket_alone_drives_a_generation_to_completion(self) -> None:
+        """GEN-003: no client GET, just an open socket -- as the real app does.
+
+        This app runs no perpetual background poller and the frontend only
+        ever refetches a generation when an event tells it to (it does not
+        itself poll /api/generations). Before this fix, a job that only
+        reached a terminal state through history reconciliation (as any fully
+        cached ComfyUI run does) could sit at output_state 'pending' forever
+        with nothing to ever notice or announce it finished.
+        """
+        client = self.local_client()
+        workflow_id = self.import_graph(client)
+        submitted = self.submit(client, workflow_id, "req-1").json()
+        self.assertEqual((submitted["status"], submitted["output_state"]), ("queued", "pending"))
+
+        self.upstream.history = {
+            "prompt-1": {"outputs": {}, "status": {"status_str": "success", "completed": True}}
+        }
+        # TestClient's websocket_connect dials ws://testserver by default,
+        # which does not match the loopback Host/Origin local_client() set up
+        # for its plain HTTP requests (see the other socket test above).
+        with client.websocket_connect("/api/events", headers={"host": "localhost:8000"}) as socket:
+            event = socket.receive_json()
+        self.assertEqual(event, {"generation_id": submitted["id"], "type": "reconciled", "data": {}})
+
+        final = client.get(f"/api/generations/{submitted['id']}").json()
+        self.assertEqual((final["status"], final["output_state"]), ("succeeded", "unavailable"))
+
+
+class TypedEditsTest(GenerationRouteTestCase):
+    """LAYOUT-001: edits are string | boolean | number, encoded like ControlDescriptor.value."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        raw = json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+        raw["TypedNode"] = {
+            **raw["SaveImage"],
+            "name": "TypedNode",
+            "input": {"required": {
+                "flag": ["BOOLEAN", {"default": False}],
+                "count": ["INT", {"default": 1, "min": 0, "max": 10}],
+                "big": ["INT", {"default": 0, "min": 0, "max": 2**64 - 1}],
+                "scale": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0}],
+                "note": ["STRING", {"default": "x"}],
+            }},
+            "input_order": {"required": ["flag", "count", "big", "scale", "note"]},
+        }
+        snapshot = CatalogSnapshot(
+            freshness=CatalogFreshness(state="fresh"), nodes=normalize(raw).nodes, capabilities={}
+        )
+
+        async def typed_snapshot():
+            return snapshot
+
+        self.app.state.catalog.snapshot = typed_snapshot
+        self.sent: list[dict] = []
+        original = self.upstream.submit_prompt
+
+        async def recording(graph, **kwargs):
+            self.sent.append(graph)
+            return await original(graph, **kwargs)
+
+        self.upstream.submit_prompt = recording
+        self.client = self.local_client()
+        graph = {"1": {"class_type": "TypedNode", "inputs": {
+            "flag": False, "count": 1, "big": 0, "scale": 1.0, "note": "x"}}}
+        response = self.post(
+            self.client, "/api/workflows?name=Typed",
+            content=json.dumps(graph), headers={"content-type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        self.workflow_id = response.json()["id"]
+
+    def test_json_booleans_numbers_and_exact_ints_submit_with_their_types(self) -> None:
+        response = self.submit(self.client, self.workflow_id, "typed-1", edits={
+            "1:flag": True, "1:count": 7, "1:big": "18446744073709551615",
+            "1:scale": 2.5, "1:note": "hello",
+        })
+        self.assertEqual(response.status_code, 201, response.text)
+        inputs = self.sent[-1]["1"]["inputs"]
+        self.assertIs(inputs["flag"], True)
+        self.assertEqual((inputs["count"], inputs["big"]), (7, 2**64 - 1))
+        self.assertEqual((inputs["scale"], inputs["note"]), (2.5, "hello"))
+        # Stored values keep the ControlDescriptor.value encoding.
+        effective = response.json()["effective_values"]
+        self.assertEqual(effective["1:flag"], True)
+        self.assertEqual(effective["1:count"], "7")
+        self.assertEqual(effective["1:big"], "18446744073709551615")
+
+    def test_a_large_json_integer_keeps_every_digit(self) -> None:
+        response = self.client.post(
+            "/api/generations",
+            content=(
+                '{"workflow_id": "%s", "request_key": "typed-big", "seed_policy": "fixed",'
+                ' "edits": {"1:big": 9007199254740993}}' % self.workflow_id
+            ),
+            headers={**self.csrf_headers(self.client), "content-type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(self.sent[-1]["1"]["inputs"]["big"], 9007199254740993)
+        self.assertEqual(response.json()["effective_values"]["1:big"], "9007199254740993")
+
+    def test_a_number_is_not_turned_into_text_and_text_is_not_a_bool(self) -> None:
+        refused = self.submit(self.client, self.workflow_id, "typed-2", edits={"1:note": 5})
+        self.assertEqual(refused.status_code, 422, refused.text)
+        refused = self.submit(self.client, self.workflow_id, "typed-3", edits={"1:flag": "yes"})
+        self.assertEqual(refused.status_code, 422, refused.text)
+        refused = self.submit(self.client, self.workflow_id, "typed-4", edits={"1:flag": 1})
+        self.assertEqual(refused.status_code, 422, refused.text)
+        self.assertEqual(self.upstream.submit_count, 0)
+
+    def test_legacy_boolean_strings_are_still_accepted_and_normalized(self) -> None:
+        for key, text, expected in (("typed-5", "true", True), ("typed-6", "false", False)):
+            response = self.submit(self.client, self.workflow_id, key, edits={"1:flag": text})
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertIs(self.sent[-1]["1"]["inputs"]["flag"], expected)
+            self.assertIs(response.json()["effective_values"]["1:flag"], expected)
+        self.assertEqual(
+            self.submit(self.client, self.workflow_id, "typed-7", edits={"1:flag": "True"}).status_code, 422
+        )
+
+    def test_idempotency_fingerprint_covers_non_string_values(self) -> None:
+        first = self.submit(self.client, self.workflow_id, "typed-8", edits={"1:flag": True, "1:scale": 2.5})
+        again = self.submit(self.client, self.workflow_id, "typed-8", edits={"1:scale": 2.5, "1:flag": True})
+        self.assertEqual((again.status_code, again.json()["id"]), (201, first.json()["id"]))
+        self.assertEqual(self.upstream.submit_count, 1)
+        changed = self.submit(self.client, self.workflow_id, "typed-8", edits={"1:flag": False, "1:scale": 2.5})
+        self.assertEqual(changed.status_code, 409, changed.text)
 
 
 if __name__ == "__main__":

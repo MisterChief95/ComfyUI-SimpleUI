@@ -1,8 +1,8 @@
 {
   "fixture_set_version": 1,
   "task": "COMPAT-001",
-  "live_gate": "blocked",
-  "live_gate_reason": "No ComfyUI installation was reachable on the development host when this set was built. Every fixture below is synthetic. See docs/COMPATIBILITY.md.",
+  "live_gate": "open_for_image_and_video",
+  "live_gate_reason": "RELEASE-001/GEN-003 (2026-09-16): a real ComfyUI installation was reached and exercised end to end through the running application for one image and one video generation, each recorded in the new catalog/capabilities.live.json and outputs/*.live.json files. Upload, live-websocket, and running-job cancellation remain unverified; see capabilities.live.json's release_blockers_remaining. Every other fixture below is still synthetic and unchanged. See docs/COMPATIBILITY.md.",
   "provenance_values": {
     "synthetic": "Hand-authored to match documented ComfyUI contracts. Not observed from a running installation. Cannot support a release claim about image or video generation.",
     "live": "Captured from a recorded ComfyUI installation, with its revision and node pack list in catalog/capabilities.*.json."
@@ -29,6 +29,12 @@
     {
       "path": "catalog/capabilities.synthetic.json",
       "provenance": "synthetic",
+      "kind": "capabilities",
+      "covers": ["revision and node packs", "route contract", "submission contract", "cancellation capabilities", "output descriptor contract", "loader contracts", "release blockers"]
+    },
+    {
+      "path": "catalog/capabilities.live.json",
+      "provenance": "live",
       "kind": "capabilities",
       "covers": ["revision and node packs", "route contract", "submission contract", "cancellation capabilities", "output descriptor contract", "loader contracts", "release blockers"]
     },
@@ -165,10 +171,22 @@
       "covers": ["image outputs", "output descriptors"]
     },
     {
+      "path": "outputs/history_image.live.json",
+      "provenance": "live",
+      "kind": "output_descriptors",
+      "covers": ["image outputs", "output descriptors"]
+    },
+    {
       "path": "outputs/history_video.json",
       "provenance": "synthetic",
       "kind": "output_descriptors",
       "covers": ["video outputs", "output descriptors", "unknown descriptor key"]
+    },
+    {
+      "path": "outputs/history_video.live.json",
+      "provenance": "live",
+      "kind": "output_descriptors",
+      "covers": ["video outputs", "output descriptors"]
     },
     {
       "path": "outputs/history_edge_cases.json",

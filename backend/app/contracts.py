@@ -134,8 +134,9 @@ class NumberConstraints(Model):
 
 
 class EnumOption(Model):
-    #: The literal value sent back to ComfyUI; `label` is presentation only.
-    value: str
+    #: The literal value sent back to ComfyUI, in the JSON type ComfyUI listed it with;
+    #: `label` is presentation only.
+    value: str | bool | int | float
     label: str
     available: bool = True
 
@@ -153,7 +154,7 @@ class ControlDescriptor(Model):
     class_type: str
     input_name: str
     logical_type: LogicalType
-    value: str | bool | float | None
+    value: str | bool | int | float | None
     component: Component
     group: Group
     order: int

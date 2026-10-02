@@ -40,6 +40,10 @@ class RevisionConflict(Exception):
     """An optimistic write whose ``expected_revision`` no longer matches. -> 409."""
 
 
+class LimitExceeded(Exception):
+    """A per-owner cap was reached. -> 409."""
+
+
 @dataclass(frozen=True)
 class PageResult:
     """Rows plus the cursor for the next page (None at the end of the list)."""
@@ -107,6 +111,52 @@ class Repository:
             )
         return workflow_id
 
+    def rename_workflow(self, owner_id: str, workflow_id: str, name: str) -> dict[str, Any] | None:
+        with self.db.write() as conn:
+            cursor = conn.execute(
+                "UPDATE workflows SET name = ?, updated_ms = ? WHERE id = ? AND owner_id = ?",
+                (name, now_ms(), workflow_id, owner_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+        return self.get_workflow(owner_id, workflow_id)
+
+    def replace_workflow_graph(
+        self, owner_id: str, workflow_id: str, graph: dict[str, Any], expected_revision: int
+    ) -> int | None:
+        """Store ``graph`` as revision N+1 and make it current, atomically.
+
+        Returns the new revision, or None when the workflow is not owned.
+        ``expected_revision`` is the revision the caller diffed against; if the
+        workflow moved on meanwhile this raises ``RevisionConflict`` and nothing
+        is written. Older revisions stay (generations keep the one they ran).
+        """
+        stamp = now_ms()
+        with self.db.write() as conn:
+            row = conn.execute(
+                "SELECT current_revision FROM workflows WHERE id = ? AND owner_id = ?",
+                (workflow_id, owner_id),
+            ).fetchone()
+            if row is None:
+                return None
+            current = int(row["current_revision"])
+            if current != expected_revision:
+                raise RevisionConflict(
+                    f"This workflow is at graph revision {current}, not {expected_revision}. "
+                    "Reload it before replacing the graph."
+                )
+            revision = current + 1
+            conn.execute(
+                "INSERT INTO workflow_revisions (workflow_id, revision, graph_json, created_ms)"
+                " VALUES (?, ?, ?, ?)",
+                (workflow_id, revision, json.dumps(graph, separators=(",", ":")), stamp),
+            )
+            conn.execute(
+                "UPDATE workflows SET current_revision = ?, updated_ms = ? WHERE id = ?",
+                (revision, stamp, workflow_id),
+            )
+        return revision
+
     def get_workflow(self, owner_id: str, workflow_id: str) -> dict[str, Any] | None:
         row = self.db.query_one(
             "SELECT * FROM workflows WHERE id = ? AND owner_id = ?", (workflow_id, owner_id)
@@ -127,6 +177,16 @@ class Repository:
         self, owner_id: str, cursor: str | None = None, limit: int = PAGE_SIZE
     ) -> PageResult:
         return self._page("workflows", owner_id, cursor, limit)
+
+    def delete_workflow(self, owner_id: str, workflow_id: str) -> bool:
+        """Delete a workflow the caller owns. Cascades to its revisions and
+        saved workflow-scoped corrections; past generations keep their history
+        with ``workflow_id`` set to null (migrations/001_initial.sql)."""
+        with self.db.write() as conn:
+            cursor = conn.execute(
+                "DELETE FROM workflows WHERE id = ? AND owner_id = ?", (workflow_id, owner_id)
+            )
+            return cursor.rowcount > 0
 
     # --- mapping corrections ---------------------------------------------
 
@@ -224,6 +284,163 @@ class Repository:
                 f"DELETE FROM mapping_overrides WHERE {' AND '.join(where)}", tuple(params)
             )
             return cursor.rowcount
+
+    # --- workflow layouts -------------------------------------------------
+
+    def get_layout(self, owner_id: str, workflow_id: str) -> dict[str, Any] | None:
+        row = self.db.query_one(
+            "SELECT * FROM workflow_layouts WHERE owner_id = ? AND workflow_id = ?",
+            (owner_id, workflow_id),
+        )
+        return dict(row) if row else None
+
+    def save_layout(
+        self,
+        owner_id: str,
+        workflow_id: str,
+        *,
+        layout: dict[str, Any],
+        schema_signature: str,
+        expected_revision: int,
+    ) -> int:
+        """Upsert the layout optimistically; returns its new revision.
+
+        ``expected_revision`` 0 means "not saved yet". A mismatch raises
+        ``RevisionConflict`` inside the transaction that read the revision and
+        leaves the stored document untouched.
+        """
+        payload = json.dumps(layout, separators=(",", ":"))
+        with self.db.write() as conn:
+            row = conn.execute(
+                "SELECT revision FROM workflow_layouts WHERE owner_id = ? AND workflow_id = ?",
+                (owner_id, workflow_id),
+            ).fetchone()
+            current = int(row["revision"]) if row else 0
+            if expected_revision != current:
+                raise RevisionConflict(
+                    f"This layout is at revision {current}, not {expected_revision}. "
+                    "Reload it before saving again."
+                )
+            revision = current + 1
+            conn.execute(
+                "INSERT INTO workflow_layouts (owner_id, workflow_id, layout_json,"
+                " schema_signature, revision, updated_ms) VALUES (?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT (owner_id, workflow_id) DO UPDATE SET layout_json = excluded.layout_json,"
+                " schema_signature = excluded.schema_signature, revision = excluded.revision,"
+                " updated_ms = excluded.updated_ms",
+                (owner_id, workflow_id, payload, schema_signature, revision, now_ms()),
+            )
+        return revision
+
+    def delete_layout(
+        self, owner_id: str, workflow_id: str, expected_revision: int | None = None
+    ) -> bool:
+        """Reset to the automatic layout. With ``expected_revision`` (0 = none
+        saved) a mismatch raises ``RevisionConflict`` in the same transaction."""
+        with self.db.write() as conn:
+            if expected_revision is not None:
+                row = conn.execute(
+                    "SELECT revision FROM workflow_layouts WHERE owner_id = ? AND workflow_id = ?",
+                    (owner_id, workflow_id),
+                ).fetchone()
+                current = int(row["revision"]) if row else 0
+                if current != expected_revision:
+                    raise RevisionConflict(
+                        f"This layout is at revision {current}, not {expected_revision}. "
+                        "Reload it before resetting."
+                    )
+            cursor = conn.execute(
+                "DELETE FROM workflow_layouts WHERE owner_id = ? AND workflow_id = ?",
+                (owner_id, workflow_id),
+            )
+            return cursor.rowcount > 0
+
+    # --- workflow presets -------------------------------------------------
+
+    def list_presets(self, owner_id: str, workflow_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in self.db.query(
+                "SELECT * FROM workflow_presets WHERE owner_id = ? AND workflow_id = ?"
+                " ORDER BY updated_ms DESC, id DESC",
+                (owner_id, workflow_id),
+            )
+        ]
+
+    def create_preset(
+        self, owner_id: str, workflow_id: str, name: str, values: dict[str, Any], limit: int
+    ) -> dict[str, Any] | None:
+        """None when the workflow is not owned; ``LimitExceeded`` at ``limit`` presets."""
+        preset_id, stamp = new_id(), now_ms()
+        with self.db.write() as conn:
+            if conn.execute(
+                "SELECT 1 FROM workflows WHERE id = ? AND owner_id = ?", (workflow_id, owner_id)
+            ).fetchone() is None:
+                return None
+            count = conn.execute(
+                "SELECT COUNT(*) AS n FROM workflow_presets WHERE owner_id = ? AND workflow_id = ?",
+                (owner_id, workflow_id),
+            ).fetchone()["n"]
+            if count >= limit:
+                raise LimitExceeded(f"A workflow holds at most {limit} presets. Delete one first.")
+            conn.execute(
+                "INSERT INTO workflow_presets (id, owner_id, workflow_id, name, values_json,"
+                " revision, created_ms, updated_ms) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+                (preset_id, owner_id, workflow_id, name, json.dumps(values, allow_nan=False), stamp, stamp),
+            )
+        return self.get_preset(owner_id, workflow_id, preset_id)
+
+    def get_preset(self, owner_id: str, workflow_id: str, preset_id: str) -> dict[str, Any] | None:
+        row = self.db.query_one(
+            "SELECT * FROM workflow_presets WHERE id = ? AND owner_id = ? AND workflow_id = ?",
+            (preset_id, owner_id, workflow_id),
+        )
+        return dict(row) if row else None
+
+    def update_preset(
+        self,
+        owner_id: str,
+        workflow_id: str,
+        preset_id: str,
+        name: str | None,
+        values: dict[str, Any] | None,
+        expected_revision: int,
+    ) -> dict[str, Any] | None:
+        """None when not found/owned; ``RevisionConflict`` on a stale revision."""
+        with self.db.write() as conn:
+            row = conn.execute(
+                "SELECT revision FROM workflow_presets WHERE id = ? AND owner_id = ?"
+                " AND workflow_id = ?",
+                (preset_id, owner_id, workflow_id),
+            ).fetchone()
+            if row is None:
+                return None
+            if int(row["revision"]) != expected_revision:
+                raise RevisionConflict(
+                    f"This preset is at revision {row['revision']}, not {expected_revision}. "
+                    "Reload the presets before saving again."
+                )
+            conn.execute(
+                "UPDATE workflow_presets SET name = COALESCE(?, name),"
+                " values_json = COALESCE(?, values_json), revision = revision + 1, updated_ms = ?"
+                " WHERE id = ? AND owner_id = ?",
+                (
+                    name,
+                    None if values is None else json.dumps(values, allow_nan=False),
+                    now_ms(),
+                    preset_id,
+                    owner_id,
+                ),
+            )
+        return self.get_preset(owner_id, workflow_id, preset_id)
+
+    def delete_preset(self, owner_id: str, workflow_id: str, preset_id: str) -> bool:
+        with self.db.write() as conn:
+            cursor = conn.execute(
+                "DELETE FROM workflow_presets WHERE id = ? AND owner_id = ? AND workflow_id = ?",
+                (preset_id, owner_id, workflow_id),
+            )
+            return cursor.rowcount > 0
 
     # --- generations ------------------------------------------------------
 
@@ -339,9 +556,11 @@ class Repository:
             return cursor.rowcount == 1
 
     def list_generations(
-        self, owner_id: str, cursor: str | None = None, limit: int = PAGE_SIZE
+        self, owner_id: str, cursor: str | None = None, limit: int = PAGE_SIZE,
+        active: bool = False,
     ) -> PageResult:
-        return self._page("generations", owner_id, cursor, limit)
+        extra = "AND status IN ('submitting','submission_unknown','queued','running')" if active else ""
+        return self._page("generations", owner_id, cursor, limit, extra)
 
     # --- media ------------------------------------------------------------
 
@@ -407,6 +626,7 @@ class Repository:
         media_kind: str | None = None,
         favorite: bool | None = None,
         workflow_id: str | None = None,
+        generation_id: str | None = None,
         created_after: int | None = None,
         created_before: int | None = None,
         prompt: str | None = None,
@@ -426,6 +646,9 @@ class Repository:
                 " AND g.owner_id = media.owner_id AND g.workflow_id = ?)"
             )
             params.append(workflow_id)
+        if generation_id is not None:
+            clauses.append("AND media.generation_id = ?")
+            params.append(generation_id)
         if created_after is not None:
             clauses.append("AND media.created_ms >= ?")
             params.append(created_after)

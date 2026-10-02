@@ -75,6 +75,29 @@ class MediaFilterTest(MediaApiTestCase):
         self.assertEqual(self._ids(f"workflow_id={self.workflow_a}"), {self.image})
         self.assertEqual(self._ids(f"workflow_id={self.workflow_b}"), {self.video})
 
+    def test_filters_by_generation_and_is_owner_scoped(self) -> None:
+        second = self.repo.record_media(
+            DEFAULT_PROFILE_ID, storage_path="a2.png", file_version="a2", media_kind="image",
+            media_type="image/png", generation_id=self.generation_a,
+        )
+        self.assertEqual(self._ids(f"generation_id={self.generation_a}"), {self.image, second})
+        self.assertEqual(self._ids(f"generation_id={self.generation_b}"), {self.video})
+        self.assertEqual(self._ids("generation_id=missing"), set())
+        self.assertEqual(
+            self._ids(f"generation_id={self.generation_a}&media_kind=video"), set()
+        )
+
+        self.enable_multi_user(PASSWORD)
+        bee_id = self.auth.create_profile("Bee", PASSWORD)
+        bee = self.local_client()
+        self.assertEqual(self.login(bee, "Bee", PASSWORD).status_code, 200)
+        response = bee.get(f"/api/media?generation_id={self.generation_a}")
+        self.assertEqual(response.json()["items"], [])
+        bee_generation = self._generation(bee_id, "bee-g", None, "mine")
+        bee_media = self._media(bee_id, bee_generation, "bee.png", "image")
+        response = bee.get(f"/api/media?generation_id={bee_generation}")
+        self.assertEqual({item["id"] for item in response.json()["items"]}, {bee_media})
+
     def test_filters_by_created_range_and_keeps_it_across_pages(self) -> None:
         self.assertEqual(self._ids("created_before=1500"), {self.image})
         self.assertEqual(self._ids("created_after=1500"), {self.video, self.plain})

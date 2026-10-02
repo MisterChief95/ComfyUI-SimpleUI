@@ -154,6 +154,29 @@ class WorkflowRouteTest(AuthTestCase):
         self.assertEqual(bee.get("/api/workflows").json()["items"], [])
         self.assertEqual(bee.get(f"/api/workflows/{workflow_id}/controls").status_code, 404)
 
+    def test_deleting_a_workflow_removes_it_from_the_list(self) -> None:
+        client = self.local_client()
+        workflow_id = self.import_graph(client).json()["id"]
+
+        self.assertEqual(self.delete(client, f"/api/workflows/{workflow_id}").status_code, 204)
+        self.assertEqual(client.get("/api/workflows").json()["items"], [])
+        self.assertEqual(client.get(f"/api/workflows/{workflow_id}/controls").status_code, 404)
+
+    def test_deleting_an_unowned_or_missing_workflow_is_a_404(self) -> None:
+        self.enable_multi_user(PASSWORD)
+        default = self.local_client()
+        self.login(default, "Default", PASSWORD)
+        workflow_id = self.import_graph(default).json()["id"]
+
+        self.assertEqual(self.delete(default, "/api/workflows/nope").status_code, 404)
+
+        self.auth.create_profile("Bee", PASSWORD)
+        bee = self.local_client()
+        self.login(bee, "Bee", PASSWORD)
+        self.assertEqual(self.delete(bee, f"/api/workflows/{workflow_id}").status_code, 404)
+        # Untouched for the owner.
+        self.assertEqual(len(default.get("/api/workflows").json()["items"]), 1)
+
 
 class MediaRouteTest(AuthTestCase):
     def test_gallery_is_reachable_and_the_baseline_gate_is_the_real_one(self) -> None:

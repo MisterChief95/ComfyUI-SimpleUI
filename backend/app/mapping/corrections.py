@@ -81,6 +81,11 @@ class Presentation(Model):
     #: validated constraints, and never applies to exact integers.
     display_min: float | None = None
     display_max: float | None = None
+    #: Overrides the control's shown value; validated against the resolved
+    #: (possibly narrowed) range above. Never applies to exact integers.
+    display_default: float | None = None
+    #: Overrides the slider/number step; never applies to exact integers.
+    display_step: float | None = Field(default=None, gt=0)
 
 
 class Correction(Model):
@@ -290,26 +295,53 @@ def _apply(
     constraints = _display_range(control, presentation)
     if constraints is not None:
         update["constraints"] = constraints
+    if presentation.display_default is not None:
+        update["value"] = (
+            str(int(presentation.display_default))
+            if control.logical_type == "int"
+            else float(presentation.display_default)
+        )
 
     update["inference_reason"] = f"{control.inference_reason};override:{scope}"
     return control.model_copy(update=update)
 
 
-def _display_range(control: ControlDescriptor, presentation: Presentation) -> Any:
-    """Narrow the shown range inside the validated constraints, never past them."""
+def effective_bounds(
+    control: ControlDescriptor, presentation: Presentation
+) -> tuple[float | None, float | None] | None:
+    """Declared min/max narrowed by a presentation's display range.
+
+    Returns ``None`` when the control has no adjustable numeric range at all
+    (missing constraints, or an exact-transport integer).
+    """
     limits = control.constraints
-    if limits is None or (presentation.display_min is None and presentation.display_max is None):
+    if limits is None or limits.exact_min is not None or limits.exact_max is not None:
         return None
-    if limits.exact_min is not None or limits.exact_max is not None:
-        return None  # exact integers never gain a display range or a slider
     low, high = limits.min, limits.max
     if presentation.display_min is not None and (low is None or presentation.display_min > low):
         low = presentation.display_min
     if presentation.display_max is not None and (high is None or presentation.display_max < high):
         high = presentation.display_max
+    return low, high
+
+
+def _display_range(control: ControlDescriptor, presentation: Presentation) -> Any:
+    """Narrow the shown range/step inside the validated constraints, never past them."""
+    if (
+        presentation.display_min is None
+        and presentation.display_max is None
+        and presentation.display_step is None
+    ):
+        return None
+    bounds = effective_bounds(control, presentation)
+    if bounds is None:
+        return None
+    low, high = bounds
     if low is not None and high is not None and low >= high:
         return None
-    return limits.model_copy(update={"min": low, "max": high})
+    limits = control.constraints
+    step = presentation.display_step if presentation.display_step is not None else limits.step
+    return limits.model_copy(update={"min": low, "max": high, "step": step})
 
 
 def _resequence(controls: list[ControlDescriptor]) -> list[ControlDescriptor]:

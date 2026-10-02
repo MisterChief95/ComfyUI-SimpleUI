@@ -25,12 +25,14 @@ from ..mapping.corrections import (
     Presentation,
     SaveCorrection,
     apply_corrections,
+    effective_bounds,
     expected_signature,
     node_selector,
     structural_signature,
     workflow_selector,
 )
 from ..storage.repository import Repository, RevisionConflict
+from .layout import LayoutDoc, SaveLayout, WorkflowLayout, stale_bindings
 
 
 class WorkflowService:
@@ -50,6 +52,44 @@ class WorkflowService:
         graph = parse_graph(payload)
         workflow_id = self._repository.create_workflow(owner_id, name, graph)
         return workflow_id, graph
+
+    def replace_graph(
+        self, owner_id: str, workflow_id: str, payload: bytes | str, snapshot: CatalogSnapshot
+    ) -> tuple[dict[str, Any], int, list[str], list[str]] | None:
+        """Store ``payload`` as the next graph revision; None if not owned.
+
+        Raises ``GraphImportError`` (nothing written) or ``RevisionConflict``.
+        Layout, corrections and presets are untouched: whatever no longer
+        matches is reported stale by the existing readers. Returns
+        ``(workflow row, new revision, added binding ids, removed binding ids)``
+        where added/removed compare the control schemas, not the raw graphs.
+        """
+        base = self._base_schema(owner_id, workflow_id, snapshot)
+        if base is None:
+            return None
+        _, old = base
+        graph = parse_graph(payload)
+        new = build_control_schema(
+            graph,
+            snapshot.nodes,
+            owner_id=owner_id,
+            workflow_id=workflow_id,
+            revision=old.revision + 1,
+            catalog_available=snapshot.freshness.state != "unavailable",
+        )
+        revision = self._repository.replace_workflow_graph(
+            owner_id, workflow_id, graph, old.revision
+        )
+        if revision is None:  # pragma: no cover - deleted between the two reads
+            return None
+        before = {c.binding_id for c in old.controls}
+        after = {c.binding_id for c in new.controls}
+        return (
+            self._repository.get_workflow(owner_id, workflow_id),
+            revision,
+            [c.binding_id for c in new.controls if c.binding_id not in before],
+            [c.binding_id for c in old.controls if c.binding_id not in after],
+        )
 
     def control_schema(
         self, owner_id: str, workflow_id: str, snapshot: CatalogSnapshot
@@ -185,6 +225,78 @@ class WorkflowService:
             owner_id, workflow_id=workflow_id, scope=scope, selector=selector
         )
 
+    # --- saved layouts ----------------------------------------------------
+
+    def get_layout(
+        self, owner_id: str, workflow_id: str, snapshot: CatalogSnapshot
+    ) -> WorkflowLayout | None:
+        """The saved layout (revision 0, null when none), or None if not owned."""
+        base = self._base_schema(owner_id, workflow_id, snapshot)
+        if base is None:
+            return None
+        graph, schema = base
+        row = self._repository.get_layout(owner_id, workflow_id)
+        layout = None if row is None else LayoutDoc.model_validate_json(row["layout_json"])
+        return WorkflowLayout(
+            workflow_id=workflow_id,
+            revision=0 if row is None else int(row["revision"]),
+            schema_signature=structural_signature(graph),
+            layout=layout,
+            stale_bindings=stale_bindings(layout, {c.binding_id for c in schema.controls}),
+        )
+
+    def save_layout(
+        self,
+        owner_id: str,
+        workflow_id: str,
+        snapshot: CatalogSnapshot,
+        request: SaveLayout,
+    ) -> WorkflowLayout | None:
+        """Persist the layout optimistically; raises ``RevisionConflict``.
+
+        A layout is pure arrangement, so there is no catalog-availability check
+        (unlike corrections): unknown binding ids are kept and reported stale.
+        """
+        base = self._base_schema(owner_id, workflow_id, snapshot)
+        if base is None:
+            return None
+        graph, schema = base
+        controls = {c.binding_id: c for c in schema.controls}
+        saved = self._repository.get_layout(owner_id, workflow_id)
+        previous = LayoutDoc.model_validate_json(saved["layout_json"]) if saved else None
+        previous_pairs = {
+            (item.width, item.height)
+            for section in previous.sections
+            for item in section.items if item.kind == "aspect_ratio"
+        } if previous else set()
+        for section in request.layout.sections:
+            for item in section.items:
+                if item.kind == "aspect_ratio":
+                    for binding in (item.width, item.height):
+                        control = controls.get(binding)
+                        if (control is None and (item.width, item.height) not in previous_pairs) or (control is not None and control.logical_type != "int"):
+                            raise CorrectionError(422, "Aspect-ratio bindings must be integer controls.")
+        self._repository.save_layout(
+            owner_id,
+            workflow_id,
+            layout=request.layout.model_dump(),
+            schema_signature=structural_signature(graph),
+            expected_revision=request.expected_revision,
+        )
+        return self.get_layout(owner_id, workflow_id, snapshot)
+
+    def delete_layout(
+        self, owner_id: str, workflow_id: str, expected_revision: int | None = None
+    ) -> bool:
+        """Revert to the automatic layout. False only when the workflow is not owned.
+
+        With ``expected_revision`` a mismatch raises ``RevisionConflict``.
+        """
+        if self._repository.get_workflow(owner_id, workflow_id) is None:
+            return False
+        self._repository.delete_layout(owner_id, workflow_id, expected_revision)
+        return True
+
     # --- internals --------------------------------------------------------
 
     def _base_schema(
@@ -220,4 +332,23 @@ class WorkflowService:
                 422,
                 f"A {control.logical_type} control cannot be shown as {component!r}. "
                 f"Allowed here: {', '.join(sorted(allowed))}.",
+            )
+
+        default = request.presentation.display_default
+        if default is None:
+            return
+        bounds = effective_bounds(control, request.presentation)
+        if bounds is None:
+            raise CorrectionError(
+                422,
+                f"{control.class_type}.{control.input_name} has no adjustable numeric range, "
+                "so a default cannot be saved for it.",
+            )
+        low, high = bounds
+        if (low is not None and default < low) or (high is not None and default > high):
+            raise CorrectionError(
+                422,
+                f"The default {default!r} is outside the resolved range "
+                f"[{low if low is not None else '-inf'}, {high if high is not None else 'inf'}] "
+                f"for {control.class_type}.{control.input_name}.",
             )

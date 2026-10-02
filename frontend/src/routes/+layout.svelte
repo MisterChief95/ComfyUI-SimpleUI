@@ -27,9 +27,9 @@
 {#if session.loading}
 	<p class="status">Loading…</p>
 {:else if session.info?.authenticated}
-	<div class="shell">
+	<div class="shell" class:has-header={session.info.multi_user}>
 		<Nav />
-		<main class="content">
+		<main class="app-main">
 			{@render children()}
 		</main>
 	</div>
@@ -40,28 +40,54 @@
 {/if}
 
 <style>
+	/* Shell contract (see the top of lib/ui/tokens.css): --header-h, --nav-h and
+	   --app-h describe the chrome so pages can size themselves. Custom properties
+	   that use var() resolve where declared, so --app-h is restated here. */
 	.status {
 		padding: var(--space-4);
 	}
 
 	.shell {
-		display: grid;
-		grid-template-areas: 'top' 'content' 'nav';
-		grid-template-rows: auto 1fr auto;
+		--nav-h: calc(3.5rem + env(safe-area-inset-bottom));
+		--header-h: 0px;
+		--app-h: calc(100dvh - var(--header-h) - var(--nav-h));
 		min-height: 100dvh;
 	}
 
-	.content {
-		grid-area: content;
-		padding: var(--space-4);
-		overflow-y: auto;
+	.shell.has-header {
+		--header-h: 2.75rem;
+	}
+
+	.app-main {
+		min-width: 0;
+		/* Phone: the fixed tab bar overlays the bottom of the document. */
+		padding: var(--page-pad);
+		padding-bottom: calc(var(--page-pad) + var(--nav-h));
+	}
+
+	/* Full-bleed pages (.page-full) own the whole content area. */
+	.app-main:has(> :global(.page-full)) {
+		padding: 0 0 var(--nav-h);
 	}
 
 	@media (min-width: 768px) {
-		.shell {
-			grid-template-areas: 'top top' 'nav content';
-			grid-template-columns: 14rem 1fr;
-			grid-template-rows: auto 1fr;
+		.shell,
+		.shell.has-header {
+			--nav-h: 0px;
+			--header-h: 0px;
+			--rail-w: 4.5rem;
+			display: grid;
+			grid-template-columns: var(--rail-w) minmax(0, 1fr);
+		}
+		.app-main {
+			grid-column: 2;
+		}
+	}
+
+	@media (min-width: 1200px) {
+		.shell,
+		.shell.has-header {
+			--rail-w: 13.5rem;
 		}
 	}
 </style>
