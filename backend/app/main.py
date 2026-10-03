@@ -146,6 +146,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             await asyncio.gather(startup, reconciled, return_exceptions=True)
             await catalog.aclose()
             await comfy.aclose()
+            media.close()
             database.close()
 
     app = FastAPI(title="ComfyUI SimpleUI", version=VERSION, lifespan=lifespan)

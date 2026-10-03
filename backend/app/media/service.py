@@ -7,8 +7,12 @@ import json
 import mimetypes
 import os
 import shutil
+import subprocess
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from threading import BoundedSemaphore
 from typing import Any
 
 from PIL import Image, UnidentifiedImageError
@@ -21,6 +25,33 @@ from ..storage.repository import DEFAULT_PROFILE_ID, Repository, new_id, now_ms
 
 IMAGE_EXTENSIONS = frozenset({".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"})
 VIDEO_EXTENSIONS = frozenset({".avi", ".mkv", ".mov", ".mp4", ".webm"})
+ZIP_MAX_ITEMS = 200
+ZIP_MAX_BYTES = 2 * 1024**3
+ZIP_CHUNK_BYTES = 64 * 1024
+
+
+class _ZipWriter:
+    """Unseekable zipfile sink; drained after each bounded input chunk."""
+
+    def __init__(self):
+        self.pending = bytearray()
+        self.position = 0
+
+    def write(self, data):
+        self.pending.extend(data)
+        self.position += len(data)
+        return len(data)
+
+    def tell(self):
+        return self.position
+
+    def flush(self):
+        pass
+
+    def drain(self):
+        data = bytes(self.pending)
+        self.pending.clear()
+        return data
 
 
 class MediaError(ValueError):
@@ -71,6 +102,25 @@ def _type(path: Path) -> str:
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
+def _video_poster(source: Path, target: Path) -> bool:
+    """Write one JPEG frame of ``source`` to ``target``; False if FFmpeg is absent or fails."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        return False
+    # A frame at 1s skips fade-ins; clips shorter than that yield nothing, so retry at 0.
+    for seek in ("1", "0"):
+        command = [ffmpeg, "-v", "error", "-ss", seek, "-i", str(source), "-frames:v", "1",
+                   "-vf", "scale='min(512,iw)':-2", "-f", "image2", "-y", str(target)]
+        try:
+            subprocess.run(command, check=True, capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if target.is_file() and target.stat().st_size:
+            return True
+    target.unlink(missing_ok=True)
+    return False
+
+
 class MediaService:
     """Blocking service; routes run every public operation in a worker thread."""
 
@@ -82,7 +132,53 @@ class MediaService:
         self.thumbnails = self.data_dir / "thumbnails"
         self.captures.mkdir(parents=True, exist_ok=True)
         self.thumbnails.mkdir(parents=True, exist_ok=True)
+        # Keep thumbnail work off indexing/capture paths while bounding queued
+        # jobs. Producers apply backpressure when the small queue is full.
+        self._thumbnail_slots = BoundedSemaphore(8)
+        self._thumbnail_jobs = ThreadPoolExecutor(max_workers=1, thread_name_prefix="media-thumbnail")
         self._ensure_capture_source()
+        self._recover_thumbnails()
+
+    def _recover_thumbnails(self) -> None:
+        """Requeue indexed media without a thumbnail after a process restart."""
+        rows = self.db.query(
+            "SELECT id, owner_id FROM media WHERE media_kind IN ('image', 'video')"
+        )
+        for row in rows:
+            if not (self.thumbnails / f"{row['id']}.jpg").is_file():
+                self._schedule_thumbnail(row["owner_id"], row["id"])
+
+    def _schedule_thumbnail(self, owner_id: str, media_id: str) -> None:
+        target = self.thumbnails / f"{media_id}.jpg"
+        if target.is_file():
+            return
+        located = self.locate(owner_id, media_id)
+        if located is None or located.row["media_kind"] not in ("image", "video"):
+            return
+        self._thumbnail_slots.acquire()
+
+        def generate() -> None:
+            temporary = target.with_suffix(".part")
+            try:
+                if located.row["media_kind"] == "video":
+                    if not _video_poster(located.path, temporary):
+                        return
+                else:
+                    with Image.open(located.path) as image:
+                        image.thumbnail((512, 512))
+                        image.convert("RGB").save(temporary, "JPEG", quality=82)
+                # Do not publish a stale thumbnail if the indexed file changed
+                # while this job was queued.
+                current = self.locate(owner_id, media_id)
+                if current is not None and current.row["file_version"] == located.row["file_version"]:
+                    os.replace(temporary, target)
+            except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError):
+                temporary.unlink(missing_ok=True)
+            finally:
+                temporary.unlink(missing_ok=True)
+                self._thumbnail_slots.release()
+
+        self._thumbnail_jobs.submit(generate)
 
     def _ensure_capture_source(self) -> None:
         with self.db.write() as conn:
@@ -91,6 +187,10 @@ class MediaService:
                 " VALUES ('captures', ?, ?, 1, ?) ON CONFLICT(id) DO NOTHING",
                 (str(self.captures), _identity(self.captures), now_ms()),
             )
+
+    def close(self) -> None:
+        """Finish queued thumbnail work before storage or files are closed."""
+        self._thumbnail_jobs.shutdown(wait=True)
 
     def baseline_status(self, _db: Database | None = None) -> BaselineStatus:
         """AuthService.baseline_gate seam: may multi-user mode be enabled yet?"""
@@ -227,6 +327,7 @@ class MediaService:
                 if row["state"] != state:  # e.g. a file that came back
                     with self.db.write() as conn:
                         conn.execute("UPDATE media SET state = ? WHERE id = ?", (state, row["id"]))
+                self._schedule_thumbnail(owner_id, row["id"])
                 return row["id"]
         media_id = new_id()
         with self.db.write() as conn:
@@ -237,6 +338,7 @@ class MediaService:
                 (media_id, owner_id, generation_id, output_node, ordinal, relative, version, _kind(path), _type(path), state, now_ms()),
             )
             conn.execute("INSERT INTO media_locations (media_id, source_id, relative_path) VALUES (?, ?, ?)", (media_id, source_id, relative))
+        self._schedule_thumbnail(owner_id, media_id)
         return media_id
 
     def capture_output(self, owner_id: str, generation_id: str | None, source_path: str, *, output_node: str | None = None, ordinal: int | None = None, preview: bool = False) -> str | None:
@@ -298,8 +400,9 @@ class MediaService:
         return source_id, root
 
     def locate(self, owner_id: str, media_id: str) -> LocatedMedia | None:
+        # Hidden (deleted) rows resolve to nothing, so file, download, thumbnail, ZIP and queued thumbnail jobs all refuse them.
         row = self.db.query_one(
-            "SELECT m.*, l.source_id, l.relative_path, s.root_path FROM media m JOIN media_locations l ON l.media_id = m.id JOIN media_sources s ON s.id = l.source_id WHERE m.id = ? AND m.owner_id = ?",
+            "SELECT m.*, l.source_id, l.relative_path, s.root_path FROM media m JOIN media_locations l ON l.media_id = m.id JOIN media_sources s ON s.id = l.source_id WHERE m.id = ? AND m.owner_id = ? AND m.hidden = 0",
             (media_id, owner_id),
         )
         if row is None:
@@ -310,29 +413,115 @@ class MediaService:
             return None
         return LocatedMedia(dict(row), path)
 
+    def zip_plan(self, owner_id: str, ids: list[str]) -> dict:
+        if not 1 <= len(ids) <= ZIP_MAX_ITEMS:
+            raise MediaError(f"Select between 1 and {ZIP_MAX_ITEMS} items.")
+        entries, skipped, total = [], [], 0
+        used = {"manifest.json"}
+        for media_id in dict.fromkeys(ids):
+            try:
+                located = self.locate(owner_id, media_id)
+                size = located.path.stat().st_size if located else None
+            except OSError:
+                located, size = None, None
+            if located is None:
+                skipped.append({"id": media_id, "reason": "unavailable"})
+                continue
+            total += size
+            if total > ZIP_MAX_BYTES:
+                raise MediaError("Selected media exceeds the 2 GiB ZIP limit.")
+            original = PurePosixPath(located.row["storage_path"].replace("\\", "/")).name
+            # ZIP members are flat, safe filenames, including on Windows extraction.
+            original = "".join("_" if c in '<>:"/\\|?*' or ord(c) < 32 else c for c in original).rstrip(" .") or "media"
+            name, number = original, 2
+            while name.casefold() in used:
+                p = PurePosixPath(original)
+                name = f"{p.stem} ({number}){p.suffix}"
+                number += 1
+            used.add(name.casefold())
+            entries.append({"id": media_id, "filename": name, "size": size})
+        return {"entries": entries, "skipped": skipped, "total_bytes": total}
+
+    def stream_zip(self, owner_id: str, plan: dict):
+        """No temporary archive, producer thread, or whole-media buffer."""
+        sink = _ZipWriter()
+        skipped = list(plan["skipped"])
+        included = []
+        with zipfile.ZipFile(sink, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+            for entry in plan["entries"]:
+                written = 0
+                started = False
+                try:
+                    located = self.locate(owner_id, entry["id"])
+                    if located is None:
+                        raise OSError("Unavailable")
+                    with located.path.open("rb") as source:
+                        stat = os.fstat(source.fileno())
+                        version = f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+                        if version != located.row["file_version"] or stat.st_size != entry["size"]:
+                            raise OSError("Changed")
+                        with archive.open(entry["filename"], "w", force_zip64=True) as member:
+                            started = True
+                            yield sink.drain()
+                            while written < entry["size"]:
+                                chunk = source.read(min(ZIP_CHUNK_BYTES, entry["size"] - written))
+                                if not chunk:
+                                    raise OSError("Short read")
+                                member.write(chunk)
+                                written += len(chunk)
+                                yield sink.drain()
+                    included.append(entry)
+                except OSError:
+                    # A read error after the header leaves a valid but incomplete member.
+                    skipped.append({"id": entry["id"], "reason": "unavailable",
+                                    "filename": entry["filename"] if started else None,
+                                    "incomplete": started})
+                yield sink.drain()
+            archive.writestr("manifest.json", json.dumps({"included": included, "skipped": skipped}))
+            yield sink.drain()
+        yield sink.drain()
+
     def thumbnail(self, owner_id: str, media_id: str) -> Path | None:
         """None means "no thumbnail": the caller 404s and the UI shows a placeholder.
 
-        # ponytail: images only. A video poster needs a decoder (FFmpeg), which
-        # ARCHITECTURE.md keeps optional, so videos take the placeholder path
-        # until an FFmpeg probe is wired in here.
+        Videos get a poster frame only when FFmpeg is on PATH (ARCHITECTURE.md
+        keeps it optional); otherwise they take the placeholder path.
         """
         located = self.locate(owner_id, media_id)
-        if located is None or located.row["media_kind"] != "image":
+        if located is None or located.row["media_kind"] not in ("image", "video"):
             return None
         target = self.thumbnails / f"{media_id}.jpg"
         if target.is_file():
             return target
         temporary = target.with_suffix(".part")
         try:
-            with Image.open(located.path) as image:
-                image.thumbnail((512, 512))
-                image.convert("RGB").save(temporary, "JPEG", quality=82)
+            if located.row["media_kind"] == "video":
+                if not _video_poster(located.path, temporary):
+                    return None
+            else:
+                with Image.open(located.path) as image:
+                    image.thumbnail((512, 512))
+                    image.convert("RGB").save(temporary, "JPEG", quality=82)
             os.replace(temporary, target)
         except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError):
             temporary.unlink(missing_ok=True)
             return None
         return target
+
+    def media_tree(self, owner_id: str, path: str = "") -> dict[str, Any]:
+        return Repository(self.db).media_tree(owner_id, path)
+
+    def list_collections(self, owner_id: str) -> dict[str, Any]:
+        return {"items": Repository(self.db).list_collections(owner_id)}
+
+    def save_collection(self, owner_id: str, name: str, collection_id: str | None = None):
+        return Repository(self.db).save_collection(owner_id, name, collection_id)
+
+    def delete_collection(self, owner_id: str, collection_id: str) -> bool:
+        return Repository(self.db).delete_collection(owner_id, collection_id)
+
+    def collection_members(self, owner_id: str, collection_id: str, ids: list[str], *, remove: bool = False):
+        return Repository(self.db).collection_members(owner_id, collection_id, ids, remove=remove)
 
     def list_media(
         self,
@@ -340,6 +529,9 @@ class MediaService:
         cursor: str | None,
         limit: int,
         *,
+        sort: str = "newest",
+        path: str = "",
+        collection_id: str | None = None,
         media_kind: str | None = None,
         favorite: bool | None = None,
         workflow_id: str | None = None,
@@ -347,11 +539,15 @@ class MediaService:
         created_after: int | None = None,
         created_before: int | None = None,
         prompt: str | None = None,
+        search_field: str = "any",
     ) -> dict[str, Any]:
         page = Repository(self.db).list_media(
             owner_id,
             cursor,
             limit,
+            sort=sort,
+            path=path,
+            collection_id=collection_id,
             media_kind=media_kind,
             favorite=favorite,
             workflow_id=workflow_id,
@@ -359,8 +555,13 @@ class MediaService:
             created_after=created_after,
             created_before=created_before,
             prompt=prompt,
+            search_field=search_field,
         )
         return {"items": [self.public_item(row) for row in page.items], "next_cursor": page.next_cursor}
+
+    def filter_suggestions(self, owner_id: str, query: str, limit: int = 10,
+                           search_field: str = "any") -> dict[str, Any]:
+        return {"items": Repository(self.db).media_filter_suggestions(owner_id, query, limit, search_field)}
 
     def clear_history(self, owner_id: str) -> dict[str, int]:
         """Purge only snapshots whose terminal state and outputs are proven."""
@@ -402,6 +603,38 @@ class MediaService:
         values += [media_id, owner_id]
         with self.db.write() as conn:
             return conn.execute(f"UPDATE media SET {', '.join(assignments)} WHERE id = ? AND owner_id = ?", tuple(values)).rowcount == 1
+
+    def delete_media(self, owner_id: str, ids: list[str]) -> int:
+        """Delete owned items; ids that are not the caller's are ignored.
+
+        Captured copies are ours, so row, file and thumbnail go. Files indexed
+        from the ComfyUI output folder are the user's originals: the row is
+        hidden (a delete would come back on the next import) and the file is
+        never touched. Rows go first so a failed unlink leaves an orphan file,
+        not a card pointing at nothing.
+        """
+        ids = list(dict.fromkeys(ids))
+        if not ids:
+            return 0
+        marks = ",".join("?" for _ in ids)
+        rows = self.db.query(
+            "SELECT m.id, l.source_id, l.relative_path FROM media m"
+            " LEFT JOIN media_locations l ON l.media_id = m.id"
+            f" WHERE m.owner_id = ? AND m.id IN ({marks})",
+            (owner_id, *ids),
+        )
+        captured = [row for row in rows if row["source_id"] == "captures"]
+        indexed = [row["id"] for row in rows if row["source_id"] != "captures"]
+        with self.db.write() as conn:
+            conn.executemany("DELETE FROM media WHERE id = ?", [(row["id"],) for row in captured])
+            conn.executemany("UPDATE media SET hidden = 1 WHERE id = ?", [(i,) for i in indexed])
+        for row in captured:
+            path = self._safe_path(self.captures, row["relative_path"])
+            if path is not None:
+                path.unlink(missing_ok=True)
+        for row in rows:
+            (self.thumbnails / f"{row['id']}.jpg").unlink(missing_ok=True)
+        return len(rows)
 
     def _safe_under(self, root: Path, path: Path) -> bool:
         """True when every component from root down to path is a real entry.

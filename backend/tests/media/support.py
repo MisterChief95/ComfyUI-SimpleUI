@@ -35,6 +35,7 @@ class MediaTestCase(unittest.TestCase):
         self.media = MediaService(self.db, self.settings, self.root / "data")
         self.addCleanup(self._tmp.cleanup)
         self.addCleanup(self.db.close)
+        self.addCleanup(self.media.close)
 
     # --- files ------------------------------------------------------------
 
