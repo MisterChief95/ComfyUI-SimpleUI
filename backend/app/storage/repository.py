@@ -14,16 +14,15 @@ Calls here block. From async code use ``await in_thread(repo.method, ...)``.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-import re
-
 import base64
 import hashlib
 import json
+import re
 import secrets
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from sqlite3 import IntegrityError, Row
 from typing import Any
 
@@ -33,10 +32,27 @@ DEFAULT_PROFILE_ID = "default"
 PAGE_SIZE = 50
 
 SEARCH_INPUTS = {
-    "prompt": frozenset({"text", "prompt", "positive", "negative", "positive_prompt", "negative_prompt"}),
-    "model": frozenset({"model", "model_name", "checkpoint", "checkpoint_name", "ckpt_name",
-                        "unet_name", "diffusion_model", "diffusion_model_name", "lora_name",
-                        "vae_name", "clip_name", "clip_name1", "clip_name2", "clip_name3"}),
+    "prompt": frozenset(
+        {"text", "prompt", "positive", "negative", "positive_prompt", "negative_prompt"}
+    ),
+    "model": frozenset(
+        {
+            "model",
+            "model_name",
+            "checkpoint",
+            "checkpoint_name",
+            "ckpt_name",
+            "unet_name",
+            "diffusion_model",
+            "diffusion_model_name",
+            "lora_name",
+            "vae_name",
+            "clip_name",
+            "clip_name1",
+            "clip_name2",
+            "clip_name3",
+        }
+    ),
 }
 
 
@@ -49,7 +65,10 @@ def _saved_search_values(raw: str | None, field: str) -> list[str]:
         return []
     result = []
     for key, value in list(values.items())[:200]:
-        if field != "any" and key.rsplit(":", 1)[-1].casefold() not in SEARCH_INPUTS[field]:
+        if (
+            field != "any"
+            and key.rsplit(":", 1)[-1].casefold() not in SEARCH_INPUTS[field]
+        ):
             continue
         if type(value) in (str, int, float, bool):
             result.append(json.dumps(value) if type(value) is bool else str(value))
@@ -646,8 +665,9 @@ class Repository:
 
     # --- media ------------------------------------------------------------
 
-    def media_filter_suggestions(self, owner_id: str, query: str, limit: int = 10,
-                                 search_field: str = "any") -> list[str]:
+    def media_filter_suggestions(
+        self, owner_id: str, query: str, limit: int = 10, search_field: str = "any"
+    ) -> list[str]:
         query = query.strip().casefold()
         if len(query) < 2 or len(query) > 500:
             return []
@@ -682,7 +702,9 @@ class Repository:
                     return items
         return items
 
-    def _media_search_generations(self, owner_id: str, term: str, field: str) -> list[str]:
+    def _media_search_generations(
+        self, owner_id: str, term: str, field: str
+    ) -> list[str]:
         if field not in {"any", *SEARCH_INPUTS} or not 1 <= len(term) <= 500:
             raise ValueError("Invalid saved metadata search")
         # ponytail: latest 1,000 generations only; add a maintained search index for older history.
@@ -758,54 +780,81 @@ class Repository:
         return dict(row) if row else None
 
     def list_collections(self, owner_id: str) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.db.query(
-            "SELECT c.id, c.name, COUNT(m.id) AS count FROM collections c"
-            " LEFT JOIN collection_media cm ON cm.collection_id = c.id AND cm.owner_id = c.owner_id"
-            " LEFT JOIN media m ON m.id = cm.media_id AND m.owner_id = c.owner_id AND m.hidden = 0"
-            " WHERE c.owner_id = ? GROUP BY c.id ORDER BY c.name COLLATE NOCASE, c.id", (owner_id,))]
+        return [
+            dict(row)
+            for row in self.db.query(
+                "SELECT c.id, c.name, COUNT(m.id) AS count FROM collections c"
+                " LEFT JOIN collection_media cm ON cm.collection_id = c.id AND cm.owner_id = c.owner_id"
+                " LEFT JOIN media m ON m.id = cm.media_id AND m.owner_id = c.owner_id AND m.hidden = 0"
+                " WHERE c.owner_id = ? GROUP BY c.id ORDER BY c.name COLLATE NOCASE, c.id",
+                (owner_id,),
+            )
+        ]
 
-    def save_collection(self, owner_id: str, name: str, collection_id: str | None = None) -> dict[str, str] | None:
+    def save_collection(
+        self, owner_id: str, name: str, collection_id: str | None = None
+    ) -> dict[str, str] | None:
         name = name.strip()
         if not 1 <= len(name) <= 100:
             raise ValueError("Collection name must contain 1 to 100 characters.")
         with self.db.write() as conn:
             if collection_id is None:
                 collection_id = new_id()
-                conn.execute("INSERT INTO collections (id, owner_id, name) VALUES (?, ?, ?)",
-                             (collection_id, owner_id, name))
-            elif not conn.execute("UPDATE collections SET name = ? WHERE id = ? AND owner_id = ?",
-                                  (name, collection_id, owner_id)).rowcount:
+                conn.execute(
+                    "INSERT INTO collections (id, owner_id, name) VALUES (?, ?, ?)",
+                    (collection_id, owner_id, name),
+                )
+            elif not conn.execute(
+                "UPDATE collections SET name = ? WHERE id = ? AND owner_id = ?",
+                (name, collection_id, owner_id),
+            ).rowcount:
                 return None
         return {"id": collection_id, "name": name}
 
     def delete_collection(self, owner_id: str, collection_id: str) -> bool:
         with self.db.write() as conn:
-            return bool(conn.execute("DELETE FROM collections WHERE id = ? AND owner_id = ?",
-                                     (collection_id, owner_id)).rowcount)
+            return bool(
+                conn.execute(
+                    "DELETE FROM collections WHERE id = ? AND owner_id = ?",
+                    (collection_id, owner_id),
+                ).rowcount
+            )
 
-    def collection_members(self, owner_id: str, collection_id: str, ids: list[str], *, remove: bool = False) -> int | None:
+    def collection_members(
+        self, owner_id: str, collection_id: str, ids: list[str], *, remove: bool = False
+    ) -> int | None:
         ids = list(dict.fromkeys(ids))
         with self.db.write() as conn:
-            if not conn.execute("SELECT 1 FROM collections WHERE id = ? AND owner_id = ?",
-                                (collection_id, owner_id)).fetchone():
+            if not conn.execute(
+                "SELECT 1 FROM collections WHERE id = ? AND owner_id = ?",
+                (collection_id, owner_id),
+            ).fetchone():
                 return None
-            found = conn.execute("SELECT id FROM media WHERE owner_id = ? AND id IN (SELECT value FROM json_each(?))",
-                                 (owner_id, json.dumps(ids))).fetchall()
+            found = conn.execute(
+                "SELECT id FROM media WHERE owner_id = ? AND id IN (SELECT value FROM json_each(?))",
+                (owner_id, json.dumps(ids)),
+            ).fetchall()
             if len(found) != len(ids):
                 return None
             if remove:
-                return conn.execute("DELETE FROM collection_media WHERE owner_id = ? AND collection_id = ?"
-                                    " AND media_id IN (SELECT value FROM json_each(?))",
-                                    (owner_id, collection_id, json.dumps(ids))).rowcount
-            return conn.executemany("INSERT OR IGNORE INTO collection_media (owner_id, collection_id, media_id) VALUES (?, ?, ?)",
-                                    [(owner_id, collection_id, item) for item in ids]).rowcount
+                return conn.execute(
+                    "DELETE FROM collection_media WHERE owner_id = ? AND collection_id = ?"
+                    " AND media_id IN (SELECT value FROM json_each(?))",
+                    (owner_id, collection_id, json.dumps(ids)),
+                ).rowcount
+            return conn.executemany(
+                "INSERT OR IGNORE INTO collection_media (owner_id, collection_id, media_id) VALUES (?, ?, ?)",
+                [(owner_id, collection_id, item) for item in ids],
+            ).rowcount
 
     @staticmethod
     def _media_folder(path: str) -> tuple[str, tuple[Any, ...]]:
         """Virtual paths only; predicates intersect the regular gallery filters."""
-        linked = ("EXISTS (SELECT 1 FROM generations g JOIN workflows w"
-                  " ON w.id = g.workflow_id AND w.owner_id = g.owner_id"
-                  " WHERE g.id = media.generation_id AND g.owner_id = media.owner_id")
+        linked = (
+            "EXISTS (SELECT 1 FROM generations g JOIN workflows w"
+            " ON w.id = g.workflow_id AND w.owner_id = g.owner_id"
+            " WHERE g.id = media.generation_id AND g.owner_id = media.owner_id"
+        )
         if path in ("", "Date"):
             return "", ()
         if path == "Workflow":
@@ -818,7 +867,11 @@ class Repository:
             return "AND media_kind = 'video'", ()
         if path == "Collections" or re.fullmatch(r"Collections/[a-zA-Z0-9_-]+", path):
             sql = "AND EXISTS (SELECT 1 FROM collection_media cm WHERE cm.media_id = media.id AND cm.owner_id = media.owner_id"
-            return (sql + ")", ()) if path == "Collections" else (sql + " AND cm.collection_id = ?)", (path.split("/")[1],))
+            return (
+                (sql + ")", ())
+                if path == "Collections"
+                else (sql + " AND cm.collection_id = ?)", (path.split("/")[1],))
+            )
         if re.fullmatch(r"Workflow/[a-zA-Z0-9_-]+", path):
             return f"AND {linked} AND w.id = ?)", (path.split("/")[1],)
         if re.fullmatch(r"Date/[0-9]{4}(?:/[0-9]{2}){0,2}", path):
@@ -828,12 +881,16 @@ class Repository:
                 end = datetime(parts[0] + 1, 1, 1, tzinfo=timezone.utc)
             elif len(parts) == 2:
                 year, month = parts
-                end = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc)
+                end = datetime(
+                    year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc
+                )
             else:
                 end = start + timedelta(days=1)
             return "AND media.created_ms >= ? AND media.created_ms < ?", (
-                (start - datetime(1970, 1, 1, tzinfo=timezone.utc)) // timedelta(milliseconds=1),
-                (end - datetime(1970, 1, 1, tzinfo=timezone.utc)) // timedelta(milliseconds=1),
+                (start - datetime(1970, 1, 1, tzinfo=timezone.utc))
+                // timedelta(milliseconds=1),
+                (end - datetime(1970, 1, 1, tzinfo=timezone.utc))
+                // timedelta(milliseconds=1),
             )
         raise ValueError("Invalid virtual folder path")
 
@@ -847,7 +904,10 @@ class Repository:
         parts = path.split("/") if path else []
         for index, name in enumerate(parts):
             if parts[0] == "Collections" and index == 1:
-                collection = self.db.query_one("SELECT name FROM collections WHERE owner_id = ? AND id = ?", (owner_id, name))
+                collection = self.db.query_one(
+                    "SELECT name FROM collections WHERE owner_id = ? AND id = ?",
+                    (owner_id, name),
+                )
                 name = collection["name"] if collection else "Unknown collection"
             if parts[0] == "Workflow" and index == 1:
                 workflow = self.get_workflow(owner_id, name)
@@ -856,9 +916,16 @@ class Repository:
                     name = "Unknown workflow"
                 else:
                     name = workflow["name"]
-            breadcrumbs.append({"path": "/".join(parts[:index + 1]), "name": name})
+            breadcrumbs.append({"path": "/".join(parts[: index + 1]), "name": name})
         if not path:
-            for branch in ("Date", "Workflow", "Favorites", "Videos", "Unsorted", "Collections"):
+            for branch in (
+                "Date",
+                "Workflow",
+                "Favorites",
+                "Videos",
+                "Unsorted",
+                "Collections",
+            ):
                 sql, values = self._media_folder(branch)
                 n = self.db.query_one(
                     f"SELECT COUNT(*) AS n FROM media WHERE owner_id = ? AND hidden = 0 {sql}",
@@ -869,25 +936,51 @@ class Repository:
             format_ = ("%Y", "%m", "%d")[len(parts) - 1]
             rows = self.db.query(
                 f"SELECT strftime('{format_}', created_ms / 1000.0, 'unixepoch') AS name,"
-                f" COUNT(*) AS n {base} GROUP BY name ORDER BY name DESC", args,
+                f" COUNT(*) AS n {base} GROUP BY name ORDER BY name DESC",
+                args,
             )
-            children = [{"path": f"{path}/{row['name']}", "name": row["name"], "count": row["n"]}
-                        for row in rows if row["name"] is not None]
+            children = [
+                {
+                    "path": f"{path}/{row['name']}",
+                    "name": row["name"],
+                    "count": row["n"],
+                }
+                for row in rows
+                if row["name"] is not None
+            ]
         elif path == "Collections":
-            children = [{"path": f"Collections/{row['id']}", "name": row["name"], "count": row["count"]}
-                        for row in self.list_collections(owner_id)]
+            children = [
+                {
+                    "path": f"Collections/{row['id']}",
+                    "name": row["name"],
+                    "count": row["count"],
+                }
+                for row in self.list_collections(owner_id)
+            ]
         elif path == "Workflow":
             rows = self.db.query(
                 "SELECT w.id, w.name, COUNT(*) AS n FROM media"
                 " JOIN generations g ON g.id = media.generation_id AND g.owner_id = media.owner_id"
                 " JOIN workflows w ON w.id = g.workflow_id AND w.owner_id = media.owner_id"
                 " WHERE media.owner_id = ? AND media.hidden = 0"
-                " GROUP BY w.id ORDER BY w.name COLLATE NOCASE, w.id", (owner_id,),
+                " GROUP BY w.id ORDER BY w.name COLLATE NOCASE, w.id",
+                (owner_id,),
             )
-            children = [{"path": f"Workflow/{row['id']}", "name": row["name"], "count": row["n"]}
-                        for row in rows]
-        return {"path": path, "timezone": "UTC", "count": count,
-                "children": children, "breadcrumbs": breadcrumbs}
+            children = [
+                {
+                    "path": f"Workflow/{row['id']}",
+                    "name": row["name"],
+                    "count": row["n"],
+                }
+                for row in rows
+            ]
+        return {
+            "path": path,
+            "timezone": "UTC",
+            "count": count,
+            "children": children,
+            "breadcrumbs": breadcrumbs,
+        }
 
     def list_media(
         self,
@@ -937,7 +1030,6 @@ class Repository:
             clauses.append("AND media.created_ms <= ?")
             params.append(created_before)
         if prompt:
-<<<<<<< Updated upstream
             matches = self._media_search_generations(owner_id, prompt, search_field)
             clauses.append("AND generation_id IN (SELECT value FROM json_each(?))")
             params.append(json.dumps(matches))
@@ -948,7 +1040,9 @@ class Repository:
         position = None
         if cursor:
             try:
-                raw = base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True)
+                raw = base64.b64decode(
+                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
+                )
                 saved = json.loads(raw)
                 if saved["sort"] != sort:
                     raise ValueError("Cursor sort does not match request")
@@ -956,11 +1050,18 @@ class Repository:
                 if not isinstance(row_id, str) or not row_id:
                     raise ValueError("Invalid cursor id")
                 if sort == "random":
-                    if not all(isinstance(value, str) and len(value) == length
-                               and all(c in "0123456789abcdef" for c in value)
-                               for value, length in ((seed, 32), (position, 64))):
+                    if not all(
+                        isinstance(value, str)
+                        and len(value) == length
+                        and all(c in "0123456789abcdef" for c in value)
+                        for value, length in ((seed, 32), (position, 64))
+                    ):
                         raise ValueError("Invalid random cursor")
-                elif seed is not None or type(position) is not int or not 0 <= position <= 9_223_372_036_854_775_807:
+                elif (
+                    seed is not None
+                    or type(position) is not int
+                    or not 0 <= position <= 9_223_372_036_854_775_807
+                ):
                     raise ValueError("Invalid time cursor")
             except (ValueError, TypeError, KeyError, UnicodeDecodeError) as exc:
                 raise ValueError("Malformed gallery cursor") from exc
@@ -968,8 +1069,11 @@ class Repository:
         if sort == "random":
             # ponytail: random scans/sorts matching rows; persisted ranks if gallery scale requires it.
             self.db.connect().create_function(
-                "gallery_rank", 2,
-                lambda seed, row_id: hashlib.sha256(f"{seed}:{row_id}".encode()).hexdigest(),
+                "gallery_rank",
+                2,
+                lambda seed, row_id: hashlib.sha256(
+                    f"{seed}:{row_id}".encode()
+                ).hexdigest(),
                 deterministic=True,
             )
             order_key = "gallery_rank(?, id)"
@@ -986,31 +1090,19 @@ class Repository:
             f"SELECT * FROM media WHERE owner_id = ? {' '.join(clauses)} {keyset}"
             f" ORDER BY {order_key} {direction}, id {direction} LIMIT ?",
             (owner_id, *params, limit + 1),
-=======
-            escaped = (
-                prompt.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            clauses.append(
-                "AND EXISTS (SELECT 1 FROM generations g WHERE g.id = media.generation_id"
-                " AND g.owner_id = media.owner_id AND g.effective_values_json LIKE ? ESCAPE '\\')"
-            )
-            params.append(f"%{escaped}%")
-        return self._page(
-            "media",
-            owner_id,
-            cursor,
-            limit,
-            extra=" ".join(clauses),
-            extra_params=tuple(params),
->>>>>>> Stashed changes
         )
         page = [dict(row) for row in rows[:limit]]
         next_cursor = None
         if len(rows) > limit and page:
             last = page[-1]
-            key = (hashlib.sha256(f"{seed}:{last['id']}".encode()).hexdigest()
-                   if sort == "random" else last["created_ms"])
-            raw = json.dumps({"sort": sort, "seed": seed, "key": key, "id": last["id"]}).encode()
+            key = (
+                hashlib.sha256(f"{seed}:{last['id']}".encode()).hexdigest()
+                if sort == "random"
+                else last["created_ms"]
+            )
+            raw = json.dumps(
+                {"sort": sort, "seed": seed, "key": key, "id": last["id"]}
+            ).encode()
             next_cursor = base64.urlsafe_b64encode(raw).decode().rstrip("=")
         return PageResult(items=page, next_cursor=next_cursor)
 

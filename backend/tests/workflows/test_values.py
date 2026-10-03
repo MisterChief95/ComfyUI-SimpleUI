@@ -6,6 +6,7 @@ import json
 
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
+
 from tests.generations.test_routes import FakeUpstream
 from tests.workflows.test_layout import FIXTURES, GRAPH, LayoutTestCase, doc
 
@@ -16,15 +17,19 @@ class ValuesTest(LayoutTestCase):
     def setUp(self) -> None:
         super().setUp()
         raw = json.loads(
-            (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8")
+            (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+                encoding="utf-8"
+            )
         )
         raw["TypedNode"] = {
             **raw["SaveImage"],
             "name": "TypedNode",
-            "input": {"required": {
-                "flag": ["BOOLEAN", {"default": False}],
-                "big": ["INT", {"default": 0, "min": 0, "max": 2**65}],
-            }},
+            "input": {
+                "required": {
+                    "flag": ["BOOLEAN", {"default": False}],
+                    "big": ["INT", {"default": 0, "min": 0, "max": 2**65}],
+                }
+            },
             "input_order": {"required": ["flag", "big"]},
         }
         self.snapshot = CatalogSnapshot(
@@ -36,7 +41,9 @@ class ValuesTest(LayoutTestCase):
         graph = json.loads(GRAPH.read_text(encoding="utf-8"))
         graph["8"] = {"class_type": "TypedNode", "inputs": {"flag": False, "big": 0}}
         response = self.post(
-            self.client, "/api/workflows?name=Values", content=json.dumps(graph),
+            self.client,
+            "/api/workflows?name=Values",
+            content=json.dumps(graph),
             headers={"content-type": "application/json"},
         )
         self.assertEqual(response.status_code, 201, response.text)
@@ -45,14 +52,16 @@ class ValuesTest(LayoutTestCase):
 
     def save(self, edits: dict, expected_revision: int = 1):
         return self.put(
-            self.client, f"{self.base}/values",
+            self.client,
+            f"{self.base}/values",
             json={"edits": edits, "expected_revision": expected_revision},
         )
 
     def stored_graph(self) -> dict:
         row = self.db.query_one(
             "SELECT graph_json FROM workflow_revisions WHERE workflow_id = ? "
-            "ORDER BY revision DESC LIMIT 1", (self.workflow_id,),
+            "ORDER BY revision DESC LIMIT 1",
+            (self.workflow_id,),
         )
         return json.loads(row["graph_json"])
 
@@ -60,7 +69,11 @@ class ValuesTest(LayoutTestCase):
         response = self.save({"8:flag": True})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(
-            (response.json()["revision"], response.json()["added"], response.json()["removed"]),
+            (
+                response.json()["revision"],
+                response.json()["added"],
+                response.json()["removed"],
+            ),
             (2, [], []),
         )
         self.assertIs(self.stored_graph()["8"]["inputs"]["flag"], True)
@@ -113,7 +126,8 @@ class ValuesTest(LayoutTestCase):
 
     def test_layout_stays_non_stale_after_saving_values(self) -> None:
         saved = self.put(
-            self.client, f"{self.base}/layout",
+            self.client,
+            f"{self.base}/layout",
             json={"layout": doc(), "expected_revision": 0},
         )
         self.assertEqual(saved.status_code, 200, saved.text)
@@ -129,14 +143,22 @@ class ValuesTest(LayoutTestCase):
         self.app.state.generations.upstream = FakeUpstream()
         self.assertEqual(self.save({"8:flag": True}).status_code, 200)
         response = self.post(
-            self.client, "/api/generations",
-            json={"workflow_id": self.workflow_id, "request_key": "saved-values",
-                  "edits": {}, "seed_policy": "fixed"},
+            self.client,
+            "/api/generations",
+            json={
+                "workflow_id": self.workflow_id,
+                "request_key": "saved-values",
+                "edits": {},
+                "seed_policy": "fixed",
+            },
         )
         self.assertEqual(response.status_code, 201, response.text)
-        graph = json.loads(self.db.query_one(
-            "SELECT graph_json FROM generations WHERE id = ?", (response.json()["id"],)
-        )["graph_json"])
+        graph = json.loads(
+            self.db.query_one(
+                "SELECT graph_json FROM generations WHERE id = ?",
+                (response.json()["id"],),
+            )["graph_json"]
+        )
         self.assertIs(graph["8"]["inputs"]["flag"], True)
 
 

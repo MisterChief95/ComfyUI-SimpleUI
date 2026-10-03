@@ -3,8 +3,12 @@ import { test } from 'node:test';
 import type { ControlDescriptor } from '../contracts.ts';
 import { describeApply, planApply, presetValues } from './presets.ts';
 
-const control = (id: string, logical_type: ControlDescriptor['logical_type'], value: ControlDescriptor['value'], component: ControlDescriptor['component'] = 'text') =>
-	({ binding_id: id, logical_type, value, component }) as ControlDescriptor;
+const control = (
+	id: string,
+	logical_type: ControlDescriptor['logical_type'],
+	value: ControlDescriptor['value'],
+	component: ControlDescriptor['component'] = 'text'
+) => ({ binding_id: id, logical_type, value, component }) as ControlDescriptor;
 
 const controls = [
 	control('1:seed', 'int', '5', 'seed'),
@@ -26,7 +30,10 @@ test('planApply coerces, drops unchanged, skips unknown/hidden/file', () => {
 	});
 	assert.deepEqual(plan.draft, { '1:seed': '123', '3:on': true });
 	assert.deepEqual([plan.applied, plan.unknown, plan.unusable], [3, 1, 2]);
-	assert.equal(describeApply('P', plan), 'Preset "P" applied: 3 values. 3 skipped (1 not in this workflow, 2 for hidden or file controls).');
+	assert.equal(
+		describeApply('P', plan),
+		'Preset "P" applied: 3 values. 3 skipped (1 not in this workflow, 2 for hidden or file controls).'
+	);
 });
 
 test('large ints stay exact strings', () => {
@@ -36,7 +43,13 @@ test('large ints stay exact strings', () => {
 
 test('presetValues keeps existing non-file controls and finite numbers', () => {
 	assert.deepEqual(
-		presetValues(controls, { '1:seed': '9', '5:img': 'q', '9:gone': 'x', '2:cfg': Number.NaN, '4:text': 'b' }),
+		presetValues(controls, {
+			'1:seed': '9',
+			'5:img': 'q',
+			'9:gone': 'x',
+			'2:cfg': Number.NaN,
+			'4:text': 'b'
+		}),
 		{ '1:seed': '9', '4:text': 'b' }
 	);
 });

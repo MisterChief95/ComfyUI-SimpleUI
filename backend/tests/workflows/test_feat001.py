@@ -186,8 +186,8 @@ class PresetTest(FeatTestCase):
 
     def test_exact_integers_are_never_lossy(self) -> None:
         raw = (
-            '{"name": "seeds", "values": {"3:seed": %d, "3:neg": -%d, "3:str": "%d",'
-            ' "3:small": 42, "3:f": 1.5}}' % (BIG, BIG, BIG)
+            f'{{"name": "seeds", "values": {{"3:seed": {BIG}, "3:neg": -{BIG}, "3:str": "{BIG}",'
+            ' "3:small": 42, "3:f": 1.5}}'
         ).encode()
         created = self.post(
             self.client,
@@ -206,7 +206,7 @@ class PresetTest(FeatTestCase):
         )
         # And through update.
         url = f"{self.base}/presets/{created.json()['id']}"
-        raw = ('{"values": {"3:seed": %d}, "expected_revision": 1}' % BIG).encode()
+        raw = f'{{"values": {{"3:seed": {BIG}}}, "expected_revision": 1}}'.encode()
         updated = self.put(
             self.client, url, content=raw, headers={"content-type": "application/json"}
         )
@@ -584,25 +584,19 @@ class MigrationTest(unittest.TestCase):
             first = Database(path, migrations_dir=old)
             self.assertEqual(first.schema_version(), 3)
             first.close()
-<<<<<<< Updated upstream
             migration = MIGRATIONS_DIR / "004_workflow_presets.sql"
-            (old / migration.name).write_text(migration.read_text(encoding="utf-8"), encoding="utf-8")
+            (old / migration.name).write_text(
+                migration.read_text(encoding="utf-8"), encoding="utf-8"
+            )
             second = Database(path, migrations_dir=old)
             try:
                 self.assertEqual(second.schema_version(), 4)
-                sql = second.query_one("SELECT sql FROM sqlite_master WHERE name = 'workflow_presets'")["sql"]
+                sql = second.query_one(
+                    "SELECT sql FROM sqlite_master WHERE name = 'workflow_presets'"
+                )["sql"]
                 self.assertIn("STRICT", sql)
             finally:
                 second.close()
-=======
-            second = Database(path)
-            self.assertEqual(second.schema_version(), 4)
-            sql = second.query_one(
-                "SELECT sql FROM sqlite_master WHERE name = 'workflow_presets'"
-            )["sql"]
-            self.assertIn("STRICT", sql)
-            second.close()
->>>>>>> Stashed changes
 
 
 if __name__ == "__main__":

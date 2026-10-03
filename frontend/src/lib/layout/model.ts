@@ -72,7 +72,10 @@ export interface ResolvedLayout {
 }
 
 /** Where a binding currently lives in a doc. `index` -1 is the section's header toggle. */
-export interface PanelTarget { row: string; column: string }
+export interface PanelTarget {
+	row: string;
+	column: string;
+}
 export type ItemLocation = { section: string; index: number; row?: string; column?: string };
 export type Location = ItemLocation | 'hidden' | null;
 
@@ -84,25 +87,44 @@ export function sectionItems(section: LayoutSection): LayoutItem[] {
 }
 
 /** Apply an immutable transformation to each leaf list, preserving panel structure. */
-export function mapSectionItems(section: LayoutSection, fn: (items: LayoutItem[]) => LayoutItem[]): LayoutSection {
+export function mapSectionItems(
+	section: LayoutSection,
+	fn: (items: LayoutItem[]) => LayoutItem[]
+): LayoutSection {
 	return section.mode === 'panels'
-		? { ...section, rows: section.rows.map((row) => ({ ...row, columns: row.columns.map((column) => ({ ...column, items: fn(column.items) })) })) }
+		? {
+				...section,
+				rows: section.rows.map((row) => ({
+					...row,
+					columns: row.columns.map((column) => ({ ...column, items: fn(column.items) }))
+				}))
+			}
 		: { ...section, items: fn(section.items) };
 }
 
 /** Normalize a valid legacy snapshot without changing order or bindings. */
 export function normalizeLayout(doc: LayoutDoc): LayoutDoc {
-	return { ...doc, version: 2, sections: doc.sections.map((s) => s.mode === 'panels' ? s : { ...s, mode: 'auto' }) };
+	return {
+		...doc,
+		version: 2,
+		sections: doc.sections.map((s) => (s.mode === 'panels' ? s : { ...s, mode: 'auto' }))
+	};
 }
 
 function targetItems(section: LayoutSection, target?: PanelTarget): LayoutItem[] | undefined {
 	if (section.mode !== 'panels') return target ? undefined : section.items;
 	return target
-		? section.rows.find((r) => r.id === target.row)?.columns.find((c) => c.id === target.column)?.items
+		? section.rows.find((r) => r.id === target.row)?.columns.find((c) => c.id === target.column)
+				?.items
 		: section.rows[0]?.columns[0]?.items;
 }
 
-function insertItem(section: LayoutSection, item: LayoutItem, index?: number, target?: PanelTarget): LayoutSection {
+function insertItem(
+	section: LayoutSection,
+	item: LayoutItem,
+	index?: number,
+	target?: PanelTarget
+): LayoutSection {
 	const list = targetItems(section, target);
 	return mapSectionItems(section, (items) => {
 		if (items !== list) return items;
@@ -129,7 +151,9 @@ function titleCase(name: string): string {
 }
 
 function byOrder(a: ControlDescriptor, b: ControlDescriptor): number {
-	return a.order - b.order || (a.binding_id < b.binding_id ? -1 : a.binding_id > b.binding_id ? 1 : 0);
+	return (
+		a.order - b.order || (a.binding_id < b.binding_id ? -1 : a.binding_id > b.binding_id ? 1 : 0)
+	);
 }
 
 /** The automatic layout: one section per non-empty group, in GROUP_ORDER. Never persisted until saved. */
@@ -176,30 +200,51 @@ export function resolveLayout(schema: SchemaLike, layout: LayoutDoc | null): Res
 		const controls: ResolvedControl[] = [];
 		for (const item of items) {
 			const ids = itemBindings(item);
-			ids.forEach((id) => { seen.add(id); note(id); });
+			ids.forEach((id) => {
+				seen.add(id);
+				note(id);
+			});
 			const control = byId.get(ids[0]);
 			const height = item.kind === 'aspect_ratio' ? byId.get(item.height) : undefined;
 			const when = boolean(item.when);
-			if (control && (item.kind === 'control' || height)) controls.push({ item, control, height, when });
+			if (control && (item.kind === 'control' || height))
+				controls.push({ item, control, height, when });
 			else if (item.kind === 'aspect_ratio') {
 				// A stale half must not remove the surviving input from the run page.
 				for (const id of ids) {
 					const surviving = byId.get(id);
-					if (surviving) controls.push({ item: { kind: 'control', binding_id: id, span: item.span }, control: surviving, when });
+					if (surviving)
+						controls.push({
+							item: { kind: 'control', binding_id: id, span: item.span },
+							control: surviving,
+							when
+						});
 				}
 			}
 		}
 		return controls;
 	};
 	const sections = doc.sections.map((section): ResolvedSection => {
-		if (section.toggle) { seen.add(section.toggle); note(section.toggle); }
+		if (section.toggle) {
+			seen.add(section.toggle);
+			note(section.toggle);
+		}
 		const toggle = boolean(section.toggle);
-		if (section.mode !== 'panels') return { section, controls: resolveItems(section.items), toggle };
+		if (section.mode !== 'panels')
+			return { section, controls: resolveItems(section.items), toggle };
 		const rows = section.rows.map((row) => ({
 			id: row.id,
-			columns: row.columns.map((column) => ({ id: column.id, controls: resolveItems(column.items) }))
+			columns: row.columns.map((column) => ({
+				id: column.id,
+				controls: resolveItems(column.items)
+			}))
 		}));
-		return { section, controls: rows.flatMap((r) => r.columns.flatMap((c) => c.controls)), toggle, rows };
+		return {
+			section,
+			controls: rows.flatMap((r) => r.columns.flatMap((c) => c.controls)),
+			toggle,
+			rows
+		};
 	});
 	const hidden: ControlDescriptor[] = [];
 	for (const id of doc.hidden) {
@@ -228,7 +273,8 @@ function validBinding(value: unknown): boolean {
 export function validate(doc: unknown): string[] {
 	const errors: string[] = [];
 	if (!isObject(doc)) return ['layout must be an object'];
-	if (Object.keys(doc).some((key) => !['version', 'sections', 'hidden'].includes(key))) errors.push('unknown layout field');
+	if (Object.keys(doc).some((key) => !['version', 'sections', 'hidden'].includes(key)))
+		errors.push('unknown layout field');
 	if (doc.version !== 1 && doc.version !== 2) errors.push('version must be 1 or 2');
 	if (!Array.isArray(doc.sections)) errors.push('sections must be an array');
 	if (!Array.isArray(doc.hidden)) errors.push('hidden must be an array');
@@ -241,7 +287,8 @@ export function validate(doc: unknown): string[] {
 	const sectionIds = new Set<string>();
 	const structuralIds = new Set<string>();
 	const structuralId = (id: unknown, where: string): void => {
-		if (typeof id !== 'string' || !SECTION_ID.test(id)) errors.push(`${where}: id must match ${SECTION_ID.source}`);
+		if (typeof id !== 'string' || !SECTION_ID.test(id))
+			errors.push(`${where}: id must match ${SECTION_ID.source}`);
 		else if (structuralIds.has(id)) errors.push(`${where}: duplicate structural id "${id}"`);
 		else structuralIds.add(id);
 	};
@@ -262,8 +309,16 @@ export function validate(doc: unknown): string[] {
 			errors.push(`${where}: must be an object`);
 			return;
 		}
-		const sectionFields = ['id', 'title', 'mode', 'collapsed', 'toggle', ...(raw.mode === 'panels' ? ['rows'] : ['columns', 'items'])];
-		if (Object.keys(raw).some((key) => !sectionFields.includes(key))) errors.push(`${where}: unknown section field`);
+		const sectionFields = [
+			'id',
+			'title',
+			'mode',
+			'collapsed',
+			'toggle',
+			...(raw.mode === 'panels' ? ['rows'] : ['columns', 'items'])
+		];
+		if (Object.keys(raw).some((key) => !sectionFields.includes(key)))
+			errors.push(`${where}: unknown section field`);
 		if (typeof raw.id !== 'string' || !SECTION_ID.test(raw.id)) {
 			errors.push(`${where}: id must match ${SECTION_ID.source}`);
 		} else if (sectionIds.has(raw.id)) {
@@ -284,27 +339,46 @@ export function validate(doc: unknown): string[] {
 			claim(raw.toggle, `${where} toggle`);
 		}
 		let leaves: unknown[] = [];
-		if (doc.version === 1 && ('mode' in raw || 'rows' in raw)) errors.push(`${where}: v1 sections must use columns and items`);
+		if (doc.version === 1 && ('mode' in raw || 'rows' in raw))
+			errors.push(`${where}: v1 sections must use columns and items`);
 		if (raw.mode === 'panels') {
-			if ('items' in raw || 'columns' in raw) errors.push(`${where}: panels cannot have section items/columns`);
+			if ('items' in raw || 'columns' in raw)
+				errors.push(`${where}: panels cannot have section items/columns`);
 			if (!Array.isArray(raw.rows)) errors.push(`${where}: rows must be an array`);
 			else {
 				if (raw.rows.length > MAX_ROWS) errors.push(`${where}: at most ${MAX_ROWS} rows`);
 				for (const row of raw.rows) {
-					if (!isObject(row)) { errors.push(`${where}: row must be an object`); continue; }
+					if (!isObject(row)) {
+						errors.push(`${where}: row must be an object`);
+						continue;
+					}
 					structuralId(row.id, 'row');
-					if (Object.keys(row).some((key) => !['id', 'columns'].includes(key))) errors.push(`${where}: unknown row field`);
-					if (!Array.isArray(row.columns) || row.columns.length < 1 || row.columns.length > MAX_COLUMNS) { errors.push(`${where}: row needs 1-${MAX_COLUMNS} columns`); continue; }
+					if (Object.keys(row).some((key) => !['id', 'columns'].includes(key)))
+						errors.push(`${where}: unknown row field`);
+					if (
+						!Array.isArray(row.columns) ||
+						row.columns.length < 1 ||
+						row.columns.length > MAX_COLUMNS
+					) {
+						errors.push(`${where}: row needs 1-${MAX_COLUMNS} columns`);
+						continue;
+					}
 					for (const column of row.columns) {
-						if (!isObject(column)) { errors.push(`${where}: column must be an object`); continue; }
+						if (!isObject(column)) {
+							errors.push(`${where}: column must be an object`);
+							continue;
+						}
 						structuralId(column.id, 'column');
-						if (Object.keys(column).some((key) => !['id', 'items'].includes(key))) errors.push(`${where}: unknown column field`);
-						if (!Array.isArray(column.items)) errors.push(`${where}: column items must be an array`);
+						if (Object.keys(column).some((key) => !['id', 'items'].includes(key)))
+							errors.push(`${where}: unknown column field`);
+						if (!Array.isArray(column.items))
+							errors.push(`${where}: column items must be an array`);
 						else leaves.push(...column.items);
 					}
 				}
 			}
-		} else if (raw.mode !== undefined && raw.mode !== 'auto') errors.push(`${where}: mode must be auto or panels`);
+		} else if (raw.mode !== undefined && raw.mode !== 'auto')
+			errors.push(`${where}: mode must be auto or panels`);
 		else if ('rows' in raw) errors.push(`${where}: auto cannot have rows`);
 		else if (Array.isArray(raw.items)) leaves = raw.items;
 		if (raw.mode !== 'panels' && !Array.isArray(raw.items)) {
@@ -316,18 +390,39 @@ export function validate(doc: unknown): string[] {
 				errors.push(`${where}: item must be an object`);
 				continue;
 			}
-			if (item.kind !== 'control' && item.kind !== 'aspect_ratio') errors.push(`${where}: unknown item kind`);
-			const fields = item.kind === 'aspect_ratio' ? ['kind', 'width', 'height', 'presets', 'span', 'when'] : ['kind', 'binding_id', 'span', 'when'];
-			if (Object.keys(item).some((key) => !fields.includes(key))) errors.push(`${where}: unknown item field`);
-			if (item.when != null && !validBinding(item.when)) errors.push(`${where}: when must be 1-200 characters`);
+			if (item.kind !== 'control' && item.kind !== 'aspect_ratio')
+				errors.push(`${where}: unknown item kind`);
+			const fields =
+				item.kind === 'aspect_ratio'
+					? ['kind', 'width', 'height', 'presets', 'span', 'when']
+					: ['kind', 'binding_id', 'span', 'when'];
+			if (Object.keys(item).some((key) => !fields.includes(key)))
+				errors.push(`${where}: unknown item field`);
+			if (item.when != null && !validBinding(item.when))
+				errors.push(`${where}: when must be 1-200 characters`);
 			if (item.span !== undefined && item.span !== 'auto' && item.span !== 'full') {
 				errors.push(`${where}: span must be "auto" or "full"`);
 			}
 			if (item.kind === 'aspect_ratio') {
 				total += 2;
-				claim(item.width, where); claim(item.height, where);
-				if (item.presets != null && (!Array.isArray(item.presets) || item.presets.length > 24 || !item.presets.every((pair) => Array.isArray(pair) && pair.length === 2 && pair.every((n) => Number.isInteger(n) && n > 0 && n <= 16384)))) errors.push(`${where}: invalid dimension presets`);
-			} else { total += 1; claim(item.binding_id, where); }
+				claim(item.width, where);
+				claim(item.height, where);
+				if (
+					item.presets != null &&
+					(!Array.isArray(item.presets) ||
+						item.presets.length > 24 ||
+						!item.presets.every(
+							(pair) =>
+								Array.isArray(pair) &&
+								pair.length === 2 &&
+								pair.every((n) => Number.isInteger(n) && n > 0 && n <= 16384)
+						))
+				)
+					errors.push(`${where}: invalid dimension presets`);
+			} else {
+				total += 1;
+				claim(item.binding_id, where);
+			}
 		}
 	});
 	for (const id of hidden) claim(id, 'hidden');
@@ -356,7 +451,13 @@ function clamp(value: number, low: number, high: number): number {
 
 /** Placed plus hidden bindings: what the backend caps at MAX_ITEMS. */
 export function itemCount(doc: LayoutDoc): number {
-	return doc.sections.reduce((n, s) => n + (s.toggle ? 1 : 0) + sectionItems(s).reduce((sum, item) => sum + itemBindings(item).length, 0), doc.hidden.length);
+	return doc.sections.reduce(
+		(n, s) =>
+			n +
+			(s.toggle ? 1 : 0) +
+			sectionItems(s).reduce((sum, item) => sum + itemBindings(item).length, 0),
+		doc.hidden.length
+	);
 }
 
 export function canAddSection(doc: LayoutDoc): boolean {
@@ -373,10 +474,11 @@ export function locate(doc: LayoutDoc, binding: string): Location {
 	for (const section of doc.sections) {
 		if (section.toggle === binding) return { section: section.id, index: -1 };
 		if (section.mode === 'panels') {
-			for (const row of section.rows) for (const column of row.columns) {
-				const index = column.items.findIndex((item) => itemBindings(item).includes(binding));
-				if (index >= 0) return { section: section.id, row: row.id, column: column.id, index };
-			}
+			for (const row of section.rows)
+				for (const column of row.columns) {
+					const index = column.items.findIndex((item) => itemBindings(item).includes(binding));
+					if (index >= 0) return { section: section.id, row: row.id, column: column.id, index };
+				}
 		} else {
 			const index = section.items.findIndex((item) => itemBindings(item).includes(binding));
 			if (index >= 0) return { section: section.id, index };
@@ -393,7 +495,9 @@ function strip(doc: LayoutDoc, binding: string): { doc: LayoutDoc; item: LayoutI
 		const found = sectionItems(section).find((it) => itemBindings(it).includes(binding));
 		if (!found) return section;
 		item = found;
-		return mapSectionItems(section, (items) => items.filter((it) => !itemBindings(it).includes(binding)));
+		return mapSectionItems(section, (items) =>
+			items.filter((it) => !itemBindings(it).includes(binding))
+		);
 	});
 	return { doc: { ...doc, sections, hidden: doc.hidden.filter((id) => id !== binding) }, item };
 }
@@ -417,7 +521,8 @@ export function addSection(
 	index?: number,
 	id: string = newSectionId(doc.sections.map((s) => s.id))
 ): LayoutDoc {
-	if (!canAddSection(doc) || !SECTION_ID.test(id) || doc.sections.some((s) => s.id === id)) return doc;
+	if (!canAddSection(doc) || !SECTION_ID.test(id) || doc.sections.some((s) => s.id === id))
+		return doc;
 	const section: LayoutSection = {
 		mode: 'auto',
 		id,
@@ -501,18 +606,40 @@ export function moveItem(
 export function pairDimensions(doc: LayoutDoc, width: string, height: string): LayoutDoc {
 	const where = locate(doc, width);
 	if (width === height || !where || where === 'hidden') return doc;
-	if (![width, height].every((id) => doc.sections.some((s) => sectionItems(s).some((item) => item.kind === 'control' && item.binding_id === id)))) return doc;
+	if (
+		![width, height].every((id) =>
+			doc.sections.some((s) =>
+				sectionItems(s).some((item) => item.kind === 'control' && item.binding_id === id)
+			)
+		)
+	)
+		return doc;
 	const target = panelTarget(where);
-	const index = targetItems(doc.sections.find((s) => s.id === where.section)!, target)!.slice(0, where.index).filter((item) => !itemBindings(item).includes(height)).length;
+	const index = targetItems(
+		doc.sections.find((s) => s.id === where.section)!,
+		target
+	)!
+		.slice(0, where.index)
+		.filter((item) => !itemBindings(item).includes(height)).length;
 	const stripped = strip(strip(doc, width).doc, height).doc;
-	const next = mapSection(stripped, where.section, (section) => insertItem(section, { kind: 'aspect_ratio', width, height, span: 'full' }, index, target));
+	const next = mapSection(stripped, where.section, (section) =>
+		insertItem(section, { kind: 'aspect_ratio', width, height, span: 'full' }, index, target)
+	);
 	return itemCount(next) <= MAX_ITEMS ? next : doc;
 }
 
 export function splitDimensions(doc: LayoutDoc, binding: string): LayoutDoc {
 	const where = locate(doc, binding);
 	if (!where || where === 'hidden') return doc;
-	return mapSection(doc, where.section, (section) => mapSectionItems(section, (items) => items.flatMap((item): LayoutItem[] => item.kind === 'aspect_ratio' && itemBindings(item).includes(binding) ? itemBindings(item).map((binding_id) => ({ kind: 'control', binding_id, span: 'auto' })) : [item])));
+	return mapSection(doc, where.section, (section) =>
+		mapSectionItems(section, (items) =>
+			items.flatMap((item): LayoutItem[] =>
+				item.kind === 'aspect_ratio' && itemBindings(item).includes(binding)
+					? itemBindings(item).map((binding_id) => ({ kind: 'control', binding_id, span: 'auto' }))
+					: [item]
+			)
+		)
+	);
 }
 
 /** Remove a control from the layout entirely; it becomes unplaced. */
@@ -524,8 +651,13 @@ export function unplace(doc: LayoutDoc, binding: string): LayoutDoc {
 export function hide(doc: LayoutDoc, binding: string): LayoutDoc {
 	if (locate(doc, binding) === 'hidden' || !canPlace(doc, binding)) return doc;
 	const { doc: stripped } = strip(doc, binding);
-	const original = doc.sections.flatMap(sectionItems).find((item) => itemBindings(item).includes(binding));
-	return { ...stripped, hidden: [...stripped.hidden, ...(original ? itemBindings(original) : [binding])] };
+	const original = doc.sections
+		.flatMap(sectionItems)
+		.find((item) => itemBindings(item).includes(binding));
+	return {
+		...stripped,
+		hidden: [...stripped.hidden, ...(original ? itemBindings(original) : [binding])]
+	};
 }
 
 /** Undo `hide`: the control becomes unplaced. */
@@ -538,7 +670,11 @@ export function unhide(doc: LayoutDoc, binding: string): LayoutDoc {
 export function setSpan(doc: LayoutDoc, binding: string, span: 'auto' | 'full'): LayoutDoc {
 	const where = locate(doc, binding);
 	if (where === null || where === 'hidden') return doc;
-	return mapSection(doc, where.section, (section) => mapSectionItems(section, (items) => items.map((item) => (itemBindings(item).includes(binding) ? { ...item, span } : item))));
+	return mapSection(doc, where.section, (section) =>
+		mapSectionItems(section, (items) =>
+			items.map((item) => (itemBindings(item).includes(binding) ? { ...item, span } : item))
+		)
+	);
 }
 
 /** Drop a stale binding (absent from the schema) wherever it is kept. */
@@ -559,14 +695,20 @@ export function setToggle(doc: LayoutDoc, sectionId: string, binding: string | n
 export function setWhen(doc: LayoutDoc, binding: string, when: string | null): LayoutDoc {
 	const where = locate(doc, binding);
 	if (where === null || where === 'hidden' || where.index < 0 || when === binding) return doc;
-	return mapSection(doc, where.section, (section) => mapSectionItems(section, (items) => items.map((item) => (itemBindings(item).includes(binding) ? { ...item, when } : item))));
+	return mapSection(doc, where.section, (section) =>
+		mapSectionItems(section, (items) =>
+			items.map((item) => (itemBindings(item).includes(binding) ? { ...item, when } : item))
+		)
+	);
 }
 
 // --- panel structure --------------------------------------------------------
 
 /** Row and column ids share one document-wide namespace. */
 function newStructuralId(doc: LayoutDoc, extra: string[] = []): string {
-	const taken = doc.sections.flatMap((s) => s.mode === 'panels' ? s.rows.flatMap((r) => [r.id, ...r.columns.map((c) => c.id)]) : []);
+	const taken = doc.sections.flatMap((s) =>
+		s.mode === 'panels' ? s.rows.flatMap((r) => [r.id, ...r.columns.map((c) => c.id)]) : []
+	);
 	return newSectionId([...taken, ...extra]);
 }
 
@@ -576,7 +718,11 @@ function emptyRow(doc: LayoutDoc, columns: number): LayoutRow {
 	return { id: ids[0], columns: ids.slice(1).map((id) => ({ id, items: [] })) };
 }
 
-function mapPanels(doc: LayoutDoc, id: string, fn: (section: PanelLayoutSection) => PanelLayoutSection): LayoutDoc {
+function mapPanels(
+	doc: LayoutDoc,
+	id: string,
+	fn: (section: PanelLayoutSection) => PanelLayoutSection
+): LayoutDoc {
 	const section = doc.sections.find((s) => s.id === id);
 	if (section?.mode !== 'panels') return doc;
 	const next = fn(section);
@@ -592,9 +738,18 @@ export function setSectionMode(doc: LayoutDoc, id: string, mode: 'auto' | 'panel
 	const section = doc.sections.find((s) => s.id === id);
 	if (!section || (section.mode ?? 'auto') === mode) return doc;
 	if (section.mode === 'panels') {
-		const columns = clamp(Math.max(1, ...section.rows.map((r) => r.columns.length)), 1, MAX_COLUMNS) as 1 | 2 | 3;
+		const columns = clamp(
+			Math.max(1, ...section.rows.map((r) => r.columns.length)),
+			1,
+			MAX_COLUMNS
+		) as 1 | 2 | 3;
 		const { rows: _rows, ...base } = section;
-		return mapSection(doc, id, () => ({ ...base, mode: 'auto', columns, items: sectionItems(section) }));
+		return mapSection(doc, id, () => ({
+			...base,
+			mode: 'auto',
+			columns,
+			items: sectionItems(section)
+		}));
 	}
 	const row = emptyRow(doc, section.columns);
 	section.items.forEach((item, i) => row.columns[i % row.columns.length].items.push(item));
@@ -607,18 +762,30 @@ export function addRow(doc: LayoutDoc, sectionId: string, columns = 1, index?: n
 	return mapPanels(doc, sectionId, (section) => {
 		if (section.rows.length >= MAX_ROWS) return section;
 		const rows = [...section.rows];
-		rows.splice(clamp(index ?? rows.length, 0, rows.length), 0, emptyRow(doc, clamp(columns, 1, MAX_COLUMNS)));
+		rows.splice(
+			clamp(index ?? rows.length, 0, rows.length),
+			0,
+			emptyRow(doc, clamp(columns, 1, MAX_COLUMNS))
+		);
 		return { ...section, rows };
 	});
 }
 
 /** Delete a row; its controls become unplaced. */
 export function removeRow(doc: LayoutDoc, sectionId: string, rowId: string): LayoutDoc {
-	return mapPanels(doc, sectionId, (section) => ({ ...section, rows: section.rows.filter((r) => r.id !== rowId) }));
+	return mapPanels(doc, sectionId, (section) => ({
+		...section,
+		rows: section.rows.filter((r) => r.id !== rowId)
+	}));
 }
 
 /** Move a row up (-1) or down (+1) within its section. */
-export function shiftRow(doc: LayoutDoc, sectionId: string, rowId: string, delta: number): LayoutDoc {
+export function shiftRow(
+	doc: LayoutDoc,
+	sectionId: string,
+	rowId: string,
+	delta: number
+): LayoutDoc {
 	return mapPanels(doc, sectionId, (section) => {
 		const from = section.rows.findIndex((r) => r.id === rowId);
 		const to = from + delta;
@@ -631,7 +798,12 @@ export function shiftRow(doc: LayoutDoc, sectionId: string, rowId: string, delta
 }
 
 /** Resize a row to `count` columns. Shrinking moves the dropped columns' controls into the last kept one. */
-export function setRowColumns(doc: LayoutDoc, sectionId: string, rowId: string, count: number): LayoutDoc {
+export function setRowColumns(
+	doc: LayoutDoc,
+	sectionId: string,
+	rowId: string,
+	count: number
+): LayoutDoc {
 	const n = clamp(count, 1, MAX_COLUMNS);
 	return mapPanels(doc, sectionId, (section) => ({
 		...section,
@@ -640,7 +812,10 @@ export function setRowColumns(doc: LayoutDoc, sectionId: string, rowId: string, 
 			if (row.columns.length > n) {
 				const kept = row.columns.slice(0, n);
 				const moved = row.columns.slice(n).flatMap((c) => c.items);
-				return { ...row, columns: kept.map((c, i) => (i === n - 1 ? { ...c, items: [...c.items, ...moved] } : c)) };
+				return {
+					...row,
+					columns: kept.map((c, i) => (i === n - 1 ? { ...c, items: [...c.items, ...moved] } : c))
+				};
 			}
 			const ids: string[] = [];
 			while (row.columns.length + ids.length < n) ids.push(newStructuralId(doc, ids));
@@ -650,7 +825,12 @@ export function setRowColumns(doc: LayoutDoc, sectionId: string, rowId: string, 
 }
 
 /** Delete one column; its controls become unplaced. The last column of a row deletes the row. */
-export function removeColumn(doc: LayoutDoc, sectionId: string, rowId: string, columnId: string): LayoutDoc {
+export function removeColumn(
+	doc: LayoutDoc,
+	sectionId: string,
+	rowId: string,
+	columnId: string
+): LayoutDoc {
 	return mapPanels(doc, sectionId, (section) => ({
 		...section,
 		rows: section.rows.flatMap((row) => {

@@ -23,6 +23,7 @@ requests.
 from __future__ import annotations
 
 import copy
+import math
 import random
 from typing import Any, Literal
 
@@ -153,7 +154,7 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
             raise SubmissionError(
                 "invalid_value", f"{control.label} must be a number.", binding
             ) from exc
-        if value != value or value in (float("inf"), float("-inf")):
+        if not math.isfinite(value):
             raise SubmissionError(
                 "non_finite_number",
                 f"{control.label} must be a finite number; it is not clamped or rounded.",

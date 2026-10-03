@@ -61,6 +61,7 @@ class MediaTestCase(unittest.TestCase):
             ["cmd", "/c", "mklink", "/J", str(link), str(target)],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0:  # pragma: no cover - depends on the host
             self.skipTest(f"mklink /J unavailable: {result.stderr.strip()}")

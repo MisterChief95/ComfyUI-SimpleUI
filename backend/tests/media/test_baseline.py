@@ -18,7 +18,6 @@ from .support import MediaTestCase
 
 
 class BaselineImportTest(MediaTestCase):
-<<<<<<< Updated upstream
     def test_import_precomputes_image_thumbnails_without_ffmpeg(self) -> None:
         self.png("one.png")
         self.video("clip.mp4")
@@ -31,7 +30,10 @@ class BaselineImportTest(MediaTestCase):
         deadline = time.monotonic() + 3
         while not poster.is_file() and time.monotonic() < deadline:
             time.sleep(0.01)
-        self.assertTrue(poster.is_file(), "image thumbnail should exist before its first-view request")
+        self.assertTrue(
+            poster.is_file(),
+            "image thumbnail should exist before its first-view request",
+        )
         poster.unlink()
         restarted = MediaService(self.db, self.settings, self.media.data_dir)
         self.addCleanup(restarted.close)
@@ -43,12 +45,9 @@ class BaselineImportTest(MediaTestCase):
         self.assertFalse((self.media.thumbnails / f"{video['id']}.jpg").exists())
         self.assertFalse(list(self.media.thumbnails.glob("*.part")))
 
-    def test_existing_files_are_indexed_under_default_with_unknown_metadata(self) -> None:
-=======
     def test_existing_files_are_indexed_under_default_with_unknown_metadata(
         self,
     ) -> None:
->>>>>>> Stashed changes
         self.png("one.png")
         self.png("nested/two.png")
         self.video("clip.mp4")

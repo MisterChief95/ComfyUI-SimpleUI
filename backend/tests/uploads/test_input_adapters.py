@@ -46,20 +46,20 @@ def _image_control() -> ControlDescriptor:
 
 
 def _hand_built(**overrides) -> ControlDescriptor:
-    base = dict(
-        binding_id="9:file_input",
-        node_id="9",
-        class_type="SomeLoader",
-        input_name="file_input",
-        logical_type="file",
-        value=None,
-        component="file",
-        group="inputs",
-        order=0,
-        label="Some loader: File input",
-        inference_reason="loader_adapter:comfy_input_dir_filename;owned_input",
-        raw_metadata={"media_kind": "image"},
-    )
+    base = {
+        "binding_id": "9:file_input",
+        "node_id": "9",
+        "class_type": "SomeLoader",
+        "input_name": "file_input",
+        "logical_type": "file",
+        "value": None,
+        "component": "file",
+        "group": "inputs",
+        "order": 0,
+        "label": "Some loader: File input",
+        "inference_reason": "loader_adapter:comfy_input_dir_filename;owned_input",
+        "raw_metadata": {"media_kind": "image"},
+    }
     base.update(overrides)
     return ControlDescriptor(**base)
 

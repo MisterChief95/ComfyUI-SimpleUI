@@ -51,7 +51,11 @@
 	}
 
 	function overwrite(preset: Preset): void {
-		if (confirm(`Replace the values of "${preset.name}" with your ${changed} current changed value(s)?`)) {
+		if (
+			confirm(
+				`Replace the values of "${preset.name}" with your ${changed} current changed value(s)?`
+			)
+		) {
 			void presets.overwrite(preset);
 		}
 	}
@@ -61,13 +65,25 @@
 	<form class="stack save" onsubmit={create}>
 		<label for={nameId}>Save current as preset</label>
 		<div class="row">
-			<input id={nameId} bind:value={newName} required maxlength="80" placeholder="Preset name" autocomplete="off" />
-			<button type="submit" class="btn btn-primary" disabled={!newName.trim() || cannotSave !== null || presets.busy !== null}>
+			<input
+				id={nameId}
+				bind:value={newName}
+				required
+				maxlength="80"
+				placeholder="Preset name"
+				autocomplete="off"
+			/>
+			<button
+				type="submit"
+				class="btn btn-primary"
+				disabled={!newName.trim() || cannotSave !== null || presets.busy !== null}
+			>
 				{presets.busy === 'new' ? 'Saving…' : 'Save'}
 			</button>
 		</div>
 		<p class="hint muted">
-			{cannotSave ?? `Stores the ${changed} control${changed === 1 ? '' : 's'} you changed. Unchanged controls stay at the imported value.`}
+			{cannotSave ??
+				`Stores the ${changed} control${changed === 1 ? '' : 's'} you changed. Unchanged controls stay at the imported value.`}
 		</p>
 	</form>
 
@@ -84,18 +100,29 @@
 					{#if editingId === preset.id}
 						<form class="row" onsubmit={(e) => rename(e, preset)}>
 							<input aria-label="Preset name" bind:value={editName} required maxlength="80" />
-							<button type="submit" class="btn btn-primary" disabled={presets.busy !== null}>Save</button>
-							<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+							<button type="submit" class="btn btn-primary" disabled={presets.busy !== null}
+								>Save</button
+							>
+							<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}
+								>Cancel</button
+							>
 						</form>
 					{:else}
 						<div class="head">
 							<strong title={preset.name}>{preset.name}</strong>
 							<span class="muted meta">
-								{Object.keys(preset.values).length} value{Object.keys(preset.values).length === 1 ? '' : 's'} · {relativeTime(preset.updated_ms)}
+								{Object.keys(preset.values).length} value{Object.keys(preset.values).length === 1
+									? ''
+									: 's'} · {relativeTime(preset.updated_ms)}
 							</span>
 						</div>
 						<div class="row wrap actions">
-							<button type="button" class="btn btn-primary" disabled={presets.busy !== null} onclick={() => apply(preset)}>
+							<button
+								type="button"
+								class="btn btn-primary"
+								disabled={presets.busy !== null}
+								onclick={() => apply(preset)}
+							>
 								Apply
 							</button>
 							<button

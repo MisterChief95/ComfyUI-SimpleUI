@@ -15,7 +15,7 @@ from ..auth.routes import CurrentPrincipal, LocalRequest, Mutation, guard_mutati
 from ..auth.security import csrf_matches, request_origin_ok
 from ..contracts import Model
 from ..storage.db import in_thread
-from .service import MediaError, ZIP_MAX_ITEMS
+from .service import ZIP_MAX_ITEMS, MediaError
 
 router = APIRouter(prefix="/api/media")
 
@@ -71,26 +71,38 @@ async def gallery(
             )
         )
     except (ValueError, OverflowError) as exc:
-        raise HTTPException(400, "Malformed gallery cursor or virtual folder path.") from exc
+        raise HTTPException(
+            400, "Malformed gallery cursor or virtual folder path."
+        ) from exc
 
 
 @router.get("/suggestions")
 async def filter_suggestions(
-    request: Request, principal: CurrentPrincipal,
+    request: Request,
+    principal: CurrentPrincipal,
     q: Annotated[str, Query(max_length=500)] = "",
     limit: Annotated[int, Query(ge=1, le=10)] = 10,
     search_field: Literal["prompt", "model", "any"] = "any",
 ):
-    return await in_thread(request.app.state.media.filter_suggestions, principal.owner_id, q, limit, search_field)
+    return await in_thread(
+        request.app.state.media.filter_suggestions,
+        principal.owner_id,
+        q,
+        limit,
+        search_field,
+    )
 
 
 @router.get("/tree")
 async def media_tree(
-    request: Request, principal: CurrentPrincipal,
+    request: Request,
+    principal: CurrentPrincipal,
     path: Annotated[str, Query(max_length=200)] = "",
 ):
     try:
-        return await in_thread(request.app.state.media.media_tree, principal.owner_id, path)
+        return await in_thread(
+            request.app.state.media.media_tree, principal.owner_id, path
+        )
     except (ValueError, OverflowError) as exc:
         raise HTTPException(400, "Invalid virtual folder path.") from exc
 
@@ -105,13 +117,17 @@ class DeleteRequest(Model):
 
 
 class ZipRequest(Model):
-    ids: Annotated[list[Annotated[str, StringConstraints(min_length=1, max_length=100)]],
-                   Field(min_length=1, max_length=ZIP_MAX_ITEMS)]
+    ids: Annotated[
+        list[Annotated[str, StringConstraints(min_length=1, max_length=100)]],
+        Field(min_length=1, max_length=ZIP_MAX_ITEMS),
+    ]
 
 
 async def _zip_plan(request: Request, principal, body: ZipRequest):
     try:
-        return await in_thread(request.app.state.media.zip_plan, principal.owner_id, body.ids)
+        return await in_thread(
+            request.app.state.media.zip_plan, principal.owner_id, body.ids
+        )
     except MediaError as exc:
         raise HTTPException(413, str(exc)) from exc
 
@@ -142,7 +158,8 @@ async def download_zip(request: Request, principal: CurrentPrincipal):
         except (ValueError, UnicodeError) as exc:
             raise HTTPException(422, "Invalid ZIP form.") from exc
         if principal.session_token and not csrf_matches(
-            request.app.state.session_secret, principal.session_token,
+            request.app.state.session_secret,
+            principal.session_token,
             form.get("csrf_token", [None])[0],
         ):
             raise HTTPException(403, "Missing or invalid CSRF token.")
@@ -152,14 +169,18 @@ async def download_zip(request: Request, principal: CurrentPrincipal):
     try:
         body = ZipRequest.model_validate_json(payload)
     except ValidationError as exc:
-        raise HTTPException(422, "Select 1–200 media IDs, each at most 100 characters.") from exc
+        raise HTTPException(
+            422, "Select 1–200 media IDs, each at most 100 characters."
+        ) from exc
     plan = await _zip_plan(request, principal, body)
     return StreamingResponse(
         request.app.state.media.stream_zip(principal.owner_id, plan),
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="selected-media.zip"',
-                 "Cache-Control": "private, no-store",
-                 "X-Media-Skipped": str(len(plan["skipped"]))},
+        headers={
+            "Content-Disposition": 'attachment; filename="selected-media.zip"',
+            "Cache-Control": "private, no-store",
+            "X-Media-Skipped": str(len(plan["skipped"])),
+        },
     )
 
 
@@ -172,9 +193,16 @@ async def collections(request: Request, principal: CurrentPrincipal):
     return await in_thread(request.app.state.media.list_collections, principal.owner_id)
 
 
-async def _save_collection(request: Request, principal, body: CollectionName, collection_id: str | None = None):
+async def _save_collection(
+    request: Request, principal, body: CollectionName, collection_id: str | None = None
+):
     try:
-        result = await in_thread(request.app.state.media.save_collection, principal.owner_id, body.name, collection_id)
+        result = await in_thread(
+            request.app.state.media.save_collection,
+            principal.owner_id,
+            body.name,
+            collection_id,
+        )
     except IntegrityError as exc:
         raise HTTPException(409, "A collection with that name already exists.") from exc
     except ValueError as exc:
@@ -185,35 +213,61 @@ async def _save_collection(request: Request, principal, body: CollectionName, co
 
 
 @router.post("/collections", dependencies=[Mutation], status_code=201)
-async def create_collection(request: Request, body: CollectionName, principal: CurrentPrincipal):
+async def create_collection(
+    request: Request, body: CollectionName, principal: CurrentPrincipal
+):
     return await _save_collection(request, principal, body)
 
 
 @router.put("/collections/{collection_id}", dependencies=[Mutation])
-async def rename_collection(request: Request, collection_id: str, body: CollectionName, principal: CurrentPrincipal):
+async def rename_collection(
+    request: Request,
+    collection_id: str,
+    body: CollectionName,
+    principal: CurrentPrincipal,
+):
     return await _save_collection(request, principal, body, collection_id)
 
 
 @router.delete("/collections/{collection_id}", dependencies=[Mutation])
-async def delete_collection(request: Request, collection_id: str, principal: CurrentPrincipal):
-    if not await in_thread(request.app.state.media.delete_collection, principal.owner_id, collection_id):
+async def delete_collection(
+    request: Request, collection_id: str, principal: CurrentPrincipal
+):
+    if not await in_thread(
+        request.app.state.media.delete_collection, principal.owner_id, collection_id
+    ):
         raise HTTPException(404, "Collection was not found.")
     return {"ok": True}
 
 
 @router.post("/collections/{collection_id}/media", dependencies=[Mutation])
 @router.post("/collections/{collection_id}/remove", dependencies=[Mutation])
-async def collection_members(request: Request, collection_id: str, body: DeleteRequest, principal: CurrentPrincipal):
-    changed = await in_thread(lambda: request.app.state.media.collection_members(
-        principal.owner_id, collection_id, body.ids, remove=request.url.path.endswith("/remove")))
+async def collection_members(
+    request: Request,
+    collection_id: str,
+    body: DeleteRequest,
+    principal: CurrentPrincipal,
+):
+    changed = await in_thread(
+        lambda: request.app.state.media.collection_members(
+            principal.owner_id,
+            collection_id,
+            body.ids,
+            remove=request.url.path.endswith("/remove"),
+        )
+    )
     if changed is None:
         raise HTTPException(404, "Collection or media item was not found.")
     return {"changed": changed}
 
 
 @router.post("/delete", dependencies=[Mutation])
-async def delete_media(request: Request, body: DeleteRequest, principal: CurrentPrincipal):
-    deleted = await in_thread(request.app.state.media.delete_media, principal.owner_id, body.ids)
+async def delete_media(
+    request: Request, body: DeleteRequest, principal: CurrentPrincipal
+):
+    deleted = await in_thread(
+        request.app.state.media.delete_media, principal.owner_id, body.ids
+    )
     return {"deleted": deleted}
 
 

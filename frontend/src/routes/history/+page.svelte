@@ -50,7 +50,11 @@
 				<span class="badge">{selected.output_state}</span>
 			</div>
 			{#if selected.workflow_id}
-				<p>Workflow: <strong>{workflowNames.name(selected.workflow_id) ?? selected.workflow_id}</strong></p>
+				<p>
+					Workflow: <strong
+						>{workflowNames.name(selected.workflow_id) ?? selected.workflow_id}</strong
+					>
+				</p>
 			{/if}
 			<p class="muted small">{formatDate(selected.created_ms)} · <code>{selected.id}</code></p>
 			{#if selected.error}
@@ -59,10 +63,15 @@
 			{#if selected.effective_values}
 				<pre>{JSON.stringify(selected.effective_values, null, 2)}</pre>
 				{#if selected.workflow_id}
-					<a class="btn btn-primary" href={`/generation/${selected.workflow_id}?reuse=${selected.id}`}>Reuse as draft</a>
+					<a
+						class="btn btn-primary"
+						href={`/generation/${selected.workflow_id}?reuse=${selected.id}`}>Reuse as draft</a
+					>
 				{/if}
 			{:else}
-				<p class="muted">Prompt and workflow inputs are unavailable for reuse. Media and status are preserved.</p>
+				<p class="muted">
+					Prompt and workflow inputs are unavailable for reuse. Media and status are preserved.
+				</p>
 			{/if}
 		</div>
 	{/if}
@@ -73,7 +82,9 @@
 
 	{#if settingsState.data?.profile.store_history === false}
 		<p class="card notice">
-			History storage is off. Active or uncertain jobs may keep temporary execution snapshots until recovery finishes. Completed jobs keep their media and status, but cannot be reused after their snapshots are purged.
+			History storage is off. Active or uncertain jobs may keep temporary execution snapshots until
+			recovery finishes. Completed jobs keep their media and status, but cannot be reused after
+			their snapshots are purged.
 		</p>
 	{/if}
 
@@ -99,8 +110,13 @@
 							>
 								<span class="top">
 									<span class="badge {statusClass(generation.status)}">{generation.status}</span>
-									<span class="name">{workflowNames.name(generation.workflow_id) ?? (generation.workflow_id ? 'Deleted workflow' : 'Generation')}</span>
-									<time class="muted small" title={formatDate(generation.created_ms)}>{relativeTime(generation.created_ms)}</time>
+									<span class="name"
+										>{workflowNames.name(generation.workflow_id) ??
+											(generation.workflow_id ? 'Deleted workflow' : 'Generation')}</span
+									>
+									<time class="muted small" title={formatDate(generation.created_ms)}
+										>{relativeTime(generation.created_ms)}</time
+									>
 								</span>
 								<span class="muted small">Output: {generation.output_state}</span>
 								{#if summary}<span class="err-summary">{summary}</span>{/if}
@@ -109,7 +125,12 @@
 					{/each}
 				</ul>
 				{#if history.nextCursor}
-					<button class="btn more" type="button" onclick={() => history.load(false)} disabled={history.loading}>
+					<button
+						class="btn more"
+						type="button"
+						onclick={() => history.load(false)}
+						disabled={history.loading}
+					>
 						{history.loading ? 'Loading…' : 'Load more'}
 					</button>
 				{/if}
@@ -127,13 +148,22 @@
 	<section class="card danger-zone">
 		<h2>Clear reusable history</h2>
 		<p class="muted">
-			This removes saved prompt and workflow snapshots from completed generations you own. It never deletes media or generation ownership/status records, and active, pending, or uncertain jobs are deferred for safe recovery.
+			This removes saved prompt and workflow snapshots from completed generations you own. It never
+			deletes media or generation ownership/status records, and active, pending, or uncertain jobs
+			are deferred for safe recovery.
 		</p>
-		<button type="button" class="btn btn-danger" onclick={() => history.clear()} disabled={history.clearing}>
+		<button
+			type="button"
+			class="btn btn-danger"
+			onclick={() => history.clear()}
+			disabled={history.clearing}
+		>
 			{history.clearing ? 'Clearing…' : 'Clear my reusable history'}
 		</button>
 		{#if history.clearResult}
-			<p role="status">Cleared {history.clearResult.purged}; deferred {history.clearResult.deferred}.</p>
+			<p role="status">
+				Cleared {history.clearResult.purged}; deferred {history.clearResult.deferred}.
+			</p>
 		{/if}
 	</section>
 </div>

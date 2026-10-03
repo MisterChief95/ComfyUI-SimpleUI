@@ -69,7 +69,9 @@
 	</ul>
 	{#if profile}
 		<div class="profile">
-			<span class="who" title={profile.name}><Icon name="user" size={16} /><span class="who-name">{profile.name}</span></span>
+			<span class="who" title={profile.name}
+				><Icon name="user" size={16} /><span class="who-name">{profile.name}</span></span
+			>
 			{#if multiUser}
 				<button
 					type="button"

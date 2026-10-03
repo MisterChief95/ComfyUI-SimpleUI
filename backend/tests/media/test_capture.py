@@ -133,7 +133,10 @@ class CaptureTest(MediaTestCase):
         deadline = time.monotonic() + 3
         while not thumbnail.is_file() and time.monotonic() < deadline:
             time.sleep(0.01)
-        self.assertTrue(thumbnail.is_file(), "captured images should be thumbnailed before first view")
+        self.assertTrue(
+            thumbnail.is_file(),
+            "captured images should be thumbnailed before first view",
+        )
 
     def test_preview_results_create_no_card(self) -> None:
         self.assertIsNone(self.capture(preview=True))

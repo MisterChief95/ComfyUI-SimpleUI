@@ -32,7 +32,11 @@
 		}
 	}
 	function saveFlag(key: string, value: boolean): void {
-		try { localStorage.setItem(key, value ? '1' : '0'); } catch { /* not persisted */ }
+		try {
+			localStorage.setItem(key, value ? '1' : '0');
+		} catch {
+			/* not persisted */
+		}
 	}
 
 	// Desktop details width in px; null = 22rem. Per-device preference. Below 768px the panel is a bottom sheet and not resizable.
@@ -42,13 +46,20 @@
 	try {
 		const saved = Number(localStorage.getItem(WIDTH_KEY));
 		if (saved > 0) detailsW = saved;
-	} catch { /* storage blocked: default width */ }
+	} catch {
+		/* storage blocked: default width */
+	}
 
 	function setWidth(px: number, save: boolean): void {
 		const total = body?.clientWidth ?? 0;
 		// ponytail: fixed 240px / 320px-stage bounds; make them tokens if designs need other limits
 		detailsW = Math.round(Math.min(Math.max(px, 240), Math.max(240, total - 320)));
-		if (save) try { localStorage.setItem(WIDTH_KEY, String(detailsW)); } catch { /* not persisted */ }
+		if (save)
+			try {
+				localStorage.setItem(WIDTH_KEY, String(detailsW));
+			} catch {
+				/* not persisted */
+			}
 	}
 	function dragDivider(event: PointerEvent): void {
 		const handle = event.currentTarget as HTMLElement;
@@ -89,8 +100,8 @@
 	const pointers = new Map<number, { x: number; y: number }>();
 
 	$effect(() => {
-		item?.id;
-		full;
+		void item?.id;
+		void full;
 		view = { s: 1, x: 0, y: 0 };
 	});
 
@@ -120,7 +131,9 @@
 			return;
 		}
 		// Pinch: zoom by the change in finger distance, pan by the midpoint's movement.
-		const k = Math.hypot(now.x - other.x, now.y - other.y) / (Math.hypot(prev.x - other.x, prev.y - other.y) || 1);
+		const k =
+			Math.hypot(now.x - other.x, now.y - other.y) /
+			(Math.hypot(prev.x - other.x, prev.y - other.y) || 1);
 		const [cx, cy] = fromCentre((now.x + other.x) / 2, (now.y + other.y) / 2);
 		zoomAt(k, cx, cy);
 		view = { ...view, x: view.x + (now.x - prev.x) / 2, y: view.y + (now.y - prev.y) / 2 };
@@ -146,15 +159,18 @@
 
 	// Keep the current thumbnail in view in the strip.
 	$effect(() => {
-		item?.id;
-		showStrip;
-		strip?.querySelector('[aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+		void item?.id;
+		void showStrip;
+		strip
+			?.querySelector('[aria-current="true"]')
+			?.scrollIntoView({ inline: 'center', block: 'nearest' });
 	});
 
 	function onkeydown(event: KeyboardEvent): void {
 		const target = event.target as HTMLElement;
 		// Let video scrubbing and form fields keep their own arrow keys.
-		if (target.tagName === 'VIDEO' || target.tagName === 'INPUT' || target.tagName === 'SELECT') return;
+		if (target.tagName === 'VIDEO' || target.tagName === 'INPUT' || target.tagName === 'SELECT')
+			return;
 		if (event.key === 'ArrowLeft' && hasPrev) {
 			event.preventDefault();
 			gallery.step(-1);
@@ -179,7 +195,9 @@
 		// Dragging a video's seek bar is not a swipe.
 		const target = event.target as HTMLElement;
 		// A video's controls (seek bar) sit along its bottom edge; in vertical mode the rest of the video can still swipe.
-		const onControls = target.tagName === 'VIDEO' && (!vertical || event.clientY > target.getBoundingClientRect().bottom - 64);
+		const onControls =
+			target.tagName === 'VIDEO' &&
+			(!vertical || event.clientY > target.getBoundingClientRect().bottom - 64);
 		swipe = full || onControls ? null : { x: event.clientX, y: event.clientY };
 	}
 
@@ -202,12 +220,7 @@
 </script>
 
 {#if item}
-	<dialog
-		bind:this={dialog}
-		aria-labelledby={titleId}
-		onclose={() => gallery.close()}
-		{onkeydown}
-	>
+	<dialog bind:this={dialog} aria-labelledby={titleId} onclose={() => gallery.close()} {onkeydown}>
 		<div class="body" class:with-details={showDetails} bind:this={body}>
 			<div class="view">
 				<header>
@@ -215,7 +228,10 @@
 						<h2 id={titleId} title={item.filename}>{item.filename}</h2>
 						<p class="muted meta">
 							{formatDate(item.created_ms)}
-							{#if index >= 0}· {index + 1} of {gallery.items.length}{gallery.canLoadMore || gallery.canLoadPrevious ? '+' : ''}{/if}
+							{#if index >= 0}· {index + 1} of {gallery.items.length}{gallery.canLoadMore ||
+								gallery.canLoadPrevious
+									? '+'
+									: ''}{/if}
 						</p>
 					</div>
 					<button
@@ -230,7 +246,9 @@
 					</button>
 					{#if gallery.detail?.workflow_id}
 						{@const d = gallery.detail}
-						{@const label = d.effective_values ? 'Reuse settings' : 'Open workflow (saved values were cleared)'}
+						{@const label = d.effective_values
+							? 'Reuse settings'
+							: 'Open workflow (saved values were cleared)'}
 						<a
 							class="btn btn-icon ctl"
 							href={`/generation/${d.workflow_id}${d.effective_values ? `?reuse=${d.id}` : ''}`}
@@ -241,10 +259,23 @@
 						</a>
 					{/if}
 					{#if !gallery.isUnavailable(item)}
-						<a class="btn btn-icon ctl" href={`/api/media/${item.id}/download`} download aria-label="Download" title="Download"><Icon name="download" /></a>
+						<a
+							class="btn btn-icon ctl"
+							href={`/api/media/${item.id}/download`}
+							download
+							aria-label="Download"
+							title="Download"><Icon name="download" /></a
+						>
 					{/if}
 					{#if item.media_kind === 'image' && !gallery.isUnavailable(item)}
-						<button type="button" class="btn btn-icon ctl" aria-pressed={full} aria-label={full ? 'Fit to screen' : 'Full size'} title={full ? 'Fit to screen' : 'Full size'} onclick={() => (full = !full)}>
+						<button
+							type="button"
+							class="btn btn-icon ctl"
+							aria-pressed={full}
+							aria-label={full ? 'Fit to screen' : 'Full size'}
+							title={full ? 'Fit to screen' : 'Full size'}
+							onclick={() => (full = !full)}
+						>
 							<Icon name={full ? 'collapse' : 'expand'} />
 						</button>
 					{/if}
@@ -256,7 +287,12 @@
 					>
 						Details
 					</button>
-					<button type="button" class="btn btn-ghost btn-icon" aria-label="Close viewer" onclick={() => dialog?.close()}>
+					<button
+						type="button"
+						class="btn btn-ghost btn-icon"
+						aria-label="Close viewer"
+						onclick={() => dialog?.close()}
+					>
 						<Icon name="close" />
 					</button>
 				</header>
@@ -268,26 +304,56 @@
 					class:full
 					class:vertical
 					bind:this={stage}
-					onpointerdown={(event) => { pointerdown(event); zoomDown(event); }}
+					onpointerdown={(event) => {
+						pointerdown(event);
+						zoomDown(event);
+					}}
 					onpointermove={zoomMove}
-					onpointerup={(event) => { pointerup(event); zoomUp(event); }}
+					onpointerup={(event) => {
+						pointerup(event);
+						zoomUp(event);
+					}}
 					onpointercancel={zoomUp}
 					onclick={stageClick}
-						ondblclick={() => (view = { s: 1, x: 0, y: 0 })}
+					ondblclick={() => (view = { s: 1, x: 0, y: 0 })}
 					role="presentation"
 				>
 					{#if hasPrev && !full}
-						<button type="button" class="nav prev btn btn-icon" aria-label="Previous" disabled={gallery.loading} onclick={() => gallery.step(-1)}>
+						<button
+							type="button"
+							class="nav prev btn btn-icon"
+							aria-label="Previous"
+							disabled={gallery.loading}
+							onclick={() => gallery.step(-1)}
+						>
 							<Icon name="chevron-left" size={24} />
 						</button>
 					{/if}
 					{#key item.id}
 						{#if gallery.isUnavailable(item)}
-							<p class="missing" role="status">The file is unavailable. Its gallery and generation records are preserved.</p>
+							<p class="missing" role="status">
+								The file is unavailable. Its gallery and generation records are preserved.
+							</p>
 						{:else if item.media_kind === 'image'}
-							<img src={`/api/media/${item.id}/file`} alt={item.filename} draggable="false" style:transform={full ? `translate(${view.x}px, ${view.y}px) scale(${view.s})` : undefined} onerror={() => gallery.markUnavailable(item.id)} />
+							<img
+								src={`/api/media/${item.id}/file`}
+								alt={item.filename}
+								draggable="false"
+								style:transform={full
+									? `translate(${view.x}px, ${view.y}px) scale(${view.s})`
+									: undefined}
+								onerror={() => gallery.markUnavailable(item.id)}
+							/>
 						{:else if item.media_kind === 'video'}
-							<video controls autoplay={settingsState.data?.profile.gallery_autoplay === true} muted={settingsState.data?.profile.gallery_autoplay === true} playsinline preload="metadata" src={`/api/media/${item.id}/file`} onerror={() => gallery.markUnavailable(item.id)}>
+							<video
+								controls
+								autoplay={settingsState.data?.profile.gallery_autoplay === true}
+								muted={settingsState.data?.profile.gallery_autoplay === true}
+								playsinline
+								preload="metadata"
+								src={`/api/media/${item.id}/file`}
+								onerror={() => gallery.markUnavailable(item.id)}
+							>
 								<track kind="captions" />
 							</video>
 						{:else}
@@ -295,7 +361,13 @@
 						{/if}
 					{/key}
 					{#if hasNext && !full}
-						<button type="button" class="nav next btn btn-icon" aria-label="Next" disabled={gallery.loading} onclick={() => gallery.step(1)}>
+						<button
+							type="button"
+							class="nav next btn btn-icon"
+							aria-label="Next"
+							disabled={gallery.loading}
+							onclick={() => gallery.step(1)}
+						>
 							<Icon name="chevron-right" size={24} />
 						</button>
 					{/if}
@@ -303,27 +375,38 @@
 
 				{#if gallery.items.length > 1}
 					<div class="strip-wrap">
-						<button type="button" class="btn btn-icon ctl fold" aria-label={showStrip ? 'Hide thumbnails' : 'Show thumbnails'} aria-expanded={showStrip} onclick={() => saveFlag('simpleui.viewerStrip', (showStrip = !showStrip))}>
+						<button
+							type="button"
+							class="btn btn-icon ctl fold"
+							aria-label={showStrip ? 'Hide thumbnails' : 'Show thumbnails'}
+							aria-expanded={showStrip}
+							onclick={() => saveFlag('simpleui.viewerStrip', (showStrip = !showStrip))}
+						>
 							<Icon name={showStrip ? 'chevron-down' : 'chevron-up'} size={16} />
 						</button>
 						{#if showStrip}
-					<div class="strip" role="group" aria-label="Items" bind:this={strip}>
-						{#each gallery.items as entry (entry.id)}
-							<button
-								type="button"
-								class="thumb"
-								aria-label={entry.filename}
-								aria-current={entry.id === item.id}
-								onclick={() => gallery.select(entry)}
-							>
-								{#if entry.media_kind !== 'other' && entry.state !== 'unavailable' && !gallery.thumbnailMissing[entry.id]}
-									<img src={`/api/media/${entry.id}/thumbnail`} alt="" loading="lazy" onerror={() => gallery.markThumbnailMissing(entry.id)} />
-								{:else}
-									<Icon name={entry.media_kind === 'video' ? 'video' : 'image'} size={24} />
-								{/if}
-							</button>
-						{/each}
-					</div>
+							<div class="strip" role="group" aria-label="Items" bind:this={strip}>
+								{#each gallery.items as entry (entry.id)}
+									<button
+										type="button"
+										class="thumb"
+										aria-label={entry.filename}
+										aria-current={entry.id === item.id}
+										onclick={() => gallery.select(entry)}
+									>
+										{#if entry.media_kind !== 'other' && entry.state !== 'unavailable' && !gallery.thumbnailMissing[entry.id]}
+											<img
+												src={`/api/media/${entry.id}/thumbnail`}
+												alt=""
+												loading="lazy"
+												onerror={() => gallery.markThumbnailMissing(entry.id)}
+											/>
+										{:else}
+											<Icon name={entry.media_kind === 'video' ? 'video' : 'image'} size={24} />
+										{/if}
+									</button>
+								{/each}
+							</div>
 						{/if}
 					</div>
 				{/if}
@@ -341,10 +424,18 @@
 					onpointerdown={dragDivider}
 					onkeydown={keyDivider}
 				></div>
-				<aside class="details" aria-label="Generation details" style:width={wide.current && detailsW ? `${detailsW}px` : undefined}>
+				<aside
+					class="details"
+					aria-label="Generation details"
+					style:width={wide.current && detailsW ? `${detailsW}px` : undefined}
+				>
 					<h3>Generation details</h3>
 					<label class="row">
-						<input type="checkbox" bind:checked={vertical} onchange={() => saveFlag('simpleui.viewerVertical', vertical)} />
+						<input
+							type="checkbox"
+							bind:checked={vertical}
+							onchange={() => saveFlag('simpleui.viewerVertical', vertical)}
+						/>
 						Swipe up/down to browse
 					</label>
 					{#if !item.generation_id}
@@ -356,11 +447,19 @@
 					{:else if gallery.detail}
 						{@const detail = gallery.detail}
 						<div class="row wrap">
-							<span class="badge" class:badge-success={detail.status === 'succeeded'} class:badge-danger={detail.status === 'failed'}>{detail.status}</span>
+							<span
+								class="badge"
+								class:badge-success={detail.status === 'succeeded'}
+								class:badge-danger={detail.status === 'failed'}>{detail.status}</span
+							>
 							<span class="badge">{detail.output_state}</span>
 						</div>
 						{#if detail.workflow_id}
-							<p>Workflow: <strong>{workflowNames.name(detail.workflow_id) ?? detail.workflow_id}</strong></p>
+							<p>
+								Workflow: <strong
+									>{workflowNames.name(detail.workflow_id) ?? detail.workflow_id}</strong
+								>
+							</p>
 						{/if}
 						{#if detail.error}
 							<pre class="error">{JSON.stringify(detail.error, null, 2)}</pre>
@@ -371,10 +470,16 @@
 								<MetaValues values={detail.effective_values} />
 							</details>
 							{#if detail.workflow_id}
-								<a class="btn btn-primary" href={`/generation/${detail.workflow_id}?reuse=${detail.id}`}>Reuse as draft</a>
+								<a
+									class="btn btn-primary"
+									href={`/generation/${detail.workflow_id}?reuse=${detail.id}`}>Reuse as draft</a
+								>
 							{/if}
 						{:else}
-							<p class="muted">Saved prompt and workflow inputs are unavailable. The media and generation status remain.</p>
+							<p class="muted">
+								Saved prompt and workflow inputs are unavailable. The media and generation status
+								remain.
+							</p>
 							{#if detail.workflow_id}
 								<a class="btn" href={`/generation/${detail.workflow_id}`}>Open workflow</a>
 							{/if}
@@ -637,7 +742,8 @@
 			width: 6px;
 			cursor: col-resize;
 			touch-action: none;
-			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100% no-repeat;
+			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100%
+				no-repeat;
 		}
 		.divider:hover,
 		.divider:focus-visible {

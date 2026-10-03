@@ -201,31 +201,73 @@ class RoundTripTest(LayoutTestCase):
         self.save(client, workflow_id, doc())
         legacy = json.dumps(doc())
         with self.db.write() as conn:
-            conn.execute("UPDATE workflow_layouts SET layout_json = ? WHERE workflow_id = ?", (legacy, workflow_id))
+            conn.execute(
+                "UPDATE workflow_layouts SET layout_json = ? WHERE workflow_id = ?",
+                (legacy, workflow_id),
+            )
         fetched = client.get(f"/api/workflows/{workflow_id}/layout").json()
         self.assertEqual(fetched["layout"]["version"], 2)
-        self.assertEqual([s["mode"] for s in fetched["layout"]["sections"]], ["auto", "auto"])
-        self.assertEqual([i["binding_id"] for i in fetched["layout"]["sections"][1]["items"]], ["5:steps", "5:cfg"])
-        self.assertEqual(self.db.query_one("SELECT layout_json FROM workflow_layouts WHERE workflow_id = ?", (workflow_id,))["layout_json"], legacy)
-        self.assertEqual(self.save(client, workflow_id, fetched["layout"], 1).status_code, 200)
-        stored = json.loads(self.db.query_one("SELECT layout_json FROM workflow_layouts WHERE workflow_id = ?", (workflow_id,))["layout_json"])
+        self.assertEqual(
+            [s["mode"] for s in fetched["layout"]["sections"]], ["auto", "auto"]
+        )
+        self.assertEqual(
+            [i["binding_id"] for i in fetched["layout"]["sections"][1]["items"]],
+            ["5:steps", "5:cfg"],
+        )
+        self.assertEqual(
+            self.db.query_one(
+                "SELECT layout_json FROM workflow_layouts WHERE workflow_id = ?",
+                (workflow_id,),
+            )["layout_json"],
+            legacy,
+        )
+        self.assertEqual(
+            self.save(client, workflow_id, fetched["layout"], 1).status_code, 200
+        )
+        stored = json.loads(
+            self.db.query_one(
+                "SELECT layout_json FROM workflow_layouts WHERE workflow_id = ?",
+                (workflow_id,),
+            )["layout_json"]
+        )
         self.assertEqual(stored["version"], 2)
 
     def test_panel_roundtrip_and_invalid_structures_are_422(self) -> None:
         from copy import deepcopy
-        from app.workflows.layout import MAX_ROWS, MAX_ENTRIES
+
+        from app.workflows.layout import MAX_ENTRIES, MAX_ROWS
 
         client = self.local_client()
         workflow_id = self.import_graph(client)
         pair = {"kind": "aspect_ratio", "width": "4:width", "height": "4:height"}
-        panel = {"id": "p", "title": "Panels", "mode": "panels", "collapsed": False,
-                 "rows": [{"id": "r", "columns": [{"id": "c", "items": [pair]},
-                                                     {"id": "d", "items": [{"kind": "control", "binding_id": "gone:x"}]}]}]}
+        panel = {
+            "id": "p",
+            "title": "Panels",
+            "mode": "panels",
+            "collapsed": False,
+            "rows": [
+                {
+                    "id": "r",
+                    "columns": [
+                        {"id": "c", "items": [pair]},
+                        {
+                            "id": "d",
+                            "items": [{"kind": "control", "binding_id": "gone:x"}],
+                        },
+                    ],
+                }
+            ],
+        }
         layout = doc(version=2, sections=[panel], hidden=[])
         saved = self.save(client, workflow_id, layout)
         self.assertEqual(saved.status_code, 200, saved.text)
         self.assertEqual(saved.json()["stale_bindings"], ["gone:x"])
-        self.assertEqual(saved.json()["layout"]["sections"][0]["rows"][0]["columns"][0]["items"][0]["width"], "4:width")
+        self.assertEqual(
+            saved.json()["layout"]["sections"][0]["rows"][0]["columns"][0]["items"][0][
+                "width"
+            ],
+            "4:width",
+        )
 
         def invalid(change):
             value = deepcopy(layout)
@@ -239,20 +281,59 @@ class RoundTripTest(LayoutTestCase):
         invalid(lambda v, p, r: r.update(id="c"))
         invalid(lambda v, p, r: p["rows"].append(deepcopy(r)))
         invalid(lambda v, p, r: r.update(columns=[]))
-        invalid(lambda v, p, r: r.update(columns=[{"id": f"c{i}", "items": []} for i in range(4)]))
-        invalid(lambda v, p, r: p.update(rows=[{"id": f"r{i}", "columns": [{"id": f"c{i}", "items": []}]} for i in range(MAX_ROWS + 1)]))
+        invalid(
+            lambda v, p, r: r.update(
+                columns=[{"id": f"c{i}", "items": []} for i in range(4)]
+            )
+        )
+        invalid(
+            lambda v, p, r: p.update(
+                rows=[
+                    {"id": f"r{i}", "columns": [{"id": f"c{i}", "items": []}]}
+                    for i in range(MAX_ROWS + 1)
+                ]
+            )
+        )
         invalid(lambda v, p, r: r["columns"][0].update(rows=[]))
-        invalid(lambda v, p, r: r["columns"][0].update(items=[{"kind": "row", "columns": []}]))
+        invalid(
+            lambda v, p, r: r["columns"][0].update(
+                items=[{"kind": "row", "columns": []}]
+            )
+        )
         invalid(lambda v, p, r: p.update(items=[]))
         invalid(lambda v, p, r: p.update(columns=2))
-        invalid(lambda v, p, r: r["columns"][0].update(items=[{**pair, "height": "2:text"}]))
-        invalid(lambda v, p, r: v.update(hidden=[f"h{i}" for i in range(MAX_ENTRIES - 2)]))
-        invalid(lambda v, p, r: (v.update(hidden=[f"h{i}" for i in range(MAX_ENTRIES - 3)]), p.update(toggle="on")))
+        invalid(
+            lambda v, p, r: r["columns"][0].update(items=[{**pair, "height": "2:text"}])
+        )
+        invalid(
+            lambda v, p, r: v.update(hidden=[f"h{i}" for i in range(MAX_ENTRIES - 2)])
+        )
+        invalid(
+            lambda v, p, r: (
+                v.update(hidden=[f"h{i}" for i in range(MAX_ENTRIES - 3)]),
+                p.update(toggle="on"),
+            )
+        )
         invalid(lambda v, p, r: v.update(version=1))
         # Empty structural containers cannot bypass the row cap; max rows and columns are valid.
-        boundary = doc(version=2, sections=[{**panel, "rows": [
-            {"id": f"r{i}", "columns": [{"id": f"c{i}_{j}", "items": []} for j in range(3)]}
-            for i in range(MAX_ROWS)]}], hidden=[])
+        boundary = doc(
+            version=2,
+            sections=[
+                {
+                    **panel,
+                    "rows": [
+                        {
+                            "id": f"r{i}",
+                            "columns": [
+                                {"id": f"c{i}_{j}", "items": []} for j in range(3)
+                            ],
+                        }
+                        for i in range(MAX_ROWS)
+                    ],
+                }
+            ],
+            hidden=[],
+        )
         self.assertEqual(self.save(client, workflow_id, boundary, 1).status_code, 200)
 
     def test_delete_reverts_to_the_automatic_layout_and_is_idempotent(self) -> None:
@@ -381,15 +462,22 @@ class ValidationTest(LayoutTestCase):
     def test_conditions_and_toggles(self) -> None:
         item = {"kind": "control", "binding_id": "5:steps"}
         for bad in (1, True, "", "b" * 201):
-            self.reject(doc(sections=[section(items=[{**item, "when": bad}])], hidden=[]))
+            self.reject(
+                doc(sections=[section(items=[{**item, "when": bad}])], hidden=[])
+            )
             self.reject(doc(sections=[section(toggle=bad)], hidden=[]))
         # A toggle places its control: it may not also be an item or hidden.
         self.reject(doc(sections=[section(items=[item], toggle="5:steps")], hidden=[]))
         self.reject(doc(sections=[section(toggle="5:cfg")], hidden=["5:cfg"]))
         # A condition is only a reference: many items may share one, even a placed one.
-        both = [{**item, "when": "9:on"}, {"kind": "control", "binding_id": "5:cfg", "when": "9:on"}]
+        both = [
+            {**item, "when": "9:on"},
+            {"kind": "control", "binding_id": "5:cfg", "when": "9:on"},
+        ]
         saved = self.save(
-            self.client, self.workflow_id, doc(sections=[section(items=both, toggle="9:on")], hidden=[])
+            self.client,
+            self.workflow_id,
+            doc(sections=[section(items=both, toggle="9:on")], hidden=[]),
         ).json()
         self.assertEqual(saved["layout"]["sections"][0]["toggle"], "9:on")
         self.assertEqual(saved["layout"]["sections"][0]["items"][1]["when"], "9:on")

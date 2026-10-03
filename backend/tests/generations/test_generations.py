@@ -203,7 +203,7 @@ class EventTests(GenerationTestCase):
         self.assertEqual(self.store.get("default", row["id"])["status"], "running")
 
     async def test_executed_output_payload_is_not_relayed(self) -> None:
-        row = await self.submit()
+        await self.submit()
         mine = self.broker.subscribe("default")
         data = {
             "prompt_id": PROMPTS["image"],

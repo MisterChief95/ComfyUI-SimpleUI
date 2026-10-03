@@ -62,16 +62,15 @@ import { History } from '$lib/layout/history.svelte';
 import { copyKnown, describeCopy } from './copyLayout';
 import { layoutChanges } from './conflict';
 import { dropIndex } from './drop';
-import {
-	applyDraft,
-	buildPresentation,
-	normalizePatch,
-	type DraftPatch
-} from './presentation';
+import { applyDraft, buildPresentation, normalizePatch, type DraftPatch } from './presentation';
 import { baseValue, sameValue } from '$lib/run/values';
 
 export type PreviewWidth = 'phone' | 'tablet' | 'full';
-export const PREVIEW_PX: Record<PreviewWidth, number | null> = { phone: 390, tablet: 820, full: null };
+export const PREVIEW_PX: Record<PreviewWidth, number | null> = {
+	phone: 390,
+	tablet: 820,
+	full: null
+};
 
 export type Selection = { kind: 'control' | 'section'; id: string } | null;
 
@@ -140,7 +139,9 @@ export class Designer {
 	readonly dirtyBindings = $derived(Object.keys(this.drafts));
 	/** Controls whose workflow default (graph value) was changed in the designer. */
 	readonly dirtyValues = $derived(Object.keys(this.previewValues));
-	readonly dirty = $derived(this.layoutDirty || this.dirtyBindings.length > 0 || this.dirtyValues.length > 0);
+	readonly dirty = $derived(
+		this.layoutDirty || this.dirtyBindings.length > 0 || this.dirtyValues.length > 0
+	);
 	readonly conflicts = $derived(this.layoutConflict || this.failures.some((f) => f.conflict));
 	/** Nothing saved and nothing placed: offer the two starting points. */
 	readonly fresh = $derived(
@@ -150,9 +151,11 @@ export class Designer {
 	readonly placement = $derived.by(() => {
 		const map = new Map<string, Placement>();
 		for (const section of this.doc.sections) {
-			if (section.toggle) map.set(section.toggle, { kind: 'section', id: section.id, title: section.title });
+			if (section.toggle)
+				map.set(section.toggle, { kind: 'section', id: section.id, title: section.title });
 			for (const item of sectionItems(section)) {
-				for (const id of itemBindings(item)) map.set(id, { kind: 'section', id: section.id, title: section.title });
+				for (const id of itemBindings(item))
+					map.set(id, { kind: 'section', id: section.id, title: section.title });
 			}
 		}
 		for (const id of this.doc.hidden) map.set(id, { kind: 'hidden' });
@@ -249,7 +252,8 @@ export class Designer {
 
 	private afterHistory(message: string): void {
 		const sel = this.selection;
-		if (sel?.kind === 'section' && !this.doc.sections.some((s) => s.id === sel.id)) this.selection = null;
+		if (sel?.kind === 'section' && !this.doc.sections.some((s) => s.id === sel.id))
+			this.selection = null;
 		if (this.targetSectionId && !this.doc.sections.some((s) => s.id === this.targetSectionId)) {
 			this.targetSectionId = null;
 		}
@@ -277,9 +281,14 @@ export class Designer {
 	async reveal(id: string): Promise<void> {
 		await tick();
 		const where = locate(this.doc, id);
-		const section = where && where !== 'hidden' ? this.doc.sections.find((s) => s.id === where.section) : undefined;
+		const section =
+			where && where !== 'hidden'
+				? this.doc.sections.find((s) => s.id === where.section)
+				: undefined;
 		const item = section ? sectionItems(section).find((it) => itemBindings(it).includes(id)) : null;
-		const element = document.querySelector(`[data-item="${CSS.escape(id)}"]`) ?? (item ? document.querySelector(`[data-item="${CSS.escape(itemId(item))}"]`) : null);
+		const element =
+			document.querySelector(`[data-item="${CSS.escape(id)}"]`) ??
+			(item ? document.querySelector(`[data-item="${CSS.escape(itemId(item))}"]`) : null);
 		element?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 	}
 
@@ -323,7 +332,10 @@ export class Designer {
 		const from = this.doc.sections.findIndex((s) => s.id === id);
 		const to = from + delta;
 		if (from < 0 || to < 0 || to >= this.doc.sections.length) return;
-		this.commit(moveSection(this.doc, from, to), `Moved section ${this.sectionTitle(id)} to position ${to + 1}`);
+		this.commit(
+			moveSection(this.doc, from, to),
+			`Moved section ${this.sectionTitle(id)} to position ${to + 1}`
+		);
 	}
 
 	/** Put a control in the target section (the last selected, else the first, else a new one). */
@@ -347,18 +359,33 @@ export class Designer {
 	}
 
 	/** Final index among a section's items for a drop before the `domIndex`-th rendered control. */
-	private dropIndex(sectionId: string, binding: string, domIndex: number, target?: PanelTarget): number | undefined {
+	private dropIndex(
+		sectionId: string,
+		binding: string,
+		domIndex: number,
+		target?: PanelTarget
+	): number | undefined {
 		const rendered = this.resolved?.sections.find((s) => s.section.id === sectionId);
 		const section = this.doc.sections.find((s) => s.id === sectionId);
 		if (!rendered || !section) return undefined;
-		const row = section.mode === 'panels' ? section.rows.find((r) => target ? r.id === target.row : true) : undefined;
-		const column = row?.columns.find((c) => target ? c.id === target.column : true);
+		const row =
+			section.mode === 'panels'
+				? section.rows.find((r) => (target ? r.id === target.row : true))
+				: undefined;
+		const column = row?.columns.find((c) => (target ? c.id === target.column : true));
 		const items = section.mode === 'panels' ? column?.items : section.items;
-		const controls = section.mode === 'panels'
-			? rendered.rows?.find((r) => r.id === row?.id)?.columns.find((c) => c.id === column?.id)?.controls
-			: rendered.controls;
+		const controls =
+			section.mode === 'panels'
+				? rendered.rows?.find((r) => r.id === row?.id)?.columns.find((c) => c.id === column?.id)
+						?.controls
+				: rendered.controls;
 		if (!items || !controls) return undefined;
-		return dropIndex(items, controls.map((rc) => itemId(rc.item)), binding, domIndex);
+		return dropIndex(
+			items,
+			controls.map((rc) => itemId(rc.item)),
+			binding,
+			domIndex
+		);
 	}
 
 	/** False when adding/hiding this control would exceed the item cap. */
@@ -368,10 +395,12 @@ export class Designer {
 
 	/** Place or move a control into a section at a rendered position (drag-and-drop, "Move to…"). */
 	placeAt(binding: string, sectionId: string, domIndex?: number, target?: PanelTarget): void {
-		const index = domIndex === undefined ? undefined : this.dropIndex(sectionId, binding, domIndex, target);
+		const index =
+			domIndex === undefined ? undefined : this.dropIndex(sectionId, binding, domIndex, target);
 		let doc = this.doc;
 		const destination = doc.sections.find((s) => s.id === sectionId);
-		if (destination?.mode === 'panels' && destination.rows.length === 0) doc = addRow(doc, sectionId);
+		if (destination?.mode === 'panels' && destination.rows.length === 0)
+			doc = addRow(doc, sectionId);
 		const next = placeControl(doc, binding, sectionId, index, target);
 		const label = this.controlsById.get(binding)?.label ?? binding;
 		const section = next.sections.find((s) => s.id === sectionId);
@@ -399,10 +428,13 @@ export class Designer {
 		const section = this.doc.sections.find((s) => s.id === where.section);
 		const rendered = this.resolved?.sections.find((s) => s.section.id === where.section);
 		if (!section || !rendered) return;
-		const target: PanelTarget | undefined = where.row && where.column ? { row: where.row, column: where.column } : undefined;
-		const items = section.mode === 'panels'
-			? section.rows.find((r) => r.id === where.row)?.columns.find((c) => c.id === where.column)?.items ?? []
-			: section.items;
+		const target: PanelTarget | undefined =
+			where.row && where.column ? { row: where.row, column: where.column } : undefined;
+		const items =
+			section.mode === 'panels'
+				? (section.rows.find((r) => r.id === where.row)?.columns.find((c) => c.id === where.column)
+						?.items ?? [])
+				: section.items;
 		// Stale items are not rendered, so step over them.
 		const renderedIds = new Set(rendered.controls.map((rc) => itemId(rc.item)));
 		const visible = items.map(itemId).filter((id) => renderedIds.has(id));
@@ -422,10 +454,14 @@ export class Designer {
 		const section = this.doc.sections.find((s) => s.id === where.section);
 		if (section?.mode !== 'panels') return;
 		const cells = section.rows.flatMap((r) => r.columns.map((c) => ({ row: r.id, column: c.id })));
-		const target = cells[cells.findIndex((c) => c.row === where.row && c.column === where.column) + delta];
+		const target =
+			cells[cells.findIndex((c) => c.row === where.row && c.column === where.column) + delta];
 		if (!target) return;
 		const label = this.controlsById.get(binding)?.label ?? binding;
-		this.commit(moveItem(this.doc, binding, section.id, undefined, target), `Moved ${label} to the ${delta < 0 ? 'previous' : 'next'} column`);
+		this.commit(
+			moveItem(this.doc, binding, section.id, undefined, target),
+			`Moved ${label} to the ${delta < 0 ? 'previous' : 'next'} column`
+		);
 		void this.reveal(binding);
 	}
 
@@ -443,11 +479,17 @@ export class Designer {
 	// --- panel structure ----------------------------------------------------
 
 	setMode(sectionId: string, mode: 'auto' | 'panels'): void {
-		this.commit(setSectionMode(this.doc, sectionId, mode), `${this.sectionTitle(sectionId)} now uses ${mode === 'panels' ? 'rows and columns' : 'automatic flow'}`);
+		this.commit(
+			setSectionMode(this.doc, sectionId, mode),
+			`${this.sectionTitle(sectionId)} now uses ${mode === 'panels' ? 'rows and columns' : 'automatic flow'}`
+		);
 	}
 
 	addRow(sectionId: string, columns = 1): void {
-		this.commit(addRow(this.doc, sectionId, columns), `Added a row to ${this.sectionTitle(sectionId)}`);
+		this.commit(
+			addRow(this.doc, sectionId, columns),
+			`Added a row to ${this.sectionTitle(sectionId)}`
+		);
 	}
 
 	removeRow(sectionId: string, rowId: string): void {
@@ -455,15 +497,24 @@ export class Designer {
 	}
 
 	shiftRow(sectionId: string, rowId: string, delta: number): void {
-		this.commit(shiftRow(this.doc, sectionId, rowId, delta), `Moved row ${delta < 0 ? 'up' : 'down'}`);
+		this.commit(
+			shiftRow(this.doc, sectionId, rowId, delta),
+			`Moved row ${delta < 0 ? 'up' : 'down'}`
+		);
 	}
 
 	setRowColumns(sectionId: string, rowId: string, count: number): void {
-		this.commit(setRowColumns(this.doc, sectionId, rowId, count), `Row now has ${count} column${count > 1 ? 's' : ''}`);
+		this.commit(
+			setRowColumns(this.doc, sectionId, rowId, count),
+			`Row now has ${count} column${count > 1 ? 's' : ''}`
+		);
 	}
 
 	removeColumn(sectionId: string, rowId: string, columnId: string): void {
-		this.commit(removeColumn(this.doc, sectionId, rowId, columnId), 'Deleted column; its controls are unplaced');
+		this.commit(
+			removeColumn(this.doc, sectionId, rowId, columnId),
+			'Deleted column; its controls are unplaced'
+		);
 	}
 
 	pair(width: string, height: string): void {
@@ -471,19 +522,29 @@ export class Designer {
 		this.commit(pairDimensions(this.doc, width, height), 'Created aspect-ratio control');
 	}
 
-	split(binding: string): void { this.commit(splitDimensions(this.doc, binding), 'Split dimension controls'); }
+	split(binding: string): void {
+		this.commit(splitDimensions(this.doc, binding), 'Split dimension controls');
+	}
 
 	/** Use a boolean control as the section's header switch (null clears it). */
 	setToggle(sectionId: string, binding: string | null): void {
 		const label = binding ? (this.controlsById.get(binding)?.label ?? binding) : null;
 		const title = this.sectionTitle(sectionId);
-		this.commit(setToggle(this.doc, sectionId, binding), label ? `${label} now switches ${title}` : `Removed the switch from ${title}`);
+		this.commit(
+			setToggle(this.doc, sectionId, binding),
+			label ? `${label} now switches ${title}` : `Removed the switch from ${title}`
+		);
 	}
 
 	/** Show a placed control only while a boolean control is on (null: always). */
 	setWhen(binding: string, when: string | null): void {
 		const label = this.controlsById.get(binding)?.label ?? binding;
-		this.commit(setWhen(this.doc, binding, when), when ? `${label} now shows only when ${this.controlsById.get(when)?.label ?? when} is on` : `${label} always shows`);
+		this.commit(
+			setWhen(this.doc, binding, when),
+			when
+				? `${label} now shows only when ${this.controlsById.get(when)?.label ?? when} is on`
+				: `${label} always shows`
+		);
 	}
 
 	setSpan(binding: string, span: 'auto' | 'full'): void {
@@ -576,10 +637,13 @@ export class Designer {
 	setPreviewValue(binding: string, value: EditValue): void {
 		const control = this.controlsById.get(binding);
 		if (!control) return;
-		if (this.savedCorrections[binding]?.presentation.display_default != null) this.setDraft(binding, { display_default: '' });
+		if (this.savedCorrections[binding]?.presentation.display_default != null)
+			this.setDraft(binding, { display_default: '' });
 		const { [binding]: _drop, ...rest } = this.previewValues;
 		void _drop;
-		this.previewValues = sameValue(control, value, baseValue(control)) ? rest : { ...rest, [binding]: value };
+		this.previewValues = sameValue(control, value, baseValue(control))
+			? rest
+			: { ...rest, [binding]: value };
 	}
 
 	/** Drop an unsaved default change. */
@@ -630,7 +694,8 @@ export class Designer {
 		if (!this.schema) return 'The workflow is not loaded.';
 		try {
 			const other = await api<WorkflowLayout>(`/workflows/${source.id}/layout`);
-			if (!other.layout) return `"${source.name}" has no saved layout, so there is nothing to copy.`;
+			if (!other.layout)
+				return `"${source.name}" has no saved layout, so there is nothing to copy.`;
 			const result = copyKnown(other.layout, this.schema);
 			this.commit(result.doc);
 			this.selection = null;
@@ -706,7 +771,12 @@ export class Designer {
 				const sent = this.doc;
 				const problems = validate(sent);
 				if (problems.length) {
-					failures.push({ key: 'layout', label: 'Layout', message: problems.join('; '), conflict: false });
+					failures.push({
+						key: 'layout',
+						label: 'Layout',
+						message: problems.join('; '),
+						conflict: false
+					});
 				} else {
 					try {
 						const result = await api<WorkflowLayout>(`/workflows/${this.workflowId}/layout`, {
@@ -777,7 +847,9 @@ export class Designer {
 					failures.push({
 						key: 'values',
 						label: 'Default values',
-						message: conflict ? 'The workflow graph changed elsewhere. Reload to apply your defaults to the new revision.' : describeApiError(cause),
+						message: conflict
+							? 'The workflow graph changed elsewhere. Reload to apply your defaults to the new revision.'
+							: describeApiError(cause),
 						conflict: false
 					});
 				}
@@ -813,15 +885,19 @@ export class Designer {
 			this.conflictChanges = layoutChanges(this.savedDoc, layout.layout ?? EMPTY_DOC);
 			for (const correction of corrections.filter((c) => c.scope === 'workflow')) {
 				if (correction.revision !== this.savedCorrections[correction.selector]?.revision) {
-					this.conflictChanges.push(`Presentation ${correction.selector}: ${JSON.stringify(this.savedCorrections[correction.selector]?.presentation ?? null)} → ${JSON.stringify(correction.presentation)}`);
+					this.conflictChanges.push(
+						`Presentation ${correction.selector}: ${JSON.stringify(this.savedCorrections[correction.selector]?.presentation ?? null)} → ${JSON.stringify(correction.presentation)}`
+					);
 				}
 			}
 			for (const id of Object.keys(this.savedCorrections)) {
-				if (!corrections.some((c) => c.scope === 'workflow' && c.selector === id)) this.conflictChanges.push(`Presentation removed: ${id}`);
+				if (!corrections.some((c) => c.scope === 'workflow' && c.selector === id))
+					this.conflictChanges.push(`Presentation removed: ${id}`);
 			}
 			this.conflictSnapshot = { layout, corrections };
 		} catch (cause) {
-			this.failures = [...this.failures.filter((failure) => failure.key !== 'overwrite'),
+			this.failures = [
+				...this.failures.filter((failure) => failure.key !== 'overwrite'),
 				{ key: 'overwrite', label: 'Refresh', message: describeApiError(cause), conflict: false }
 			];
 			return;

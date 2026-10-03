@@ -7,9 +7,16 @@ import { itemBindings } from '../layout/model.ts';
  * Stale leaves stay in place; the dragged leaf (including both dimensions of a
  * composite) is removed before counting. Rendered IDs may name a surviving half.
  */
-export function dropIndex(items: LayoutItem[], renderedIds: string[], binding: string, domIndex: number): number {
+export function dropIndex(
+	items: LayoutItem[],
+	renderedIds: string[],
+	binding: string,
+	domIndex: number
+): number {
 	const remaining = items.filter((item) => !itemBindings(item).includes(binding));
-	const visible = renderedIds.filter((id) => remaining.some((item) => itemBindings(item).includes(id)));
+	const visible = renderedIds.filter((id) =>
+		remaining.some((item) => itemBindings(item).includes(id))
+	);
 	if (domIndex >= visible.length) return remaining.length;
 	return remaining.findIndex((item) => itemBindings(item).includes(visible[domIndex]));
 }

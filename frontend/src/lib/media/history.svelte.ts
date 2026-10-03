@@ -1,10 +1,5 @@
 import { api, describeApiError } from '$lib/api';
-import type {
-	ClearHistoryResult,
-	GenerationDetail,
-	GenerationInfo,
-	Page
-} from '$lib/contracts';
+import type { ClearHistoryResult, GenerationDetail, GenerationInfo, Page } from '$lib/contracts';
 
 export class HistoryState {
 	items = $state.raw<GenerationInfo[]>([]);
@@ -23,7 +18,8 @@ export class HistoryState {
 		this.loading = true;
 		this.error = null;
 		try {
-			const cursor = reset || !this.nextCursor ? '' : `&cursor=${encodeURIComponent(this.nextCursor)}`;
+			const cursor =
+				reset || !this.nextCursor ? '' : `&cursor=${encodeURIComponent(this.nextCursor)}`;
 			const page = await api<Page<GenerationInfo>>(`/generations?limit=50${cursor}`);
 			this.items = reset ? page.items : [...this.items, ...page.items];
 			this.nextCursor = page.next_cursor;
@@ -51,7 +47,12 @@ export class HistoryState {
 	}
 
 	async clear(): Promise<void> {
-		if (!confirm('Clear reusable prompt and workflow snapshots from completed generations? Media files and generation status records will remain.')) return;
+		if (
+			!confirm(
+				'Clear reusable prompt and workflow snapshots from completed generations? Media files and generation status records will remain.'
+			)
+		)
+			return;
 		this.clearing = true;
 		this.error = null;
 		try {

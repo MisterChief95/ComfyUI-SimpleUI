@@ -15,6 +15,7 @@ from pathlib import Path
 
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
+from starlette.websockets import WebSocketDisconnect
 
 from tests.auth.support import AuthTestCase
 
@@ -140,7 +141,9 @@ class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
         self.auth.create_profile("Bee", PASSWORD)
         bee = self.local_client()
         self.login(bee, "Bee", PASSWORD)
-        self.assertEqual(bee.get(f"/api/generations/{generation_id}/graph").status_code, 404)
+        self.assertEqual(
+            bee.get(f"/api/generations/{generation_id}/graph").status_code, 404
+        )
 
     def test_repeating_a_request_key_never_resubmits_upstream(self) -> None:
         client = self.local_client()
@@ -354,9 +357,11 @@ class EventStreamTest(GenerationRouteTestCase):
     def test_an_unauthenticated_socket_is_refused(self) -> None:
         self.enable_multi_user(PASSWORD)
         client = self.local_client()
-        with self.assertRaises(Exception):
-            with client.websocket_connect("/api/events"):
-                pass
+        with (
+            self.assertRaises(WebSocketDisconnect),
+            client.websocket_connect("/api/events"),
+        ):
+            pass
 
     def test_an_open_socket_alone_drives_a_generation_to_completion(self) -> None:
         """GEN-003: no client GET, just an open socket -- as the real app does.
@@ -490,8 +495,8 @@ class TypedEditsTest(GenerationRouteTestCase):
         response = self.client.post(
             "/api/generations",
             content=(
-                '{"workflow_id": "%s", "request_key": "typed-big", "seed_policy": "fixed",'
-                ' "edits": {"1:big": 9007199254740993}}' % self.workflow_id
+                f'{{"workflow_id": "{self.workflow_id}", "request_key": "typed-big", "seed_policy": "fixed",'
+                ' "edits": {"1:big": 9007199254740993}}'
             ),
             headers={
                 **self.csrf_headers(self.client),

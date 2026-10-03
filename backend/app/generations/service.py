@@ -101,7 +101,7 @@ class GenerationService:
             response = await self.upstream.submit_prompt(
                 accepted.row["graph"], client_id=self.client_id, extra_data=extra_data
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - any failure leaves the outcome unknown
             # The request may have reached ComfyUI. Retrying here could execute
             # it twice, so only reconciliation may move this record forward.
             self.store.update(owner_id, generation_id, status="submission_unknown")
@@ -344,7 +344,7 @@ class GenerationService:
                             preview=False,
                         )
                         saved += 1
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 - recorded on the row, not raised
                         failures += 1
                         self.store.update(
                             row["owner_id"],

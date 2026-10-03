@@ -150,7 +150,7 @@ class SweepTest(UploadTestCase):
 
     def test_upload_no_longer_referenced_once_the_snapshot_is_purged(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        staged_name = self.uploads.ensure_staged(OWNER, row["id"])
+        self.uploads.ensure_staged(OWNER, row["id"])
         with self.db.write() as conn:
             conn.execute(
                 "INSERT INTO generations (id, owner_id, client_request_key, request_fingerprint,"

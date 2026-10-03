@@ -37,7 +37,12 @@ export interface ViewSection {
 	rows?: { id: string; columns: ViewEntry[][] }[];
 }
 
-export interface ViewEntry { control: ControlDescriptor; height?: ControlDescriptor; ratio?: AspectRatioLayoutItem; span: 'auto' | 'full' }
+export interface ViewEntry {
+	control: ControlDescriptor;
+	height?: ControlDescriptor;
+	ratio?: AspectRatioLayoutItem;
+	span: 'auto' | 'full';
+}
 
 function storage(): Storage | null {
 	try {
@@ -96,15 +101,19 @@ export class RunState {
 	name = $derived(this.workflows.find((w) => w.id === this.workflowId)?.name ?? null);
 	resolved = $derived(this.schema ? resolveLayout(this.schema, this.layout?.layout ?? null) : null);
 	seedPolicy = $derived(
-		this.seedChoice ?? (settingsState.data?.profile.seed_policy as SeedPolicy | undefined) ?? 'random'
+		this.seedChoice ??
+			(settingsState.data?.profile.seed_policy as SeedPolicy | undefined) ??
+			'random'
 	);
 	blockingReason = $derived(this.schema?.blocking[0]?.message ?? null);
-	
+
 	/** Edited, visible controls whose value cannot be submitted, in page order: binding id -> reason. */
 	invalid = $derived.by((): Map<string, string> => {
 		const out = new Map<string, string>();
 		for (const section of this.sections) {
-			for (const control of section.entries.flatMap((entry) => entry.height ? [entry.control, entry.height] : [entry.control])) {
+			for (const control of section.entries.flatMap((entry) =>
+				entry.height ? [entry.control, entry.height] : [entry.control]
+			)) {
 				const id = control.binding_id;
 				const message = id in this.draft ? validateValue(control, this.draft[id]) : null;
 				if (message) out.set(id, message);
@@ -131,7 +140,8 @@ export class RunState {
 		const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
 		return this.schema.controls.flatMap((control) => {
 			const value = values[control.binding_id];
-			const usable = control.component === 'seed' && !hidden.has(control.binding_id) && value != null;
+			const usable =
+				control.component === 'seed' && !hidden.has(control.binding_id) && value != null;
 			return usable ? [{ control, value: String(value) }] : [];
 		});
 	});
@@ -142,10 +152,16 @@ export class RunState {
 		if (!resolved) return [];
 		const only = this.modifiedOnly;
 		const keep = (control: ControlDescriptor): boolean => !only || control.binding_id in this.draft;
-		const view = (controls: ResolvedControl[]): ViewEntry[] => controls
-			.filter((entry) => !entry.when || this.isOn(entry.when))
-			.filter((entry) => keep(entry.control) || (entry.height && keep(entry.height)))
-			.map((entry) => ({ control: entry.control, height: entry.height, ratio: entry.item.kind === 'aspect_ratio' ? entry.item : undefined, span: entry.item.span ?? 'auto' }));
+		const view = (controls: ResolvedControl[]): ViewEntry[] =>
+			controls
+				.filter((entry) => !entry.when || this.isOn(entry.when))
+				.filter((entry) => keep(entry.control) || (entry.height && keep(entry.height)))
+				.map((entry) => ({
+					control: entry.control,
+					height: entry.height,
+					ratio: entry.item.kind === 'aspect_ratio' ? entry.item : undefined,
+					span: entry.item.span ?? 'auto'
+				}));
 		const out: ViewSection[] = resolved.sections.map(({ section, controls, toggle, rows }) => ({
 			id: section.id,
 			title: section.title,
@@ -154,7 +170,10 @@ export class RunState {
 			toggle,
 			entries: view(controls),
 			rows: rows
-				?.map((row) => ({ id: row.id, columns: row.columns.map((column) => view(column.controls)) }))
+				?.map((row) => ({
+					id: row.id,
+					columns: row.columns.map((column) => view(column.controls))
+				}))
 				.filter((row) => row.columns.some((column) => column.length > 0))
 		}));
 		if (resolved.unplaced.length) {
@@ -168,7 +187,11 @@ export class RunState {
 					.map((control) => ({ control, span: control.component === 'textarea' ? 'full' : 'auto' }))
 			});
 		}
-		return out.filter((section) => section.entries.length > 0 || (section.toggle && (!only || section.toggle.binding_id in this.draft)));
+		return out.filter(
+			(section) =>
+				section.entries.length > 0 ||
+				(section.toggle && (!only || section.toggle.binding_id in this.draft))
+		);
 	});
 
 	private persistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -343,7 +366,8 @@ export class RunState {
 			const draft: Record<string, EditValue> = {};
 			for (const control of schema.controls) {
 				const id = control.binding_id;
-				if (control.component === 'file' || hidden.has(id) || !(id in generation.effective_values)) continue;
+				if (control.component === 'file' || hidden.has(id) || !(id in generation.effective_values))
+					continue;
 				const value = coerceValue(control, generation.effective_values[id]);
 				if (!sameValue(control, value, baseValue(control))) draft[id] = value;
 			}
@@ -361,7 +385,9 @@ export class RunState {
 	async focusInvalid(): Promise<void> {
 		const first = this.invalid.keys().next().value;
 		if (first === undefined) return;
-		const section = this.sections.find((s) => s.entries.some((e) => e.control.binding_id === first || e.height?.binding_id === first));
+		const section = this.sections.find((s) =>
+			s.entries.some((e) => e.control.binding_id === first || e.height?.binding_id === first)
+		);
 		if (section) this.setOpen(section, true);
 		await tick();
 		const el = document.getElementById(first);
@@ -382,7 +408,9 @@ export class RunState {
 		this.notice = null;
 		try {
 			const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
-			const edits = Object.fromEntries(Object.entries(this.draft).filter(([id]) => !hidden.has(id)));
+			const edits = Object.fromEntries(
+				Object.entries(this.draft).filter(([id]) => !hidden.has(id))
+			);
 			// ponytail: a fresh key per click; GenerationService already guarantees a key
 			// that did reach the server is never resubmitted upstream.
 			const requestKey =

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Self
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
@@ -188,7 +188,7 @@ class ComfyClient:
         """
         await self._post("/interrupt", {"prompt_id": prompt_id})
 
-    async def __aenter__(self) -> ComfyClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> None:

@@ -48,7 +48,10 @@
 	let textarea = $state<HTMLTextAreaElement>();
 	let selection = { start: 0, end: 0 };
 	function rememberSelection(): void {
-		selection = { start: textarea?.selectionStart ?? text.length, end: textarea?.selectionEnd ?? text.length };
+		selection = {
+			start: textarea?.selectionStart ?? text.length,
+			end: textarea?.selectionEnd ?? text.length
+		};
 	}
 	async function insertPrompt(prompt: string): Promise<void> {
 		onchange(insertText(text, prompt, selection.start, selection.end));
@@ -77,15 +80,23 @@
 	);
 
 	// --- number / seed (ExactInt text) ---
-	const exactMin = $derived(constraints?.exact_min ?? (constraints?.min != null ? String(Math.trunc(constraints.min)) : null));
-	const exactMax = $derived(constraints?.exact_max ?? (constraints?.max != null ? String(Math.trunc(constraints.max)) : null));
+	const exactMin = $derived(
+		constraints?.exact_min ??
+			(constraints?.min != null ? String(Math.trunc(constraints.min)) : null)
+	);
+	const exactMax = $derived(
+		constraints?.exact_max ??
+			(constraints?.max != null ? String(Math.trunc(constraints.max)) : null)
+	);
 	// An untouched control is never flagged (its imported value may be null/empty);
 	// RunState runs the same validateValue on edited values to block Generate.
 	const error = $derived(
 		sameValue(control, value, baseValue(control)) ? null : validateValue(control, value)
 	);
 	const hintId = $derived(`${id}-hint`);
-	const described = $derived([describedby, error ? hintId : ''].filter(Boolean).join(' ') || undefined);
+	const described = $derived(
+		[describedby, error ? hintId : ''].filter(Boolean).join(' ') || undefined
+	);
 	const invalid = $derived(error ? true : undefined);
 
 	function rollSeed(): void {
@@ -128,7 +139,9 @@
 	// --- select ---
 	const options = $derived(control.options ?? []);
 	// Option values are typed (1 is not "1"), so the <select> works on indexes.
-	const selected = $derived(options.findIndex((o) => typeof o.value === typeof value && o.value === value));
+	const selected = $derived(
+		options.findIndex((o) => typeof o.value === typeof value && o.value === value)
+	);
 
 	// --- file ---
 	let uploading = $state(false);
@@ -204,10 +217,15 @@
 			value={text}
 			{disabled}
 			rows="2"
-			oninput={(e) => onchange(e.currentTarget.value)}
-		></textarea>
+			oninput={(e) => onchange(e.currentTarget.value)}></textarea>
 		{#if workflowId && !preview}
-			<RecentPrompts {workflowId} bindingId={control.binding_id} {disabled} onopen={rememberSelection} oninsert={insertPrompt} />
+			<RecentPrompts
+				{workflowId}
+				bindingId={control.binding_id}
+				{disabled}
+				onopen={rememberSelection}
+				oninsert={insertPrompt}
+			/>
 		{/if}
 	{:else if component === 'checkbox'}
 		<label class="toggle">
@@ -334,7 +352,13 @@
 						onchange={upload}
 					/>
 					{#if hasFile}
-						<button type="button" class="btn btn-ghost btn-icon" {disabled} aria-label="Clear file" onclick={clearFile}>
+						<button
+							type="button"
+							class="btn btn-ghost btn-icon"
+							{disabled}
+							aria-label="Clear file"
+							onclick={clearFile}
+						>
 							<Icon name="close" />
 						</button>
 					{/if}

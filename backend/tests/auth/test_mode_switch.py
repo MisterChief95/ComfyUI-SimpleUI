@@ -140,9 +140,12 @@ class AdmissionGateTest(unittest.TestCase):
 
     def test_closing_refuses_new_admissions_and_reopens_afterwards(self) -> None:
         gate = AdmissionGate()
-        with gate.closed(lambda: True), self.assertRaises(AdmissionClosed):
-            with gate.admit():
-                pass
+        with (
+            gate.closed(lambda: True),
+            self.assertRaises(AdmissionClosed),
+            gate.admit(),
+        ):
+            pass
         self.assertTrue(gate.is_open)
         with gate.admit():
             pass
@@ -178,9 +181,8 @@ class AdmissionGateTest(unittest.TestCase):
 
     def test_close_times_out_and_reopens_rather_than_wedging_the_server(self) -> None:
         gate = AdmissionGate()
-        with self.assertRaises(Conflict):
-            with gate.closed(lambda: False, timeout=0.2):
-                self.fail("body must not run while submissions are unresolved")
+        with self.assertRaises(Conflict), gate.closed(lambda: False, timeout=0.2):
+            self.fail("body must not run while submissions are unresolved")
         self.assertTrue(gate.is_open)
         with gate.admit():
             pass
@@ -239,7 +241,7 @@ class ModeSwitchDuringSubmissionTest(AuthTestCase):
         def activate() -> None:
             try:
                 self.auth.activate_multi_user("default-password", timeout=10)
-            except Exception as exc:  # pragma: no cover - reported below
+            except Exception as exc:  # noqa: BLE001  # pragma: no cover - reported below
                 failures.append(exc)
             done.set()
 

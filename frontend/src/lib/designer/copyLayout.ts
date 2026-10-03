@@ -20,14 +20,22 @@ export function copyKnown(source: LayoutDoc, schema: SchemaLike): CopyResult {
 		else dropped += 1;
 		return known.has(id);
 	};
-	const sections = source.sections.map((section) => mapSectionItems(section, (items) =>
-		items.filter((item) => {
-			const ids = itemBindings(item);
-			const compatible = ids.every((id) => known.has(id)) && (item.kind === 'control' || ids.every((id) => schema.controls.find((c) => c.binding_id === id)?.logical_type === 'int'));
-			if (compatible) kept += ids.length; else dropped += ids.length;
-			return compatible;
-		})
-	));
+	const sections = source.sections.map((section) =>
+		mapSectionItems(section, (items) =>
+			items.filter((item) => {
+				const ids = itemBindings(item);
+				const compatible =
+					ids.every((id) => known.has(id)) &&
+					(item.kind === 'control' ||
+						ids.every(
+							(id) => schema.controls.find((c) => c.binding_id === id)?.logical_type === 'int'
+						));
+				if (compatible) kept += ids.length;
+				else dropped += ids.length;
+				return compatible;
+			})
+		)
+	);
 	return { doc: { ...source, sections, hidden: source.hidden.filter(keep) }, kept, dropped };
 }
 

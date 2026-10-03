@@ -27,7 +27,16 @@ export class ViewPrefs {
 
 	save(): void {
 		try {
-			localStorage.setItem(KEY, JSON.stringify({ sort: this.sort, size: this.size, fit: this.fit, badges: this.badges, walk: this.walk }));
+			localStorage.setItem(
+				KEY,
+				JSON.stringify({
+					sort: this.sort,
+					size: this.size,
+					fit: this.fit,
+					badges: this.badges,
+					walk: this.walk
+				})
+			);
 		} catch {
 			/* not persisted */
 		}

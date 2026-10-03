@@ -40,7 +40,8 @@
 					<a class="card pick" href={`/generation/${workflow.id}`}>
 						<Icon name="generate" />
 						<span class="name">{workflow.name}</span>
-						{#if workflow.id === lastWorkflow.id}<span class="badge badge-accent">Last used</span>{/if}
+						{#if workflow.id === lastWorkflow.id}<span class="badge badge-accent">Last used</span
+							>{/if}
 					</a>
 				</li>
 			{/each}

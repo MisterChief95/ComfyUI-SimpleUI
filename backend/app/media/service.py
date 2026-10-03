@@ -111,8 +111,23 @@ def _video_poster(source: Path, target: Path) -> bool:
         return False
     # A frame at 1s skips fade-ins; clips shorter than that yield nothing, so retry at 0.
     for seek in ("1", "0"):
-        command = [ffmpeg, "-v", "error", "-ss", seek, "-i", str(source), "-frames:v", "1",
-                   "-vf", "scale='min(512,iw)':-2", "-f", "image2", "-y", str(target)]
+        command = [
+            ffmpeg,
+            "-v",
+            "error",
+            "-ss",
+            seek,
+            "-i",
+            str(source),
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale='min(512,iw)':-2",
+            "-f",
+            "image2",
+            "-y",
+            str(target),
+        ]
         try:
             subprocess.run(command, check=True, capture_output=True, timeout=30)
         except (OSError, subprocess.SubprocessError):
@@ -137,7 +152,9 @@ class MediaService:
         # Keep thumbnail work off indexing/capture paths while bounding queued
         # jobs. Producers apply backpressure when the small queue is full.
         self._thumbnail_slots = BoundedSemaphore(8)
-        self._thumbnail_jobs = ThreadPoolExecutor(max_workers=1, thread_name_prefix="media-thumbnail")
+        self._thumbnail_jobs = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="media-thumbnail"
+        )
         self._ensure_capture_source()
         self._recover_thumbnails()
 
@@ -172,9 +189,17 @@ class MediaService:
                 # Do not publish a stale thumbnail if the indexed file changed
                 # while this job was queued.
                 current = self.locate(owner_id, media_id)
-                if current is not None and current.row["file_version"] == located.row["file_version"]:
+                if (
+                    current is not None
+                    and current.row["file_version"] == located.row["file_version"]
+                ):
                     os.replace(temporary, target)
-            except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError):
+            except (
+                OSError,
+                UnidentifiedImageError,
+                Image.DecompressionBombError,
+                ValueError,
+            ):
                 temporary.unlink(missing_ok=True)
             finally:
                 temporary.unlink(missing_ok=True)
@@ -363,15 +388,11 @@ class MediaService:
             if row:
                 if row["state"] != state:  # e.g. a file that came back
                     with self.db.write() as conn:
-<<<<<<< Updated upstream
-                        conn.execute("UPDATE media SET state = ? WHERE id = ?", (state, row["id"]))
-                self._schedule_thumbnail(owner_id, row["id"])
-=======
                         conn.execute(
                             "UPDATE media SET state = ? WHERE id = ?",
                             (state, row["id"]),
                         )
->>>>>>> Stashed changes
+                self._schedule_thumbnail(owner_id, row["id"])
                 return row["id"]
         media_id = new_id()
         with self.db.write() as conn:
@@ -397,11 +418,7 @@ class MediaService:
                 "INSERT INTO media_locations (media_id, source_id, relative_path) VALUES (?, ?, ?)",
                 (media_id, source_id, relative),
             )
-<<<<<<< Updated upstream
-            conn.execute("INSERT INTO media_locations (media_id, source_id, relative_path) VALUES (?, ?, ?)", (media_id, source_id, relative))
         self._schedule_thumbnail(owner_id, media_id)
-=======
->>>>>>> Stashed changes
         return media_id
 
     def capture_output(
@@ -542,9 +559,16 @@ class MediaService:
             total += size
             if total > ZIP_MAX_BYTES:
                 raise MediaError("Selected media exceeds the 2 GiB ZIP limit.")
-            original = PurePosixPath(located.row["storage_path"].replace("\\", "/")).name
+            original = PurePosixPath(
+                located.row["storage_path"].replace("\\", "/")
+            ).name
             # ZIP members are flat, safe filenames, including on Windows extraction.
-            original = "".join("_" if c in '<>:"/\\|?*' or ord(c) < 32 else c for c in original).rstrip(" .") or "media"
+            original = (
+                "".join(
+                    "_" if c in '<>:"/\\|?*' or ord(c) < 32 else c for c in original
+                ).rstrip(" .")
+                or "media"
+            )
             name, number = original, 2
             while name.casefold() in used:
                 p = PurePosixPath(original)
@@ -559,7 +583,9 @@ class MediaService:
         sink = _ZipWriter()
         skipped = list(plan["skipped"])
         included = []
-        with zipfile.ZipFile(sink, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+        with zipfile.ZipFile(
+            sink, "w", compression=zipfile.ZIP_STORED, allowZip64=True
+        ) as archive:
             for entry in plan["entries"]:
                 written = 0
                 started = False
@@ -570,13 +596,20 @@ class MediaService:
                     with located.path.open("rb") as source:
                         stat = os.fstat(source.fileno())
                         version = f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
-                        if version != located.row["file_version"] or stat.st_size != entry["size"]:
+                        if (
+                            version != located.row["file_version"]
+                            or stat.st_size != entry["size"]
+                        ):
                             raise OSError("Changed")
-                        with archive.open(entry["filename"], "w", force_zip64=True) as member:
+                        with archive.open(
+                            entry["filename"], "w", force_zip64=True
+                        ) as member:
                             started = True
                             yield sink.drain()
                             while written < entry["size"]:
-                                chunk = source.read(min(ZIP_CHUNK_BYTES, entry["size"] - written))
+                                chunk = source.read(
+                                    min(ZIP_CHUNK_BYTES, entry["size"] - written)
+                                )
                                 if not chunk:
                                     raise OSError("Short read")
                                 member.write(chunk)
@@ -585,11 +618,18 @@ class MediaService:
                     included.append(entry)
                 except OSError:
                     # A read error after the header leaves a valid but incomplete member.
-                    skipped.append({"id": entry["id"], "reason": "unavailable",
-                                    "filename": entry["filename"] if started else None,
-                                    "incomplete": started})
+                    skipped.append(
+                        {
+                            "id": entry["id"],
+                            "reason": "unavailable",
+                            "filename": entry["filename"] if started else None,
+                            "incomplete": started,
+                        }
+                    )
                 yield sink.drain()
-            archive.writestr("manifest.json", json.dumps({"included": included, "skipped": skipped}))
+            archive.writestr(
+                "manifest.json", json.dumps({"included": included, "skipped": skipped})
+            )
             yield sink.drain()
         yield sink.drain()
 
@@ -631,14 +671,20 @@ class MediaService:
     def list_collections(self, owner_id: str) -> dict[str, Any]:
         return {"items": Repository(self.db).list_collections(owner_id)}
 
-    def save_collection(self, owner_id: str, name: str, collection_id: str | None = None):
+    def save_collection(
+        self, owner_id: str, name: str, collection_id: str | None = None
+    ):
         return Repository(self.db).save_collection(owner_id, name, collection_id)
 
     def delete_collection(self, owner_id: str, collection_id: str) -> bool:
         return Repository(self.db).delete_collection(owner_id, collection_id)
 
-    def collection_members(self, owner_id: str, collection_id: str, ids: list[str], *, remove: bool = False):
-        return Repository(self.db).collection_members(owner_id, collection_id, ids, remove=remove)
+    def collection_members(
+        self, owner_id: str, collection_id: str, ids: list[str], *, remove: bool = False
+    ):
+        return Repository(self.db).collection_members(
+            owner_id, collection_id, ids, remove=remove
+        )
 
     def list_media(
         self,
@@ -679,9 +725,14 @@ class MediaService:
             "next_cursor": page.next_cursor,
         }
 
-    def filter_suggestions(self, owner_id: str, query: str, limit: int = 10,
-                           search_field: str = "any") -> dict[str, Any]:
-        return {"items": Repository(self.db).media_filter_suggestions(owner_id, query, limit, search_field)}
+    def filter_suggestions(
+        self, owner_id: str, query: str, limit: int = 10, search_field: str = "any"
+    ) -> dict[str, Any]:
+        return {
+            "items": Repository(self.db).media_filter_suggestions(
+                owner_id, query, limit, search_field
+            )
+        }
 
     def clear_history(self, owner_id: str) -> dict[str, int]:
         """Purge only snapshots whose terminal state and outputs are proven."""
@@ -770,8 +821,12 @@ class MediaService:
         captured = [row for row in rows if row["source_id"] == "captures"]
         indexed = [row["id"] for row in rows if row["source_id"] != "captures"]
         with self.db.write() as conn:
-            conn.executemany("DELETE FROM media WHERE id = ?", [(row["id"],) for row in captured])
-            conn.executemany("UPDATE media SET hidden = 1 WHERE id = ?", [(i,) for i in indexed])
+            conn.executemany(
+                "DELETE FROM media WHERE id = ?", [(row["id"],) for row in captured]
+            )
+            conn.executemany(
+                "UPDATE media SET hidden = 1 WHERE id = ?", [(i,) for i in indexed]
+            )
         for row in captured:
             path = self._safe_path(self.captures, row["relative_path"])
             if path is not None:

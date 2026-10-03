@@ -114,8 +114,19 @@ class GalleryTest(MediaApiTestCase):
     def test_a_real_video_gets_a_poster_frame_when_ffmpeg_is_available(self) -> None:
         clip = self.output / "real.mp4"
         subprocess.run(
-            ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=0.5:r=10",
-             "-pix_fmt", "yuv420p", "-y", str(clip)],
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=red:s=64x64:d=0.5:r=10",
+                "-pix_fmt",
+                "yuv420p",
+                "-y",
+                str(clip),
+            ],
             check=True,
         )
         self.media.import_baseline()
@@ -204,7 +215,9 @@ class VideoStreamingTest(MediaApiTestCase):
 
 
 class DeleteTest(MediaApiTestCase):
-    def test_a_captured_copy_is_removed_but_an_indexed_original_is_only_hidden(self) -> None:
+    def test_a_captured_copy_is_removed_but_an_indexed_original_is_only_hidden(
+        self,
+    ) -> None:
         original = self.png("photo.png")
         self.media.import_baseline()
         indexed = self.own_media()["photo.png"]["id"]
@@ -215,7 +228,9 @@ class DeleteTest(MediaApiTestCase):
         self.assertTrue(copy.is_file() and thumb.is_file())
 
         response = self.post(
-            self.local_client(), "/api/media/delete", json={"ids": [captured, indexed, captured]}
+            self.local_client(),
+            "/api/media/delete",
+            json={"ids": [captured, indexed, captured]},
         )
 
         self.assertEqual(response.json(), {"deleted": 2})
@@ -233,9 +248,14 @@ class DeleteTest(MediaApiTestCase):
         self.post(client, "/api/media/delete", json={"ids": [indexed]})
 
         for tail in ("file", "download", "thumbnail"):
-            self.assertEqual(client.get(f"/api/media/{indexed}/{tail}").status_code, 404, tail)
+            self.assertEqual(
+                client.get(f"/api/media/{indexed}/{tail}").status_code, 404, tail
+            )
         self.assertIsNone(self.media.locate(DEFAULT_PROFILE_ID, indexed))
-        self.assertEqual(self.media.zip_plan(DEFAULT_PROFILE_ID, [indexed])["skipped"][0]["reason"], "unavailable")
+        self.assertEqual(
+            self.media.zip_plan(DEFAULT_PROFILE_ID, [indexed])["skipped"][0]["reason"],
+            "unavailable",
+        )
 
 
 class PrivacyTest(MediaApiTestCase):

@@ -18,7 +18,6 @@ from typing import Any
 from ..catalog.contracts import CatalogSnapshot
 from ..contracts import ControlSchema
 from ..mapping import build_control_schema, parse_graph
-from ..mapping.submission import apply_edits
 from ..mapping.corrections import (
     ALLOWED_COMPONENTS,
     Correction,
@@ -32,6 +31,7 @@ from ..mapping.corrections import (
     structural_signature,
     workflow_selector,
 )
+from ..mapping.submission import apply_edits
 from ..storage.repository import Repository, RevisionConflict
 from .layout import LayoutDoc, SaveLayout, WorkflowLayout, section_items, stale_bindings
 
@@ -131,7 +131,9 @@ class WorkflowService:
                 f"This workflow is at graph revision {schema.revision}, not {expected_revision}. "
                 "Reload it before replacing the graph."
             )
-        graph = self._repository.get_workflow_graph(owner_id, workflow_id, schema.revision)
+        graph = self._repository.get_workflow_graph(
+            owner_id, workflow_id, schema.revision
+        )
         if graph is None:  # pragma: no cover - written in the same transaction
             return None
         updated = apply_edits(graph, schema, edits)
@@ -309,14 +311,6 @@ class WorkflowService:
         graph, schema = base
         controls = {c.binding_id: c for c in schema.controls}
         saved = self._repository.get_layout(owner_id, workflow_id)
-<<<<<<< Updated upstream
-        previous = LayoutDoc.model_validate_json(saved["layout_json"]) if saved else None
-        previous_pairs = {
-            (item.width, item.height)
-            for section in previous.sections
-            for item in section_items(section) if item.kind == "aspect_ratio"
-        } if previous else set()
-=======
         previous = (
             LayoutDoc.model_validate_json(saved["layout_json"]) if saved else None
         )
@@ -324,13 +318,12 @@ class WorkflowService:
             {
                 (item.width, item.height)
                 for section in previous.sections
-                for item in section.items
+                for item in section_items(section)
                 if item.kind == "aspect_ratio"
             }
             if previous
             else set()
         )
->>>>>>> Stashed changes
         for section in request.layout.sections:
             for item in section_items(section):
                 if item.kind == "aspect_ratio":

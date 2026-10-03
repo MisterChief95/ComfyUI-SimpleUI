@@ -19,7 +19,9 @@
 			? (editor.doc.sections.find((s) => s.id === selection.id) ?? null)
 			: null
 	);
-	const draft = $derived(control ? effectiveDraft(control, editor.drafts[control.binding_id]) : null);
+	const draft = $derived(
+		control ? effectiveDraft(control, editor.drafts[control.binding_id]) : null
+	);
 	const ranged = $derived(control ? isRangedNumber(control) : false);
 	const widgets = $derived.by((): Component[] => {
 		if (!control) return [];
@@ -30,13 +32,18 @@
 	const placedItem = $derived.by(() => {
 		if (!control || place?.kind !== 'section') return null;
 		const s = editor.doc.sections.find((sec) => sec.id === place.id);
-		return s ? sectionItems(s).find((i) => itemBindings(i).includes(control.binding_id)) ?? null : null;
+		return s
+			? (sectionItems(s).find((i) => itemBindings(i).includes(control.binding_id)) ?? null)
+			: null;
 	});
 	let ratioHeight = $state('');
-	const booleans = $derived((editor.schema?.controls ?? []).filter((c) => c.logical_type === 'boolean'));
+	const booleans = $derived(
+		(editor.schema?.controls ?? []).filter((c) => c.logical_type === 'boolean')
+	);
 	const counts = $derived({
-		placed: [...editor.placement].filter(([id, p]) => p.kind === 'section' && editor.controlsById.has(id))
-			.length,
+		placed: [...editor.placement].filter(
+			([id, p]) => p.kind === 'section' && editor.controlsById.has(id)
+		).length,
 		hidden: editor.doc.hidden.filter((id) => editor.controlsById.has(id)).length,
 		total: editor.schema?.controls.length ?? 0
 	});
@@ -59,7 +66,9 @@
 		if (!section) return;
 		if (
 			sectionItems(section).length > 0 &&
-			!confirm(`Delete "${section.title}"? Its ${sectionItems(section).length} controls become unplaced.`)
+			!confirm(
+				`Delete "${section.title}"? Its ${sectionItems(section).length} controls become unplaced.`
+			)
 		) {
 			return;
 		}
@@ -111,7 +120,8 @@
 								type="number"
 								step="any"
 								value={draft[key]}
-								oninput={(e) => editor.setDraft(control.binding_id, { [key]: e.currentTarget.value })}
+								oninput={(e) =>
+									editor.setDraft(control.binding_id, { [key]: e.currentTarget.value })}
 							/>
 						</div>
 					{/each}
@@ -132,26 +142,40 @@
 		</div>
 
 		{#if control.logical_type === 'int' && placedItem?.kind === 'control'}
-            <div class="field">
-                <label for="ratio-height">Pair as width with height control</label>
-                <select id="ratio-height" bind:value={ratioHeight}>
-                    <option value="">Choose height…</option>
-                    {#each editor.schema?.controls.filter((c) => c.logical_type === 'int' && c.binding_id !== control.binding_id && editor.doc.sections.some((s) => sectionItems(s).some((i) => i.kind === 'control' && i.binding_id === c.binding_id))) ?? [] as candidate (candidate.binding_id)}
-                        <option value={candidate.binding_id}>{candidate.label} ({candidate.binding_id})</option>
-                    {/each}
-                </select>
-                <button type="button" class="btn" disabled={!ratioHeight} onclick={() => { editor.pair(control.binding_id, ratioHeight); ratioHeight = ''; }}>Create aspect-ratio control</button>
-            </div>
-        {:else if placedItem?.kind === 'aspect_ratio'}
-            <p class="muted small">Width: {placedItem.width} · Height: {placedItem.height}</p>
-            <button type="button" class="btn" onclick={() => editor.split(control.binding_id)}>Split dimension controls</button>
-        {/if}
+			<div class="field">
+				<label for="ratio-height">Pair as width with height control</label>
+				<select id="ratio-height" bind:value={ratioHeight}>
+					<option value="">Choose height…</option>
+					{#each editor.schema?.controls.filter((c) => c.logical_type === 'int' && c.binding_id !== control.binding_id && editor.doc.sections.some( (s) => sectionItems(s).some((i) => i.kind === 'control' && i.binding_id === c.binding_id) )) ?? [] as candidate (candidate.binding_id)}
+						<option value={candidate.binding_id}>{candidate.label} ({candidate.binding_id})</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					class="btn"
+					disabled={!ratioHeight}
+					onclick={() => {
+						editor.pair(control.binding_id, ratioHeight);
+						ratioHeight = '';
+					}}>Create aspect-ratio control</button
+				>
+			</div>
+		{:else if placedItem?.kind === 'aspect_ratio'}
+			<p class="muted small">Width: {placedItem.width} · Height: {placedItem.height}</p>
+			<button type="button" class="btn" onclick={() => editor.split(control.binding_id)}
+				>Split dimension controls</button
+			>
+		{/if}
 
 		<hr />
 
 		<div class="field">
 			<label for="insp-section">Section</label>
-			<select id="insp-section" value={place?.kind === 'section' ? place.id : ''} onchange={chooseSection}>
+			<select
+				id="insp-section"
+				value={place?.kind === 'section' ? place.id : ''}
+				onchange={chooseSection}
+			>
 				<option value="">{place?.kind === 'hidden' ? 'Hidden' : 'Not placed (More)'}</option>
 				{#each editor.doc.sections as s (s.id)}
 					<option value={s.id}>{s.title}</option>
@@ -184,12 +208,17 @@
 		<div class="field">
 			<span class="label">Default value</span>
 			{#if control.binding_id in editor.previewValues}
-				<p class="small">Changed from <code>{String(control.value ?? '')}</code>; saved as the workflow's new default.</p>
+				<p class="small">
+					Changed from <code>{String(control.value ?? '')}</code>; saved as the workflow's new
+					default.
+				</p>
 				<button type="button" class="btn" onclick={() => editor.revertValue(control.binding_id)}>
 					<Icon name="reset" size={16} /> Revert value
 				</button>
 			{:else}
-				<p class="muted small">Change the control on the canvas to set its default for every run.</p>
+				<p class="muted small">
+					Change the control on the canvas to set its default for every run.
+				</p>
 			{/if}
 		</div>
 
@@ -203,7 +232,9 @@
 				>
 					<option value="">Always shown</option>
 					{#each booleans as b (b.binding_id)}
-						{#if b.binding_id !== control.binding_id}<option value={b.binding_id}>{editor.preview(b).label} is on</option>{/if}
+						{#if b.binding_id !== control.binding_id}<option value={b.binding_id}
+								>{editor.preview(b).label} is on</option
+							>{/if}
 					{/each}
 					{#if placedItem.when && !booleans.some((b) => b.binding_id === placedItem.when)}
 						<option value={placedItem.when}>{placedItem.when} (missing, always shown)</option>
@@ -269,13 +300,24 @@
 		<div class="field">
 			<span class="label" id="insp-mode">Layout</span>
 			<div class="seg" role="group" aria-labelledby="insp-mode">
-				<button type="button" aria-pressed={section.mode !== 'panels'} onclick={() => editor.setMode(section.id, 'auto')}>Automatic</button>
-				<button type="button" aria-pressed={section.mode === 'panels'} onclick={() => editor.setMode(section.id, 'panels')}>Rows &amp; columns</button>
+				<button
+					type="button"
+					aria-pressed={section.mode !== 'panels'}
+					onclick={() => editor.setMode(section.id, 'auto')}>Automatic</button
+				>
+				<button
+					type="button"
+					aria-pressed={section.mode === 'panels'}
+					onclick={() => editor.setMode(section.id, 'panels')}>Rows &amp; columns</button
+				>
 			</div>
 		</div>
 		{#if section.mode === 'panels'}
 			<div class="field">
-				<p class="muted small">{section.rows.length} row{section.rows.length === 1 ? '' : 's'}. Edit rows and columns on the canvas. Phones stack columns, tablets show at most two.</p>
+				<p class="muted small">
+					{section.rows.length} row{section.rows.length === 1 ? '' : 's'}. Edit rows and columns on
+					the canvas. Phones stack columns, tablets show at most two.
+				</p>
 				<button type="button" class="btn" onclick={() => editor.addRow(section.id)}>Add row</button>
 			</div>
 		{:else}
@@ -292,7 +334,9 @@
 						</button>
 					{/each}
 				</div>
-				<p class="muted small">A desktop hint. Phones always use one column, tablets at most two.</p>
+				<p class="muted small">
+					A desktop hint. Phones always use one column, tablets at most two.
+				</p>
 			</div>
 		{/if}
 		<div class="field">
@@ -310,7 +354,10 @@
 					<option value={section.toggle}>{section.toggle} (missing)</option>
 				{/if}
 			</select>
-			<p class="muted small">Shown in the section header on the run page; the section's controls appear only while it is on.</p>
+			<p class="muted small">
+				Shown in the section header on the run page; the section's controls appear only while it is
+				on.
+			</p>
 		</div>
 		<label class="check">
 			<input

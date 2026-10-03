@@ -85,11 +85,14 @@
 		importError = null;
 		try {
 			const body = await file.text();
-			const created = await api<WorkflowInfo>(`/workflows?name=${encodeURIComponent(name.trim())}`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body
-			});
+			const created = await api<WorkflowInfo>(
+				`/workflows?name=${encodeURIComponent(name.trim())}`,
+				{
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body
+				}
+			);
 			name = '';
 			file = null;
 			if (picker) picker.value = '';
@@ -153,7 +156,8 @@
 			const stale = await api<WorkflowLayout>(`/workflows/${workflow.id}/layout`)
 				.then((layout) => layout.stale_bindings.length)
 				.catch(() => 0);
-			const n = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
+			const n = (count: number, noun: string): string =>
+				`${count} ${noun}${count === 1 ? '' : 's'}`;
 			outcomes = {
 				...outcomes,
 				[workflow.id]: {
@@ -166,14 +170,18 @@
 				}
 			};
 		} catch (cause) {
-			outcomes = { ...outcomes, [workflow.id]: { text: describeApiError(cause), review: false, error: true } };
+			outcomes = {
+				...outcomes,
+				[workflow.id]: { text: describeApiError(cause), review: false, error: true }
+			};
 		} finally {
 			replacingId = null;
 		}
 	}
 
 	async function removeWorkflow(workflow: WorkflowInfo): Promise<void> {
-		if (!confirm(`Delete "${workflow.name}"? Its layout and saved presentation go with it.`)) return;
+		if (!confirm(`Delete "${workflow.name}"? Its layout and saved presentation go with it.`))
+			return;
 		removingId = workflow.id;
 		removeError = null;
 		try {
@@ -215,7 +223,13 @@
 		<div class="row wrap fields">
 			<div class="grow field">
 				<label for="workflow-name">Name</label>
-				<input id="workflow-name" bind:value={name} required maxlength="120" placeholder="Workflow name" />
+				<input
+					id="workflow-name"
+					bind:value={name}
+					required
+					maxlength="120"
+					placeholder="Workflow name"
+				/>
 			</div>
 			<button type="submit" class="btn btn-primary" disabled={importing || !file || !name.trim()}>
 				{importing ? 'Importing…' : 'Import workflow'}
@@ -248,7 +262,9 @@
 						<form class="row rename" onsubmit={(e) => rename(e, workflow)}>
 							<input aria-label="Workflow name" bind:value={renameValue} required maxlength="120" />
 							<button type="submit" class="btn btn-primary">Save</button>
-							<button type="button" class="btn btn-ghost" onclick={() => (renamingId = null)}>Cancel</button>
+							<button type="button" class="btn btn-ghost" onclick={() => (renamingId = null)}
+								>Cancel</button
+							>
 						</form>
 						{#if renameError}<p class="error" role="alert">{renameError}</p>{/if}
 					{:else}
@@ -282,7 +298,8 @@
 							title="Upload a new API-format JSON as the next revision"
 							onclick={() => pickGraph(workflow)}
 						>
-							<Icon name="upload" size={16} /> {replacingId === workflow.id ? 'Replacing…' : 'Replace graph'}
+							<Icon name="upload" size={16} />
+							{replacingId === workflow.id ? 'Replacing…' : 'Replace graph'}
 						</button>
 						<button
 							type="button"
@@ -297,7 +314,10 @@
 					</div>
 					{#if outcomes[workflow.id]}
 						{@const outcome = outcomes[workflow.id]}
-						<p class={outcome.error ? 'error' : 'outcome'} role={outcome.error ? 'alert' : 'status'}>
+						<p
+							class={outcome.error ? 'error' : 'outcome'}
+							role={outcome.error ? 'alert' : 'status'}
+						>
 							{outcome.text}
 							{#if outcome.review}<a href={`/workflows/${workflow.id}`}>Review in designer</a>{/if}
 						</p>
@@ -314,7 +334,9 @@
 		border-style: dashed;
 		border-width: 2px;
 		border-color: var(--color-border-strong);
-		transition: border-color 0.12s var(--ease), background 0.12s var(--ease);
+		transition:
+			border-color 0.12s var(--ease),
+			background 0.12s var(--ease);
 	}
 	.import.dragging {
 		border-color: var(--color-accent);

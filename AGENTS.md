@@ -18,18 +18,9 @@ The coordination tool is implemented; inspect the filesystem and database for cu
 
 ## Where decisions and status live
 
-Read the relevant documents before implementing a task:
+[README.md](README.md) is the project entry point. Run `dibs --help` or `python "<DIBS_SCRIPT>" COMMAND --help` for the coordination CLI contract.
 
-| Document | Purpose |
-| --- | --- |
-| [README.md](README.md) | Project entry point |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Product scope, backend, profiles, media, deployment |
-| [docs/WORKFLOW_MAPPING.md](docs/WORKFLOW_MAPPING.md) | Discovery, bindings, mapping persistence, compatibility |
-| [docs/TASKS.md](docs/TASKS.md) | Original implementation tasks and acceptance criteria |
-| [docs/tasks.json](docs/tasks.json) | Reviewed initial backlog, including review additions |
-| [docs/AGENT_COORDINATION.md](docs/AGENT_COORDINATION.md) | Full CLI, storage, reservation, and recovery contract |
-
-**`.dibs/tasks.sqlite3` is the live task/status source.** Use the CLI, not direct SQL writes. JSON/Markdown task documents and exported snapshots do not supersede current ownership or completion evidence. Later user-requested tasks may be added through a separate structured import without rewriting the original release backlog.
+**`.dibs/tasks.sqlite3` is the live task/status source.** Use the CLI, not direct SQL writes. Exported snapshots do not supersede current ownership or completion evidence. Later user-requested tasks may be added through a separate structured import without rewriting the original release backlog.
 
 ## Before editing: claim and reserve
 
@@ -40,7 +31,7 @@ Run commands from the repository root. Resolve `<DIBS_SCRIPT>` to `../../scripts
 ```cmd
 python "<DIBS_SCRIPT>" next --workspace "." --actor agent-compat
 python "<DIBS_SCRIPT>" show COMPAT-001 --workspace "." --actor agent-compat
-python "<DIBS_SCRIPT>" claim COMPAT-001 --workspace "." --actor agent-compat --reserve-tree tests/fixtures --reserve-file docs/COMPATIBILITY.md --json
+python "<DIBS_SCRIPT>" claim COMPAT-001 --workspace "." --actor agent-compat --reserve-tree tests/fixtures --reserve-file tests/fixtures/README.md --json
 ```
 
 These are examples: choose the task that matches the user's request and current readiness. `claim-next` also exists, but its reservations must fit the task you will execute. A claim does **not** automatically reserve the task's listed work areas. Translate prose/globs into concrete `--reserve-file` or `--reserve-tree` paths. Reserve shared manifests, lockfiles, schemas, and migration files explicitly; use `--resource git-index` before Git staging/index operations. Never stage another worker's changes accidentally.
@@ -101,10 +92,4 @@ CLI exit codes: `0` success, `1` internal tool error (report; do not retry), `2`
 
 The current development host is Windows/PowerShell. Prefer `rg` for search; GNU CoreUtils are available where useful. Quote command arguments with double quotes, use forward-slash relative paths where supported, exclude heavy directories from searches, and preserve file encoding/line endings. Avoid shell tricks that reinterpret paths or expose secrets. Check resolved targets before destructive filesystem operations.
 
-Run checks appropriate to the change. For coordination tool changes:
-
-```cmd
-python -m unittest discover -s tests/coordination -v
-```
-
-These tests use temporary databases, not the live backlog. As frontend/backend code is added, use its actual documented build/typecheck/test commands; do not invent missing scripts. Use applicable Svelte skills when available. Image/video release claims require recorded live ComfyUI evidence, not only synthetic fixtures. Finish with a concise account of changes, checks, and remaining limitations, and leave the coordination record ready for the next agent.
+Run checks appropriate to the change. The coordination tool lives in the dibs plugin and is not tested here. As frontend/backend code is added, use its actual documented build/typecheck/test commands; do not invent missing scripts. Use applicable Svelte skills when available. Image/video release claims require recorded live ComfyUI evidence, not only synthetic fixtures. Finish with a concise account of changes, checks, and remaining limitations, and leave the coordination record ready for the next agent.

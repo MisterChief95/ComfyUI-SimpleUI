@@ -18,15 +18,17 @@ from pydantic import BaseModel, ValidationError
 
 class ConfigTest(unittest.TestCase):
     def test_rejects_bad_comfy_url_and_missing_build(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(ConfigError) as ctx:
-                Config.from_env(
-                    {
-                        "SIMPLEUI_COMFY_URL": "not-a-url",
-                        "SIMPLEUI_DATA_DIR": tmp,
-                        "SIMPLEUI_STATIC_DIR": str(Path(tmp) / "nope"),
-                    }
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self.assertRaises(ConfigError) as ctx,
+        ):
+            Config.from_env(
+                {
+                    "SIMPLEUI_COMFY_URL": "not-a-url",
+                    "SIMPLEUI_DATA_DIR": tmp,
+                    "SIMPLEUI_STATIC_DIR": str(Path(tmp) / "nope"),
+                }
+            )
         message = str(ctx.exception)
         self.assertIn("SIMPLEUI_COMFY_URL", message)
         self.assertIn("No built UI", message)

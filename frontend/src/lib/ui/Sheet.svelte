@@ -72,11 +72,21 @@
 	<header>
 		<h2 id={titleId}>{title}</h2>
 		{#if half && !drawer}
-			<button type="button" class="btn btn-ghost expand" aria-pressed={expanded} onclick={() => (expanded = !expanded)}>
+			<button
+				type="button"
+				class="btn btn-ghost expand"
+				aria-pressed={expanded}
+				onclick={() => (expanded = !expanded)}
+			>
 				{expanded ? 'Shrink' : 'Expand'}
 			</button>
 		{/if}
-		<button type="button" class="btn btn-ghost btn-icon" aria-label="Close" onclick={() => dialog?.close()}>
+		<button
+			type="button"
+			class="btn btn-ghost btn-icon"
+			aria-label="Close"
+			onclick={() => dialog?.close()}
+		>
 			<Icon name="close" />
 		</button>
 	</header>

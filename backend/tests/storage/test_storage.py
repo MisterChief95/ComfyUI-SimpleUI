@@ -104,15 +104,24 @@ class MigrationTest(StorageTestCase):
                 shutil.copy(script, migrations / script.name)
         path = self.root / "collections-upgrade.sqlite3"
         old = Database(path, migrations_dir=migrations)
-        media_id = Repository(old).record_media(OWNER, storage_path="existing.png",
-                                               file_version="existing", media_kind="image", media_type="image/png")
+        media_id = Repository(old).record_media(
+            OWNER,
+            storage_path="existing.png",
+            file_version="existing",
+            media_kind="image",
+            media_type="image/png",
+        )
         old.close()
-        shutil.copy(MIGRATIONS_DIR / "005_collections.sql", migrations / "005_collections.sql")
+        shutil.copy(
+            MIGRATIONS_DIR / "005_collections.sql", migrations / "005_collections.sql"
+        )
         upgraded = Database(path, migrations_dir=migrations)
         try:
             repo = Repository(upgraded)
             self.assertEqual(upgraded.schema_version(), 5)
-            self.assertEqual(repo.get_media(OWNER, media_id)["storage_path"], "existing.png")
+            self.assertEqual(
+                repo.get_media(OWNER, media_id)["storage_path"], "existing.png"
+            )
             cid = repo.save_collection(OWNER, "Existing")["id"]
             self.assertEqual(repo.collection_members(OWNER, cid, [media_id]), 1)
             self.assertEqual(upgraded.migrate(), [])
@@ -367,15 +376,15 @@ class IdempotentWriteTest(StorageTestCase):
         generation_id = self.repo.create_generation(
             OWNER, client_request_key="k", request_fingerprint="f"
         )
-        kwargs = dict(
-            storage_path="out/a.png",
-            file_version="v1",
-            media_kind="image",
-            media_type="image/png",
-            generation_id=generation_id,
-            output_node="9",
-            ordinal=0,
-        )
+        kwargs = {
+            "storage_path": "out/a.png",
+            "file_version": "v1",
+            "media_kind": "image",
+            "media_type": "image/png",
+            "generation_id": generation_id,
+            "output_node": "9",
+            "ordinal": 0,
+        }
         first = self.repo.record_media(OWNER, **kwargs)
         self.assertEqual(self.repo.record_media(OWNER, **kwargs), first)
         self.assertEqual(len(self.repo.list_media(OWNER).items), 1)

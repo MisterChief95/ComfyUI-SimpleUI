@@ -17,10 +17,13 @@ from .support import AuthTestCase
 class RecoveryTest(AuthTestCase):
     def _run(self, *argv: str) -> tuple[int, str, str]:
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch.object(recovery, "open_database", return_value=self.db):
-            with mock.patch.object(recovery.Database, "close", lambda _self: None):
-                with redirect_stdout(out), redirect_stderr(err):
-                    code = recovery.main(list(argv))
+        with (
+            mock.patch.object(recovery, "open_database", return_value=self.db),
+            mock.patch.object(recovery.Database, "close", lambda _self: None),
+            redirect_stdout(out),
+            redirect_stderr(err),
+        ):
+            code = recovery.main(list(argv))
         return code, out.getvalue(), err.getvalue()
 
     def _default_hash(self) -> str | None:
@@ -55,13 +58,18 @@ class RecoveryTest(AuthTestCase):
 
     def test_mismatched_or_short_passwords_change_nothing(self) -> None:
         self.enable_multi_user("default-password")
-        with mock.patch.object(
-            recovery.getpass, "getpass", side_effect=["one-password", "two"]
-        ), self.assertRaises(SystemExit):
+        with (
+            mock.patch.object(
+                recovery.getpass, "getpass", side_effect=["one-password", "two"]
+            ),
+            self.assertRaises(SystemExit),
+        ):
             self._run("set-password", "Default")
-        with mock.patch.object(recovery.getpass, "getpass", return_value="short"):
-            with self.assertRaises(SystemExit):
-                self._run("set-password", "Default")
+        with (
+            mock.patch.object(recovery.getpass, "getpass", return_value="short"),
+            self.assertRaises(SystemExit),
+        ):
+            self._run("set-password", "Default")
         self.assertTrue(verify_password("default-password", self._default_hash()))
 
     def test_unknown_profile_is_refused(self) -> None:

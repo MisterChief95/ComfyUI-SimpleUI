@@ -104,7 +104,7 @@ async def create_upload(
 
     size = 0
     try:
-        with open(temp, "wb") as out:
+        async with await anyio.open_file(temp, "wb") as out:
             # Bounded chunked read straight off the ASGI receive channel: a
             # multi-GB video is never held whole in memory, on either the
             # read or the write side.
@@ -116,7 +116,7 @@ async def create_upload(
                     raise UploadError(
                         "too_large", f"Upload exceeds the {limit} byte limit."
                     )
-                await anyio.to_thread.run_sync(out.write, chunk)
+                await out.write(chunk)
     except UploadError as exc:
         await in_thread(lambda: temp.unlink(missing_ok=True))
         raise _http_error(exc) from exc

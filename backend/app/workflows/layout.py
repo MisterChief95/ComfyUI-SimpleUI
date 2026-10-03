@@ -25,7 +25,9 @@ StructuralId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,40}$"
 BindingId = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 Dimension = Annotated[int, Field(strict=True, gt=0, le=16384)]
 #: Optional binding reference, omitted from output when unset.
-OptionalBinding = Annotated[BindingId | None, Field(default=None, exclude_if=lambda v: v is None)]
+OptionalBinding = Annotated[
+    BindingId | None, Field(default=None, exclude_if=lambda v: v is None)
+]
 
 
 class ControlItem(Model):
@@ -61,18 +63,11 @@ def item_bindings(item: ControlItem | AspectRatioItem) -> list[str]:
     )
 
 
-<<<<<<< Updated upstream
 class SectionBase(Model):
     id: StructuralId
-    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
-=======
-class LayoutSection(Model):
-    id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,40}$")]
     title: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
     ]
-    columns: Literal[1, 2, 3]
->>>>>>> Stashed changes
     #: Default disclosure on the run page; the live open state is per-device.
     collapsed: StrictBool
     #: Boolean binding rendered as the header switch; the body folds away while
@@ -105,9 +100,16 @@ LayoutSection = Annotated[AutoSection | PanelSection, Field(discriminator="mode"
 
 
 def section_items(section: LayoutSection) -> list[ControlItem | AspectRatioItem]:
-    return section.items if isinstance(section, AutoSection) else [
-        item for row in section.rows for column in row.columns for item in column.items
-    ]
+    return (
+        section.items
+        if isinstance(section, AutoSection)
+        else [
+            item
+            for row in section.rows
+            for column in row.columns
+            for item in column.items
+        ]
+    )
 
 
 class LayoutDoc(Model):
@@ -125,9 +127,15 @@ class LayoutDoc(Model):
                 raise ValueError("version must be 1 or 2")
             sections = value.get("sections")
             if isinstance(sections, list):
-                if version == 1 and any(isinstance(s, dict) and ("mode" in s or "rows" in s) for s in sections):
+                if version == 1 and any(
+                    isinstance(s, dict) and ("mode" in s or "rows" in s)
+                    for s in sections
+                ):
                     raise ValueError("v1 sections must use columns and items")
-                sections = [dict(s, mode=s.get("mode", "auto")) if isinstance(s, dict) else s for s in sections]
+                sections = [
+                    dict(s, mode=s.get("mode", "auto")) if isinstance(s, dict) else s
+                    for s in sections
+                ]
             return {**value, "version": 2, "sections": sections}
         return value
 
@@ -136,8 +144,13 @@ class LayoutDoc(Model):
         ids = [section.id for section in self.sections]
         if len(set(ids)) != len(ids):
             raise ValueError("section ids must be unique")
-        structural_ids = [identifier for s in self.sections if isinstance(s, PanelSection)
-                          for row in s.rows for identifier in [row.id, *(c.id for c in row.columns)]]
+        structural_ids = [
+            identifier
+            for s in self.sections
+            if isinstance(s, PanelSection)
+            for row in s.rows
+            for identifier in [row.id, *(c.id for c in row.columns)]
+        ]
         if len(set(structural_ids)) != len(structural_ids):
             raise ValueError("row and column ids must be unique across the document")
         bindings = self.bindings()
@@ -152,17 +165,17 @@ class LayoutDoc(Model):
         return self
 
     def bindings(self) -> list[str]:
-<<<<<<< Updated upstream
         toggles = [s.toggle for s in self.sections if s.toggle is not None]
-        return [binding for s in self.sections for item in section_items(s) for binding in item_bindings(item)] + toggles + self.hidden
-=======
-        return [
-            binding
-            for s in self.sections
-            for item in s.items
-            for binding in item_bindings(item)
-        ] + self.hidden
->>>>>>> Stashed changes
+        return (
+            [
+                binding
+                for s in self.sections
+                for item in section_items(s)
+                for binding in item_bindings(item)
+            ]
+            + toggles
+            + self.hidden
+        )
 
 
 class SaveLayout(Model):

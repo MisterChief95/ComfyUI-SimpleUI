@@ -21,6 +21,7 @@ import json
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from pydantic import Field
 
 from ..auth.routes import CurrentPrincipal, Mutation
 from ..comfy_client import ComfyUnavailable
@@ -29,12 +30,8 @@ from ..mapping import SeedPolicy, SubmissionError, build_submission_graph, resol
 from ..mapping.input_adapters import InputAdapterError, bind_upload
 from ..mapping.submission import DEFAULT_SEED_MAX
 from ..storage.db import in_thread
-from .service import (
-    CancellationUnavailable,
-    GenerationBusy,
-    GenerationConflict,
-    GenerationService,
-)
+from .service import CancellationUnavailable, GenerationService
+from .store import GenerationBusy, GenerationConflict
 
 router = APIRouter(prefix="/api/generations")
 
@@ -50,7 +47,7 @@ class SubmitRequest(Model):
     #: controls, a number for floats, an ExactInt string for ints (a JSON
     #: integer is accepted too), a string for the rest. Smart-mode unions keep
     #: ``true`` a bool and ``5`` an int rather than coercing either to a string.
-    edits: dict[str, str | bool | int | float] = {}
+    edits: dict[str, str | bool | int | float] = Field(default_factory=dict)
     seed_policy: SeedPolicy | None = None
 
 
@@ -351,7 +348,9 @@ async def get_generation_graph(
     generations: GenerationService = request.app.state.generations
     row = await in_thread(generations.store.get, principal.owner_id, generation_id)
     if row is None or not row.get("graph"):
-        raise HTTPException(404, "The workflow JSON for this generation is not available.")
+        raise HTTPException(
+            404, "The workflow JSON for this generation is not available."
+        )
     return row["graph"]
 
 

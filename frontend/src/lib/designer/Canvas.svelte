@@ -3,7 +3,13 @@
 	// with live widgets; changing a value drafts a new workflow default (saved by Save). Drag grips, tap buttons and the
 	// inspector all edit the same Designer state.
 	import AspectRatio from '$lib/controls/AspectRatio.svelte';
-	import { itemBindings, itemId, sectionItems, MAX_ROWS, type ResolvedControl } from '$lib/layout/model';
+	import {
+		itemBindings,
+		itemId,
+		sectionItems,
+		MAX_ROWS,
+		type ResolvedControl
+	} from '$lib/layout/model';
 	import ControlRow from '$lib/controls/ControlRow.svelte';
 	import type { LayoutSection } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -47,7 +53,9 @@
 	function removeSection(section: LayoutSection): void {
 		if (
 			sectionItems(section).length > 0 &&
-			!confirm(`Delete "${section.title}"? Its ${sectionItems(section).length} controls become unplaced.`)
+			!confirm(
+				`Delete "${section.title}"? Its ${sectionItems(section).length} controls become unplaced.`
+			)
 		) {
 			return;
 		}
@@ -59,13 +67,20 @@
 		editor.updateSection(section.id, { columns: n });
 	}
 
-	function removeRow(section: LayoutSection, row: { id: string; columns: { controls: unknown[] }[] }): void {
+	function removeRow(
+		section: LayoutSection,
+		row: { id: string; columns: { controls: unknown[] }[] }
+	): void {
 		const n = row.columns.reduce((sum, c) => sum + c.controls.length, 0);
 		if (n > 0 && !confirm(`Delete this row? Its ${n} controls become unplaced.`)) return;
 		editor.removeRow(section.id, row.id);
 	}
 
-	function removeColumn(section: LayoutSection, rowId: string, column: { id: string; controls: unknown[] }): void {
+	function removeColumn(
+		section: LayoutSection,
+		rowId: string,
+		column: { id: string; controls: unknown[] }
+	): void {
 		const n = column.controls.length;
 		if (n > 0 && !confirm(`Delete this column? Its ${n} controls become unplaced.`)) return;
 		editor.removeColumn(section.id, rowId, column.id);
@@ -114,23 +129,48 @@
 				<code>{id}</code>
 			</button>
 			{#if id in editor.drafts}<span class="badge badge-accent">edited</span>{/if}
-			{#if itemBindings(rc.item).some((b) => b in editor.previewValues)}<span class="badge badge-accent" title="Unsaved default value">default changed</span>{/if}
+			{#if itemBindings(rc.item).some((b) => b in editor.previewValues)}<span
+					class="badge badge-accent"
+					title="Unsaved default value">default changed</span
+				>{/if}
 			{#if rc.item.span === 'full'}<span class="badge">full row</span>{/if}
-			{#if rc.when}<span class="badge" title="Shown only while this is on">when {editor.preview(rc.when).label}</span>{:else if rc.item.when}<span class="badge badge-warning" title="This condition is missing or not a boolean, so the control always shows">condition missing</span>{/if}
+			{#if rc.when}<span class="badge" title="Shown only while this is on"
+					>when {editor.preview(rc.when).label}</span
+				>{:else if rc.item.when}<span
+					class="badge badge-warning"
+					title="This condition is missing or not a boolean, so the control always shows"
+					>condition missing</span
+				>{/if}
 		</div>
-                                {#if rc.item.kind === 'aspect_ratio' && rc.height}
-                                    <AspectRatio width={control} height={editor.preview(rc.height)} presets={rc.item.presets} widthValue={editor.previewValue(control)} heightValue={editor.previewValue(rc.height)} onchange={(w, h) => { editor.setPreviewValue(id, w); editor.setPreviewValue(rc.height!.binding_id, h); }} />
-                                {/if}
+		{#if rc.item.kind === 'aspect_ratio' && rc.height}
+			<AspectRatio
+				width={control}
+				height={editor.preview(rc.height)}
+				presets={rc.item.presets}
+				widthValue={editor.previewValue(control)}
+				heightValue={editor.previewValue(rc.height)}
+				onchange={(w, h) => {
+					editor.setPreviewValue(id, w);
+					editor.setPreviewValue(rc.height!.binding_id, h);
+				}}
+			/>
+		{/if}
 		<ControlRow
-			control={control}
+			{control}
 			value={editor.previewValue(control)}
 			onchange={(value) => editor.setPreviewValue(id, value)}
 			compact
 			preview
 		/>
-                                {#if rc.height}
-                                    <ControlRow control={editor.preview(rc.height)} value={editor.previewValue(rc.height)} onchange={(value) => editor.setPreviewValue(rc.height!.binding_id, value)} compact preview />
-                                {/if}
+		{#if rc.height}
+			<ControlRow
+				control={editor.preview(rc.height)}
+				value={editor.previewValue(rc.height)}
+				onchange={(value) => editor.setPreviewValue(rc.height!.binding_id, value)}
+				compact
+				preview
+			/>
+		{/if}
 		{#if picked}
 			<div class="actions" role="group" aria-label={`Actions for ${control.label}`}>
 				<button
@@ -286,7 +326,11 @@
 							class="grip"
 							title="Drag to reorder this section"
 							aria-hidden="true"
-							{@attach dnd.handle(() => ({ type: 'section', id: section.id, label: section.title }))}
+							{@attach dnd.handle(() => ({
+								type: 'section',
+								id: section.id,
+								label: section.title
+							}))}
 						>
 							<Icon name="grip" size={20} />
 						</span>
@@ -321,9 +365,14 @@
 							</button>
 						</div>
 						{#if rs.toggle}
-							<span class="badge" title="On/off switch shown in this section's header">switch: {editor.preview(rs.toggle).label}</span>
+							<span class="badge" title="On/off switch shown in this section's header"
+								>switch: {editor.preview(rs.toggle).label}</span
+							>
 						{:else if section.toggle}
-							<span class="badge badge-warning" title="The switch control is missing or not a boolean">switch missing</span>
+							<span
+								class="badge badge-warning"
+								title="The switch control is missing or not a boolean">switch missing</span
+							>
 						{/if}
 						<label class="collapse" title="Start collapsed on the run page">
 							<input
@@ -331,7 +380,8 @@
 								class="switch"
 								role="switch"
 								checked={section.collapsed}
-								onchange={(e) => editor.updateSection(section.id, { collapsed: e.currentTarget.checked })}
+								onchange={(e) =>
+									editor.updateSection(section.id, { collapsed: e.currentTarget.checked })}
 							/>
 							<span>Collapsed</span>
 						</label>
@@ -383,29 +433,60 @@
 											{/each}
 										</div>
 										<span class="spacer"></span>
-										<button type="button" class="btn btn-ghost btn-icon" aria-label={`Move row ${ri + 1} up`} disabled={ri === 0} onclick={() => editor.shiftRow(section.id, row.id, -1)}>
+										<button
+											type="button"
+											class="btn btn-ghost btn-icon"
+											aria-label={`Move row ${ri + 1} up`}
+											disabled={ri === 0}
+											onclick={() => editor.shiftRow(section.id, row.id, -1)}
+										>
 											<Icon name="chevron-up" size={16} />
 										</button>
-										<button type="button" class="btn btn-ghost btn-icon" aria-label={`Move row ${ri + 1} down`} disabled={ri === rs.rows.length - 1} onclick={() => editor.shiftRow(section.id, row.id, 1)}>
+										<button
+											type="button"
+											class="btn btn-ghost btn-icon"
+											aria-label={`Move row ${ri + 1} down`}
+											disabled={ri === rs.rows.length - 1}
+											onclick={() => editor.shiftRow(section.id, row.id, 1)}
+										>
 											<Icon name="chevron-down" size={16} />
 										</button>
-										<button type="button" class="btn btn-ghost btn-icon danger" aria-label={`Delete row ${ri + 1}`} onclick={() => removeRow(section, row)}>
+										<button
+											type="button"
+											class="btn btn-ghost btn-icon danger"
+											aria-label={`Delete row ${ri + 1}`}
+											onclick={() => removeRow(section, row)}
+										>
 											<Icon name="trash" size={16} />
 										</button>
 									</div>
 									<div class="pgrid" style:--cols={Math.min(row.columns.length, cap)}>
 										{#each row.columns as column, ci (column.id)}
-											<div class="pcol" class:zone={dnd.zone === column.id && dnd.target?.type === 'items' && dnd.target.panel?.column === column.id}
-												data-items={section.id} data-row={row.id} data-column={column.id}
-												role="group" aria-label={`Row ${ri + 1}, column ${ci + 1}`}>
+											<div
+												class="pcol"
+												class:zone={dnd.zone === column.id &&
+													dnd.target?.type === 'items' &&
+													dnd.target.panel?.column === column.id}
+												data-items={section.id}
+												data-row={row.id}
+												data-column={column.id}
+												role="group"
+												aria-label={`Row ${ri + 1}, column ${ci + 1}`}
+											>
 												{#each column.controls as rc (itemId(rc.item))}
 													{@render card(rc, section)}
 												{/each}
 												{#if column.controls.length === 0}
-													<p class="empty-grid muted">Empty column. Drag controls here, or use the column arrows.</p>
+													<p class="empty-grid muted">
+														Empty column. Drag controls here, or use the column arrows.
+													</p>
 												{/if}
 												{#if row.columns.length > 1}
-													<button type="button" class="btn btn-ghost colx" onclick={() => removeColumn(section, row.id, column)}>
+													<button
+														type="button"
+														class="btn btn-ghost colx"
+														onclick={() => removeColumn(section, row.id, column)}
+													>
 														<Icon name="trash" size={14} /> Column
 													</button>
 												{/if}
@@ -414,14 +495,21 @@
 									</div>
 								</div>
 							{/each}
-							<button type="button" class="btn addrow" disabled={rs.rows.length >= MAX_ROWS} onclick={() => editor.addRow(section.id)}>
+							<button
+								type="button"
+								class="btn addrow"
+								disabled={rs.rows.length >= MAX_ROWS}
+								onclick={() => editor.addRow(section.id)}
+							>
 								<Icon name="plus" size={16} /> Row
 							</button>
 						</div>
 					{:else}
 						<div
 							class="grid"
-							class:zone={dnd.zone === section.id && dnd.target?.type === 'items' && !dnd.target.panel}
+							class:zone={dnd.zone === section.id &&
+								dnd.target?.type === 'items' &&
+								!dnd.target.panel}
 							style:--cols={Math.min(section.mode === 'panels' ? 1 : section.columns, cap)}
 							data-items={section.id}
 						>
@@ -429,9 +517,7 @@
 								{@render card(rc, section)}
 							{/each}
 							{#if rs.controls.length === 0}
-								<p class="empty-grid muted">
-									Empty. Drag controls here, or use Library, then Add.
-								</p>
+								<p class="empty-grid muted">Empty. Drag controls here, or use Library, then Add.</p>
 							{/if}
 						</div>
 					{/if}
@@ -441,16 +527,39 @@
 			{#if resolved.unplaced.length > 0}
 				<details class="card stack">
 					<summary>Unplaced ({resolved.unplaced.length})</summary>
-					<p class="muted small">These controls appear under More on the run page. Add places them in the selected section.</p>
+					<p class="muted small">
+						These controls appear under More on the run page. Add places them in the selected
+						section.
+					</p>
 					{#each resolved.unplaced as control (control.binding_id)}
 						<div class="row wrap">
-							<span class="grip" title="Drag to move" aria-hidden="true"
-								{@attach dnd.handle(() => ({ type: 'lib', id: control.binding_id, label: control.label }))}>
+							<span
+								class="grip"
+								title="Drag to move"
+								aria-hidden="true"
+								{@attach dnd.handle(() => ({
+									type: 'lib',
+									id: control.binding_id,
+									label: control.label
+								}))}
+							>
 								<Icon name="grip" size={18} />
 							</span>
 							<span>{control.label} <code>{control.binding_id}</code></span>
-							<button type="button" class="btn" disabled={!editor.canPlace(control.binding_id)} onclick={() => editor.addControl(control.binding_id)} aria-label={`Add ${control.label} from Unplaced`}>Add</button>
-							<button type="button" class="btn" disabled={!editor.canPlace(control.binding_id)} onclick={() => editor.hideControl(control.binding_id)} aria-label={`Hide ${control.label} from Unplaced`}>Hide</button>
+							<button
+								type="button"
+								class="btn"
+								disabled={!editor.canPlace(control.binding_id)}
+								onclick={() => editor.addControl(control.binding_id)}
+								aria-label={`Add ${control.label} from Unplaced`}>Add</button
+							>
+							<button
+								type="button"
+								class="btn"
+								disabled={!editor.canPlace(control.binding_id)}
+								onclick={() => editor.hideControl(control.binding_id)}
+								aria-label={`Hide ${control.label} from Unplaced`}>Hide</button
+							>
 						</div>
 					{/each}
 				</details>

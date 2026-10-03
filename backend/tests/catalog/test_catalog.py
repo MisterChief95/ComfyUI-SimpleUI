@@ -16,7 +16,7 @@ import logging
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 from app.catalog import CatalogService, CatalogStore, evaluate_selections, normalize
@@ -460,7 +460,7 @@ class SchemaHashTest(CatalogTestCase):
 
 
 class SelectionInvalidationTest(CatalogTestCase):
-    SAVED = [
+    SAVED: ClassVar[list[dict[str, object]]] = [
         {
             "node_id": "4",
             "class_type": "CheckpointLoaderSimple",

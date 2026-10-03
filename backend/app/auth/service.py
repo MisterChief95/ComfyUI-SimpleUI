@@ -428,15 +428,17 @@ class AuthService:
         if not status.ready:
             raise Conflict(status.reason)
 
-        with self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout):
-            with self.db.write() as conn:
-                conn.execute(
-                    "UPDATE profiles SET password_hash = ? WHERE id = ?",
-                    (hash_password(default_password), DEFAULT_PROFILE_ID),
-                )
-                # Every existing session, anonymous or not, stops here.
-                conn.execute("DELETE FROM sessions")
-                write_host(conn, MULTI_USER_ENABLED, True)
+        with (
+            self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout),
+            self.db.write() as conn,
+        ):
+            conn.execute(
+                "UPDATE profiles SET password_hash = ? WHERE id = ?",
+                (hash_password(default_password), DEFAULT_PROFILE_ID),
+            )
+            # Every existing session, anonymous or not, stops here.
+            conn.execute("DELETE FROM sessions")
+            write_host(conn, MULTI_USER_ENABLED, True)
 
     def deactivate_multi_user(self, timeout: float = DRAIN_TIMEOUT_S) -> None:
         """Blocked while other profiles exist: their data must not fall into Default."""
@@ -450,14 +452,16 @@ class AuthService:
                 "Remove the other profiles before disabling multi-user mode; otherwise their "
                 "workflows, history and media would be reachable from the Default session."
             )
-        with self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout):
-            with self.db.write() as conn:
-                conn.execute(
-                    "UPDATE profiles SET password_hash = NULL WHERE id = ?",
-                    (DEFAULT_PROFILE_ID,),
-                )
-                conn.execute("DELETE FROM sessions")
-                write_host(conn, MULTI_USER_ENABLED, False)
+        with (
+            self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout),
+            self.db.write() as conn,
+        ):
+            conn.execute(
+                "UPDATE profiles SET password_hash = NULL WHERE id = ?",
+                (DEFAULT_PROFILE_ID,),
+            )
+            conn.execute("DELETE FROM sessions")
+            write_host(conn, MULTI_USER_ENABLED, False)
 
 
 def _check_password(password: str) -> None:

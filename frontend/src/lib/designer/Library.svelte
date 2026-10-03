@@ -31,8 +31,8 @@
 
 	function matches(control: ControlDescriptor, q: string): boolean {
 		if (!q) return true;
-		return [control.label, control.class_type, control.input_name, control.binding_id].some((text) =>
-			text.toLowerCase().includes(q)
+		return [control.label, control.class_type, control.input_name, control.binding_id].some(
+			(text) => text.toLowerCase().includes(q)
 		);
 	}
 
@@ -106,15 +106,20 @@
 		<section aria-label={group.title}>
 			<h3>{group.title}</h3>
 			<div class="row wrap">
-				<button type="button" class="btn" disabled={editor.sectionsFull} onclick={() => editor.addNodeSection(nodeId, group.title)}>Add node as section</button>
-				<button type="button" class="btn" onclick={() => editor.hideNode(nodeId)}>Hide all controls of this node</button>
+				<button
+					type="button"
+					class="btn"
+					disabled={editor.sectionsFull}
+					onclick={() => editor.addNodeSection(nodeId, group.title)}>Add node as section</button
+				>
+				<button type="button" class="btn" onclick={() => editor.hideNode(nodeId)}
+					>Hide all controls of this node</button
+				>
 			</div>
 			<ul>
 				{#each group.controls as control (control.binding_id)}
 					{@const st = status(control.binding_id)}
-					<li
-						class:dragging={dnd.payload?.type === 'lib' && dnd.payload.id === control.binding_id}
-					>
+					<li class:dragging={dnd.payload?.type === 'lib' && dnd.payload.id === control.binding_id}>
 						{#if draggable}
 							<span
 								class="grip"

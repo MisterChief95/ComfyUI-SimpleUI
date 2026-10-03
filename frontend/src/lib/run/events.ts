@@ -14,10 +14,18 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 export function parseFrame(raw: unknown): Frame | null {
 	try {
 		const message: unknown = JSON.parse(String(raw));
-		if (!isObject(message) || typeof message.generation_id !== 'string' || typeof message.type !== 'string') {
+		if (
+			!isObject(message) ||
+			typeof message.generation_id !== 'string' ||
+			typeof message.type !== 'string'
+		) {
 			return null;
 		}
-		return { generation_id: message.generation_id, type: message.type, data: isObject(message.data) ? message.data : {} };
+		return {
+			generation_id: message.generation_id,
+			type: message.type,
+			data: isObject(message.data) ? message.data : {}
+		};
 	} catch {
 		return null;
 	}

@@ -140,7 +140,9 @@ export class GenerationTracker {
 		const outputs: MediaInfo[] = [];
 		let cursor: string | null = null;
 		do {
-			const page: Page<MediaInfo> = await api(`/media?generation_id=${id}&limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+			const page: Page<MediaInfo> = await api(
+				`/media?generation_id=${id}&limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+			);
 			outputs.push(...page.items);
 			cursor = page.next_cursor;
 		} while (cursor);

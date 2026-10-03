@@ -61,15 +61,7 @@ export interface Revisioned {
 export type LogicalType = 'string' | 'int' | 'float' | 'boolean' | 'enum' | 'file' | 'unknown';
 
 export type Component =
-	| 'text'
-	| 'textarea'
-	| 'number'
-	| 'slider'
-	| 'checkbox'
-	| 'select'
-	| 'seed'
-	| 'file'
-	| 'readonly';
+	'text' | 'textarea' | 'number' | 'slider' | 'checkbox' | 'select' | 'seed' | 'file' | 'readonly';
 
 export type Group =
 	| 'prompts'

@@ -17,17 +17,13 @@ from pydantic import Field, StringConstraints
 from ..auth.routes import CurrentPrincipal, Mutation
 from ..contracts import ControlSchema, ExactInt, Id, Model, Page
 from ..mapping import GraphImportError
-<<<<<<< Updated upstream
-from ..mapping.corrections import Correction, CorrectionError, CorrectionScope, SaveCorrection
-from ..mapping.submission import SubmissionError
-=======
 from ..mapping.corrections import (
     Correction,
     CorrectionError,
     CorrectionScope,
     SaveCorrection,
 )
->>>>>>> Stashed changes
+from ..mapping.submission import SubmissionError
 from ..storage.db import in_thread
 from ..storage.repository import LimitExceeded, RevisionConflict
 from .layout import BindingId, SaveLayout, WorkflowLayout
@@ -162,7 +158,9 @@ async def replace_graph(
     )
 
 
-@router.put("/{workflow_id}/values", response_model=ReplaceResult, dependencies=[Mutation])
+@router.put(
+    "/{workflow_id}/values", response_model=ReplaceResult, dependencies=[Mutation]
+)
 async def replace_values(
     request: Request, workflow_id: str, principal: CurrentPrincipal, body: ReplaceValues
 ) -> ReplaceResult:
@@ -183,7 +181,9 @@ async def replace_values(
     if result is None:
         raise HTTPException(404, "Workflow was not found.")
     row, revision, added, removed = result
-    return ReplaceResult(workflow=_info(row), revision=revision, added=added, removed=removed)
+    return ReplaceResult(
+        workflow=_info(row), revision=revision, added=added, removed=removed
+    )
 
 
 @router.delete("/{workflow_id}", status_code=204, dependencies=[Mutation])

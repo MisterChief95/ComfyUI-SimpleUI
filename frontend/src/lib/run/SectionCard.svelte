@@ -11,14 +11,28 @@
 
 	const on = $derived(!section.toggle || run.isOn(section.toggle));
 	const open = $derived(run.isOpen(section));
-	const modified = $derived(section.entries.flatMap((e) => e.height ? [e.control, e.height] : [e.control]).filter((c) => run.isModified(c)).length);
+	const modified = $derived(
+		section.entries
+			.flatMap((e) => (e.height ? [e.control, e.height] : [e.control]))
+			.filter((c) => run.isModified(c)).length
+	);
 	const bodyId = $props.id();
 </script>
 
 {#snippet cell({ control, height, ratio, span }: ViewEntry)}
 	<div class="cell" class:full={span === 'full'}>
 		{#if ratio && height}
-			<AspectRatio width={control} {height} presets={ratio.presets} widthValue={run.valueFor(control)} heightValue={run.valueFor(height)} onchange={(w, h) => { run.setValue(control, w); run.setValue(height, h); }} />
+			<AspectRatio
+				width={control}
+				{height}
+				presets={ratio.presets}
+				widthValue={run.valueFor(control)}
+				heightValue={run.valueFor(height)}
+				onchange={(w, h) => {
+					run.setValue(control, w);
+					run.setValue(height, h);
+				}}
+			/>
 		{/if}
 		<ControlRow
 			{control}
@@ -29,7 +43,14 @@
 			onreset={() => run.reset(control)}
 		/>
 		{#if height}
-			<ControlRow control={height} workflowId={run.workflowId} value={run.valueFor(height)} onchange={(value) => run.setValue(height, value)} modified={run.isModified(height)} onreset={() => run.reset(height)} />
+			<ControlRow
+				control={height}
+				workflowId={run.workflowId}
+				value={run.valueFor(height)}
+				onchange={(value) => run.setValue(height, value)}
+				modified={run.isModified(height)}
+				onreset={() => run.reset(height)}
+			/>
 		{/if}
 	</div>
 {/snippet}
@@ -45,7 +66,9 @@
 		>
 			<Icon name={open ? 'chevron-down' : 'chevron-right'} size={18} />
 			<span class="title">{section.title}</span>
-			{#if modified}<span class="badge badge-accent" title="Modified controls">{modified} changed</span>{/if}
+			{#if modified}<span class="badge badge-accent" title="Modified controls"
+					>{modified} changed</span
+				>{/if}
 			<span class="count muted">{section.entries.length}</span>
 		</button>
 		{#if section.toggle}
