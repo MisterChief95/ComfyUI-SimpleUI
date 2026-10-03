@@ -35,6 +35,7 @@ from ..contracts import (
     LogicalType,
     NumberConstraints,
 )
+from ..catalog.normalize import is_scalar, same_choice
 from .importer import classify_input, looks_like_link
 
 #: Group order follows generation use (docs/WORKFLOW_MAPPING.md "Grouping").
@@ -395,9 +396,9 @@ def _literal_control(
 
     elif logical == "COMBO":
         kind, component = "enum", "select"
-        choices = [c for c in input_spec.get("choices", []) if isinstance(c, str)]
-        options = [EnumOption(value=c, label=c, available=True) for c in choices]
-        if isinstance(value, str) and choices and value not in choices:
+        choices = [c for c in input_spec.get("choices", []) if is_scalar(c)]
+        options = [EnumOption(value=c, label=str(c), available=True) for c in choices]
+        if is_scalar(value) and choices and not any(same_choice(value, c) for c in choices):
             # The imported value is shown and must be corrected; it is never
             # swapped for the first remaining option.
             options.append(EnumOption(value=value, label=f"{value} (not installed)", available=False))
@@ -411,7 +412,7 @@ def _literal_control(
                     ),
                 )
             )
-        elif not isinstance(value, str):
+        elif not is_scalar(value):
             value = _preserved(value, warnings, node_id, class_type, name, "COMBO")
             kind, component, options = "unknown", "readonly", None
 

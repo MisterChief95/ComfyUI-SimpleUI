@@ -2,6 +2,8 @@
 	"extends": "./.svelte-kit/tsconfig.json",
 	"compilerOptions": {
 		"allowJs": true,
+		// model.test.ts imports "./model.ts" so node can run it directly; noEmit is set by SvelteKit.
+		"allowImportingTsExtensions": true,
 		"checkJs": true,
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
@@ -10,5 +12,7 @@
 		"sourceMap": true,
 		"strict": true,
 		"moduleResolution": "bundler"
-	}
+	},
+	// node:test files run under plain node (no @types/node here), so svelte-check skips them.
+	"exclude": ["src/**/*.test.ts"]
 }

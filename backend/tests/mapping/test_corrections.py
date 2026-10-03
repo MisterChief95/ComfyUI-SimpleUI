@@ -274,6 +274,38 @@ class TemplatesCarryPresentationOnly(CorrectionTestCase):
         self.assertEqual(narrowed.min, 10.0)
         self.assertEqual(narrowed.max, declared.max)  # the widened bound is ignored
 
+    def test_a_display_default_and_step_are_saved_and_replayed(self) -> None:
+        workflow_id = self.import_graph()
+        self.save(
+            workflow_id,
+            "5:steps",
+            {"display_min": 10.0, "display_max": 100.0, "display_default": 25.0, "display_step": 5.0},
+        )
+        control = self.controls(workflow_id)["5:steps"]
+        self.assertEqual(control.value, "25")
+        self.assertEqual(control.constraints.step, 5.0)
+
+    def test_a_display_default_outside_the_resolved_range_is_rejected(self) -> None:
+        workflow_id = self.import_graph()
+        with self.assertRaises(CorrectionError) as caught:
+            self.save(
+                workflow_id,
+                "5:steps",
+                {"display_min": 10.0, "display_max": 100.0, "display_default": 500.0},
+            )
+        self.assertEqual(caught.exception.status, 422)
+        self.assertEqual(self.controls(workflow_id)["5:steps"].value, "20")  # unchanged
+
+    def test_a_display_default_is_rejected_for_an_exact_integer(self) -> None:
+        workflow_id = self.import_graph()
+        with self.assertRaises(CorrectionError) as caught:
+            self.save(workflow_id, "5:seed", {"display_default": 42.0})
+        self.assertEqual(caught.exception.status, 422)
+
+    def test_a_non_positive_display_step_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            Presentation(display_step=0)
+
 
 class TemplatesDoNotSpread(CorrectionTestCase):
     """Graph context is part of the template key."""

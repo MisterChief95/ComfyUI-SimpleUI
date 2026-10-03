@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..storage.db import Database
-from ..storage.repository import new_id, now_ms
+from ..storage.repository import PageResult, _decode_cursor, _encode_cursor, new_id, now_ms
 
 ACTIVE = ("submitting", "submission_unknown", "queued", "running")
 TERMINAL = frozenset(("succeeded", "failed", "cancelled", "interrupted", "unknown"))
@@ -100,6 +100,44 @@ class GenerationStore:
             "SELECT * FROM generations WHERE id = ? AND owner_id = ?", (generation_id, owner_id)
         )
         return _decode(row) if row else None
+
+    def last_effective_value(self, owner_id: str, workflow_id: str | None, binding_id: str) -> Any:
+        """The value this owner most recently submitted for ``binding_id`` in a workflow.
+
+        Seed ``increment`` advances from this. Uses the caller's connection, so
+        called from ``accept``'s ``resolve`` it sees a consistent snapshot.
+        """
+        row = self.db.query_one(
+            "SELECT json_extract(effective_values_json, ?) AS value FROM generations"
+            " WHERE owner_id = ? AND workflow_id IS ? AND json_extract(effective_values_json, ?) IS NOT NULL"
+            " ORDER BY created_ms DESC, rowid DESC LIMIT 1",
+            (f'$."{binding_id}"', owner_id, workflow_id, f'$."{binding_id}"'),
+        )
+        return row["value"] if row else None
+
+    def recent_prompts(
+        self, owner_id: str, workflow_id: str, binding_id: str,
+        query: str = "", cursor: str | None = None, limit: int = 20,
+    ) -> PageResult:
+        params: list[Any] = [owner_id, workflow_id, binding_id, query]
+        after = ""
+        if cursor:
+            stamp, row_id = _decode_cursor(cursor)
+            after = " AND (created_ms < ? OR (created_ms = ? AND id < ?))"
+            params.extend((stamp, stamp, row_id))
+        params.append(limit + 1)
+        rows = self.db.query(
+            "WITH ranked AS (SELECT g.id, g.created_ms, j.value AS text,"
+            " ROW_NUMBER() OVER (PARTITION BY j.value ORDER BY g.created_ms DESC, g.id DESC) AS rank"
+            " FROM generations g, json_each(g.effective_values_json) j"
+            " WHERE g.owner_id = ? AND g.workflow_id = ? AND j.key = ?"
+            " AND j.type = 'text' AND length(trim(j.value)) > 0"
+            " AND instr(lower(j.value), lower(?)) > 0)"
+            " SELECT id, created_ms, text FROM ranked WHERE rank = 1" + after
+            + " ORDER BY created_ms DESC, id DESC LIMIT ?", params,
+        )
+        page = [dict(row) for row in rows[:limit]]
+        return PageResult(page, _encode_cursor(page[-1]) if len(rows) > limit else None)
 
     def owner_for_prompt(self, prompt_id: str) -> tuple[str, str] | None:
         row = self.db.query_one(

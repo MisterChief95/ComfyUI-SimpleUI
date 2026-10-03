@@ -1,11 +1,10 @@
 <script lang="ts">
-	import GenerationForm from '$lib/controls/GenerationForm.svelte';
+	import RunView from '$lib/run/RunView.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 </script>
 
-<h1>Generate</h1>
 {#key data.id}
-	<GenerationForm workflowId={data.id} />
+	<RunView workflowId={data.id} />
 {/key}

@@ -103,10 +103,19 @@ owned and revisioned, and separates blocking errors from warnings:
 | POST | `/api/settings/multi-user/deactivate` | `204`. **Local gate.** |
 | GET | `/api/catalog` | `CatalogSnapshot { freshness, nodes, capabilities }` — the sanitized projection; no upstream call |
 | POST | `/api/catalog/refresh` | `CatalogSnapshot` after one coalesced fetch. Server-side cooldown; no client can force it |
-| GET | `/api/workflows` | `Page<{ id, name }>` for the session's own workflows |
-| POST | `/api/workflows?name=…` | Body is the ComfyUI **API JSON** itself → `201 { id, name }`; a refused graph is `422` |
+| GET | `/api/workflows` | `Page<WorkflowInfo>` for the session's own workflows; `WorkflowInfo = { id, name, current_revision: int, updated_ms: ExactInt string }` |
+| POST | `/api/workflows?name=…` | Body is the ComfyUI **API JSON** itself → `201 WorkflowInfo`; a refused graph is `422` |
+| PATCH | `/api/workflows/{id}` | `{ name }` (1–120 chars) → `WorkflowInfo`; `404` if not owned |
+| PUT | `/api/workflows/{id}/graph` | Body is the ComfyUI **API JSON** (same `parse_graph` rules as import) → `{ workflow: WorkflowInfo, revision, added: [binding_id], removed: [binding_id] }`. Stores revision N+1 and makes it current in one transaction; `added`/`removed` compare control binding ids of the old and new schema. Layout, corrections and presets are untouched. `422` for a refused graph (nothing changes), `409` if the workflow changed concurrently |
 | GET | `/api/workflows/{id}/controls` | `ControlSchema` for the stored revision; `404` if the session does not own it |
-| GET | `/api/media` | `{ items, next_cursor }` gallery for the session's own media (`?cursor=`, `?limit=`) |
+| GET | `/api/workflows/{id}/layout` | `{ workflow_id, revision, schema_signature, layout, stale_bindings }`; `revision: 0` with `layout: null` means nothing is saved (use the automatic layout). `stale_bindings` are saved binding ids absent from the current schema. `404` if not owned |
+| PUT | `/api/workflows/{id}/layout` | `{ layout: LayoutDoc, expected_revision }` → the same `WorkflowLayout`. Version 1 supports `control` and `aspect_ratio` items; both aspect-ratio bindings count toward uniqueness and the 1000-binding cap. New pairs require existing integer bindings; previously saved pairs may retain absent bindings as stale. `422` on any [layout invariant](UI_DESIGNER.md#layout-document-v1), `409` on a revision mismatch (stored document untouched). Ordinary control layouts need no node catalog |
+| DELETE | `/api/workflows/{id}/layout` | `204`; reverts to the automatic layout (idempotent). Optional `?expected_revision=N` (`0` = nothing saved): a different stored revision is `409` and nothing is deleted. `404` if the workflow is not owned |
+| GET | `/api/workflows/{id}/presets` | `Preset[]`, most recently updated first; `Preset = { id, name, values: { binding_id: string \| bool \| int \| float }, revision, created_ms, updated_ms }` (`*_ms` are ExactInt strings; integers beyond 2^53 come back as ExactInt strings). `404` if the workflow is not owned |
+| POST | `/api/workflows/{id}/presets` | `{ name, values }` → `201 Preset`. `422` outside the [limits](UI_DESIGNER.md#presets), `409` at 100 presets |
+| PUT | `/api/workflows/{id}/presets/{preset_id}` | `{ name?, values?, expected_revision }` (at least one of `name`/`values`) → `Preset`; `409` on a revision mismatch, `404` if missing or not owned |
+| DELETE | `/api/workflows/{id}/presets/{preset_id}` | `204`; `404` if missing or not owned |
+| GET | `/api/media` | `{ items, next_cursor }` gallery for the session's own media (`?cursor=`, `?limit=`, and filters `?media_kind=`, `?favorite=`, `?workflow_id=`, `?generation_id=`, `?created_after=`, `?created_before=`, `?prompt=`) |
 | POST | `/api/media/import` | One-time baseline index of the configured output folder. **Local gate.** `409` when refused |
 | GET/HEAD | `/api/media/{id}/file` | The original bytes, with range support; `404` when not owned |
 | GET/HEAD | `/api/media/{id}/download` | Same bytes under the original filename; never transcoded |
@@ -118,7 +127,70 @@ Every route above is registered ahead of the `/api/{path:path}` catch-all in
 included after it could never run.
 
 `/api/generations`, `/api/events`, and `/api/uploads` are specified in
-[ARCHITECTURE.md](ARCHITECTURE.md) and are not implemented yet.
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
+### Generation events (`WS /api/events`)
+
+Advisory and owner-filtered (a socket only receives its own profile's frames; on
+reconnect re-fetch `/api/generations`). Every frame is JSON
+`{ "generation_id": string, "type": string, "data": object }`.
+
+A backend task (`app/generations/listener.py`) holds one websocket to ComfyUI
+(`/ws?clientId=simpleui`), feeds each ComfyUI event to the generation service and
+reconnects with capped backoff (1 s up to 30 s, one warning per outage), reconciling
+against ComfyUI's history after each connect. `type` is the ComfyUI event name,
+`data` is its payload unchanged:
+
+| `type` | `data` (main fields) |
+| --- | --- |
+| `execution_start`, `execution_cached`, `execution_success` | `prompt_id`, `timestamp` (cached: `nodes`) |
+| `executing` | `node`, `prompt_id`; `node: null` closes the job |
+| `progress` | `value`, `max`, `node`, `prompt_id` (per sampler step) |
+| `progress_state` | `prompt_id`, `nodes` (per-node state snapshot) |
+| `executed` | `node`, `output`, `prompt_id` |
+| `execution_error`, `execution_interrupted` | error / interruption details |
+| `reconciled` | `{}`; the stored generation changed through reconciliation, re-fetch it |
+| `preview` | `{ "mime": "image/jpeg" \| "image/png", "image": "<base64>" }` |
+
+`preview` frames carry a latent preview of the generation in `generation_id`. They are
+sent only to the owner, only when that profile's `live_previews` setting is on, at most
+2 per second per generation (excess frames are dropped), never larger than about 1.5 MB,
+and are discarded when they cannot be attributed to a prompt. They exist only if ComfyUI
+produces them: start it with `--preview-method auto` (or `latent2rgb`/`taesd`); the
+default `none` sends no previews. Previews never replace the saved output.
+
+`executed` frames are relayed without their `output` payload (only the node id and prompt id).
+
+`POST /api/generations/{id}/cancel` -> `204`. A queued job is removed from ComfyUI's
+queue; a running job is stopped with a **targeted** `POST /interrupt {"prompt_id"}` that
+ComfyUI ignores unless that prompt is the running one (verified on ComfyUI 0.38.0; the
+global form is never sent; only when the catalog's recorded ComfyUI version is >= 0.38.0, otherwise a queued job is only removed from the queue and a running one returns `409`), after which an `execution_interrupted` event and the
+`cancelled` status follow. `409` when the generation is not safely cancellable (foreign,
+unknown, finished); `503 upstream_unavailable` when ComfyUI cannot be reached.
+
+`GET /api/generations?status=active` lists only the caller's pending/queued/running
+generations (same pagination as the unfiltered list). `POST /api/generations/{id}/retry`
+-> `201` submits a new generation from the source's saved effective-values snapshot with a
+fresh request key; `409` when the source is still active, uncertain, or its snapshot/inputs
+were purged. `can_retry` on a generation says whether this will be accepted.
+
+`seed_policy: "increment"` advances from the value this profile last submitted for that
+seed control in that workflow (an explicit edit counts), falling back to the imported
+seed for the first run.
+
+Combo inputs are read from the newer `["COMBO", {"options": [...]}]` form, falling back to the
+legacy `[[...]]` list. Options keep the JSON type ComfyUI listed them with (numbers and booleans are not
+stringified); a chosen option is submitted exactly as listed, and `1`, `1.0`, `"1"` and `true`
+are matched by type (`1` equals `1.0`; `true` is not `1`). A `remote.route` list (same-host routes only) is fetched at catalog refresh. An enum with
+no options is shown disabled ("No Options Present") and edits to it are rejected (`422`); its
+saved value is still submitted unchanged. Unknown values for enums with options are `422` too.
+
+`POST /api/generations` `edits` values are `string | boolean | number`, encoded like
+`ControlDescriptor.value`: a real JSON boolean for `boolean` controls, a number for `float`,
+an ExactInt string for `int` (a JSON integer is accepted and stored back as the string, with
+every digit kept), and a string for the rest. For `boolean` controls the exact strings
+`"true"` / `"false"` are also accepted (older clients sent them) and are stored as booleans;
+any other value is a `422`.
 
 ## Sessions, CSRF, and the local gate
 
@@ -136,6 +208,17 @@ Implemented by AUTH-001 (`backend/app/auth/`). See
 | Activation | Requires a Default password **and** a completed media baseline. `create_app` wires `AuthService.baseline_gate` to `MediaService.baseline_status`, so activation returns `409` until `POST /api/media/import` has indexed the configured output folder — multi-user mode is never enabled over an unscanned library. Changing the output folder to a different one invalidates the baseline again. |
 | Deactivation | Refused with `409` while any profile other than Default exists. |
 | Mode switch | Closes generation admission atomically and waits for unresolved submissions (`submitting`, `submission_unknown`) to reconcile before committing. In-flight submissions are waited for; new ones get `409`. On timeout admission reopens and nothing is changed. GEN-001's submit path wraps its work in `AuthService.admission.admit()`. |
+
+## Recent text history
+
+`GET /api/generations/recent-prompts?workflow_id=ID&binding_id=NODE:INPUT&q=TEXT&limit=20&cursor=...`
+returns `{items: [{text, created_ms}], next_cursor}`. Values are distinct strings,
+ordered by their latest submission, scoped to the signed-in profile and owned
+workflow. `q` is a literal substring filter (not a wildcard expression); `limit`
+is 1–100. Non-string bindings return 422, foreign/missing workflows 404, and
+malformed cursors 400. With `store_history=false` the list is empty; purged
+snapshots never contribute. The run-page Recent prompts sheet inserts plain text
+at the textarea cursor, replacing the selection. Named saved snippets are deferred.
 
 ## Static serving and deep links
 

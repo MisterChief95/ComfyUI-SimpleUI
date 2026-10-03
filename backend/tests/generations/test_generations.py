@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 from app.events import EventBroker
+from app.generations.service import version_supports_targeted_interrupt
 from app.generations import (
     CancellationUnavailable,
     GenerationBusy,
@@ -176,6 +177,15 @@ class EventTests(GenerationTestCase):
         self.assertTrue(other.queue.empty())
         self.assertEqual(self.store.get("default", row["id"])["status"], "running")
 
+    async def test_executed_output_payload_is_not_relayed(self) -> None:
+        row = await self.submit()
+        mine = self.broker.subscribe("default")
+        data = {"prompt_id": PROMPTS["image"], "node": "62", "output": {"text": ["secret prompt"]}}
+        self.assertTrue(self.service.process_event({"type": "executed", "data": data}))
+        sent = await mine.receive()
+        self.assertEqual(sent["data"], {"prompt_id": PROMPTS["image"], "node": "62"})
+        self.assertIn("output", data)  # the source frame is not mutated
+
     async def test_foreign_and_unattributable_previews_are_dropped(self) -> None:
         await self.submit()
         subscription = self.broker.subscribe("default")
@@ -207,6 +217,32 @@ class ReconciliationTests(GenerationTestCase):
                 self.assertEqual(final["output_state"], "ready" if kind == "image" else "partial")
                 self.assertTrue(all(key[0] == "default" for key in self.media.keys))
 
+    async def test_animated_metadata_alongside_a_clean_output_still_reaches_ready(self) -> None:
+        """GEN-003: SaveWEBM's real history entry carries an 'animated': [true]
+        sibling key next to 'images' -- confirmed live against ComfyUI 0.35.0.
+        The synthetic fixture never modeled this, so the scanner's own
+        assumption that every list value is a list of file descriptors
+        mis-counted that boolean flag as a malformed output and downgraded an
+        otherwise fully successful save from 'ready' to 'partial'.
+        """
+        prompt_id = PROMPTS["video"]
+        self.upstream.response = {"prompt_id": prompt_id, "node_errors": {}}
+        row = await self.submit()
+        self.upstream.history = {
+            prompt_id: {
+                "outputs": {
+                    "11": {
+                        "images": [{"filename": "clip.webm", "subfolder": "", "type": "output"}],
+                        "animated": [True],
+                    }
+                },
+                "status": {"status_str": "success", "completed": True},
+            }
+        }
+        await self.service.reconcile()
+        final = self.store.get("default", row["id"])
+        self.assertEqual((final["status"], final["output_state"]), ("succeeded", "ready"))
+
     async def test_fully_cached_success_requires_history_reconciliation(self) -> None:
         self.upstream.response = {"prompt_id": PROMPTS["cached"], "node_errors": {}}
         row = await self.submit()
@@ -214,12 +250,31 @@ class ReconciliationTests(GenerationTestCase):
             self.service.process_event(event)
         self.assertEqual(self.store.get("default", row["id"])["status"], "running")
 
+        # GEN-003: a fully cached job produces no execution_success websocket
+        # event, and process_event() above never touches output_state -- the
+        # frontend only ever refetches a generation when a matching event
+        # tells it to (GenerationFormState._watch), so this poll alone must
+        # publish one or the UI is stuck showing the last state it fetched.
+        subscription = self.broker.subscribe("default")
         self.upstream.history = {
             PROMPTS["cached"]: {"outputs": {}, "status": {"status_str": "success", "completed": True}}
         }
         await self.service.reconcile()
         final = self.store.get("default", row["id"])
         self.assertEqual((final["status"], final["output_state"]), ("succeeded", "unavailable"))
+        self.assertEqual((await subscription.receive())["generation_id"], row["id"])
+
+    async def test_reconcile_is_silent_when_nothing_moved(self) -> None:
+        row = await self.submit()
+        subscription = self.broker.subscribe("default")
+        self.upstream.queue = {
+            "queue_running": [[0, PROMPTS["image"], {}, {}]], "queue_pending": []
+        }
+        await self.service.reconcile()  # queued -> running: one event
+        self.assertEqual((await subscription.receive())["generation_id"], row["id"])
+
+        await self.service.reconcile()  # still running upstream: no change, no event
+        self.assertTrue(subscription.queue.empty())
 
     async def test_accepted_node_errors_and_partial_results_survive(self) -> None:
         edge = history("history_edge_cases.json")
@@ -329,6 +384,41 @@ class CancellationTests(GenerationTestCase):
         with self.assertRaises(CancellationUnavailable):
             await self.service.cancel("default", row["id"])
         self.assertEqual(self.upstream.cancelled, [])
+
+    async def _cancel_with_version(self, version, status):
+        self.upstream.cancel_job = lambda pid: self._job_cancels.append(pid) or asyncio.sleep(0)
+        self._job_cancels = []
+        async def supported():  # evaluated per cancel, like the catalog-backed one in main.py
+            return version_supports_targeted_interrupt(version)
+        self.service._targeted_interrupt_supported = supported
+        row = await self.submit()
+        self.store.update("default", row["id"], status=status)
+        return row
+
+    async def test_supported_version_interrupts_on_both_paths(self) -> None:
+        row = await self._cancel_with_version("0.38.0", "queued")
+        await self.service.cancel("default", row["id"])
+        self.assertEqual(self._job_cancels, [PROMPTS["image"]])
+        row = await self._cancel_with_version("v0.38.1", "running")
+        await self.service.cancel("default", row["id"])
+        self.assertEqual(self._job_cancels, [PROMPTS["image"]])  # reset by helper; one call
+
+    async def test_old_or_unknown_version_never_interrupts(self) -> None:
+        for version in ("0.37.9", "0.35.0", None, "", "garbage"):
+            row = await self._cancel_with_version(version, "queued")
+            await self.service.cancel("default", row["id"])  # queue delete only
+            self.assertEqual(self._job_cancels, [], version)
+            self.assertEqual(self.store.get("default", row["id"])["status"], "cancelled")
+            row = await self._cancel_with_version(version, "running")
+            with self.assertRaises(CancellationUnavailable):
+                await self.service.cancel("default", row["id"])
+            self.assertEqual(self._job_cancels, [], version)
+
+    def test_version_parsing_tolerates_suffixes(self) -> None:
+        for good in ("0.38.0", "v0.38.1", "0.38.0+abc", "0.40", "1.0.0", "0.38.0.dev1"):
+            self.assertTrue(version_supports_targeted_interrupt(good), good)
+        for bad in ("0.37.99", "0.9", "x0.38.0", None):
+            self.assertFalse(version_supports_targeted_interrupt(bad), bad)
 
 
 if __name__ == "__main__":

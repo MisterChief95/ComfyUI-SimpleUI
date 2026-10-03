@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from ..events import EventBroker
 from .store import GenerationBusy, GenerationConflict, GenerationStore
@@ -17,6 +18,18 @@ LOGGER = logging.getLogger("simpleui.generations")
 
 class CancellationUnavailable(ValueError):
     pass
+
+
+# Older ComfyUI ignores prompt_id on POST /interrupt and stops whatever is
+# running (possibly another profile's job). Targeted interrupt was verified live
+# on 0.38.0 (docs/API.md, cancel semantics); anything older or unparseable is unsafe.
+MIN_TARGETED_INTERRUPT_VERSION = (0, 38, 0)
+
+
+def version_supports_targeted_interrupt(version: str | None) -> bool:
+    """True when ``version`` ("0.38.0", "v0.38.1", "0.38.0+abc") is >= the verified minimum."""
+    match = re.match(r"\s*v?(\d+)\.(\d+)(?:\.(\d+))?", version or "")
+    return bool(match) and tuple(int(p or 0) for p in match.groups()) >= MIN_TARGETED_INTERRUPT_VERSION
 
 
 def fingerprint_request(payload: dict[str, Any]) -> str:
@@ -37,7 +50,7 @@ class GenerationService:
         client_id: str = "simpleui",
         global_pending_cap: int = 8,
         profile_pending_cap: int = 8,
-        per_job_cancel: bool = False,
+        targeted_interrupt_supported: Callable[[], Awaitable[bool]] | None = None,
         reconcile_cooldown_s: float = 1.5,
     ) -> None:
         self.store, self.upstream, self.media = store, upstream, media
@@ -45,7 +58,8 @@ class GenerationService:
         self.client_id = client_id
         self.global_pending_cap = global_pending_cap
         self.profile_pending_cap = profile_pending_cap
-        self.per_job_cancel = per_job_cancel
+        # Evaluated at cancel time: the catalog (and its recorded version) may refresh.
+        self._targeted_interrupt_supported = targeted_interrupt_supported
         self._reconcile_cooldown_s = reconcile_cooldown_s
         self._next_reconcile_s = 0.0
 
@@ -115,25 +129,42 @@ class GenerationService:
             return False
         owner_id, generation_id = owned
         kind = event.get("type")
-        if kind in ("execution_start", "executing", "progress", "execution_cached"):
-            self.store.update(owner_id, generation_id, status="running")
+        # {"node": null} closes a job (history decides how it ended): it is not
+        # a sign the job is running, and every progress tick after the first
+        # would otherwise be a redundant write.
+        if kind in ("execution_start", "executing", "progress", "execution_cached") and not (
+            kind == "executing" and data.get("node") is None
+        ):
+            row = self.store.get(owner_id, generation_id)
+            if row is not None and row["status"] in ("submitting", "submission_unknown", "queued"):
+                self.store.update(owner_id, generation_id, status="running")
         elif kind == "execution_interrupted":
             self.store.update(owner_id, generation_id, status="cancelled", error={"execution": data})
         elif kind == "execution_error":
             self.store.update(owner_id, generation_id, status="failed", error={"execution": data})
         # execution_success is advisory. History is the terminal authority,
         # including fully cached jobs with no executed-node events.
-        self.events.publish(owner_id, {"generation_id": generation_id, "type": kind, "data": data})
+        # The UI only needs which node finished; node output (e.g. Show Text prompt
+        # text) is never displayed, so it is not sent to the browser.
+        relayed = {k: v for k, v in data.items() if k != "output"} if kind == "executed" else data
+        self.events.publish(owner_id, {"generation_id": generation_id, "type": kind, "data": relayed})
         return True
 
     async def reconcile(self, *, history_retention: dict[str, bool] | None = None) -> None:
         history_retention = history_retention or {}
+        active_rows = self.store.active()
+        if not active_rows:
+            # Skip the upstream round trip entirely: an open events socket now
+            # calls this on every RECONCILE_POLL_S tick (app/events/routes.py),
+            # so idle polling must stay cheap.
+            return
         queue = await self.upstream.get_queue()
         history = await self.upstream.get_history()
         queue_entries = self._queue_entries(queue)
         history_entries = history if isinstance(history, dict) else {}
 
-        for row in self.store.active():
+        for row in active_rows:
+            before = (row["status"], row["output_state"])
             prompt_id = row.get("upstream_prompt_id")
             if not prompt_id:
                 prompt_id = self._find_marker(row["id"], queue_entries, history_entries)
@@ -147,6 +178,21 @@ class GenerationService:
                 self.store.update(row["owner_id"], row["id"], status=queue_entries[prompt_id][0])
             elif row["status"] not in ("failed", "cancelled", "interrupted", "unknown"):
                 self.store.update(row["owner_id"], row["id"], status="unknown")
+
+            # process_event() publishes for the live ComfyUI websocket, but a
+            # fully cached job (or any state this poll alone discovers, such
+            # as an upstream restart recovery) produces no such event -- this
+            # reconciliation path is otherwise silent, and the frontend only
+            # refetches a generation when an event tells it to (GEN-003: a
+            # generation that only ever finishes through history looked stuck
+            # at output_state 'pending' in the UI even once the backend knew
+            # better). Publish once here whenever this poll actually moved
+            # the row, regardless of which branch above did it.
+            after = self.store.get(row["owner_id"], row["id"])
+            if after is not None and (after["status"], after["output_state"]) != before:
+                self.events.publish(
+                    row["owner_id"], {"generation_id": row["id"], "type": "reconciled", "data": {}}
+                )
 
     async def reconcile_if_due(self, *, history_retention: dict[str, bool] | None = None) -> None:
         """Best-effort ``reconcile``, throttled and never raising.
@@ -172,11 +218,20 @@ class GenerationService:
         if row is None or not row.get("upstream_prompt_id"):
             raise CancellationUnavailable("generation is not safely cancellable")
         prompt_id = row["upstream_prompt_id"]
+        targeted = hasattr(self.upstream, "cancel_job") and bool(
+            self._targeted_interrupt_supported and await self._targeted_interrupt_supported()
+        )
         if row["status"] == "queued" and hasattr(self.upstream, "cancel_pending"):
             await self.upstream.cancel_pending(prompt_id)
-            self.store.update(owner_id, generation_id, status="cancelled")
+            if targeted:
+                # Our "queued" may be stale: the job could have just started,
+                # which deleting from the queue does not stop. A targeted
+                # interrupt is a no-op unless this very prompt is running.
+                await self.upstream.cancel_job(prompt_id)
+            # Never ran, so no outputs will ever appear.
+            self.store.update(owner_id, generation_id, status="cancelled", output_state="unavailable")
             return
-        if row["status"] == "running" and self.per_job_cancel and hasattr(self.upstream, "cancel_job"):
+        if row["status"] == "running" and targeted:
             await self.upstream.cancel_job(prompt_id)
             return
         raise CancellationUnavailable("this ComfyUI installation has no verified per-job cancellation")
@@ -202,6 +257,15 @@ class GenerationService:
             recognized = False
             for key, descriptors in output.items():
                 if not isinstance(descriptors, list):
+                    continue
+                # A node can attach non-file metadata alongside its real
+                # outputs -- SaveWEBM's real ComfyUI history entry carries
+                # "animated": [true] next to "images", confirmed against a
+                # live install (GEN-003; the earlier synthetic fixture never
+                # modeled this and so never caught it). A list with no
+                # dict-shaped, filenamed entry at all is not a claimed file
+                # output, so it must not count as an unrecognized one either.
+                if not any(isinstance(d, dict) and "filename" in d for d in descriptors):
                     continue
                 for ordinal, descriptor in enumerate(descriptors):
                     if not isinstance(descriptor, dict) or not isinstance(descriptor.get("filename"), str):

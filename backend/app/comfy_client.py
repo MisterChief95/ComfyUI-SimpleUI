@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -87,6 +87,7 @@ class ComfyClient:
         self.base_url = base_url.rstrip("/")
         #: The only form of the URL that may be shown or logged.
         self.safe_url = redact_url(self.base_url)
+        self.headers = dict(headers or {})
         self._attempts = max(1, attempts)
         self._backoff_s = backoff_s
         # httpx keeps userinfo in the URL for the Authorization header it
@@ -102,8 +103,18 @@ class ComfyClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def post_json(self, path: str, payload: dict[str, Any]) -> Any:
-        """POST ``path`` once and parse JSON. Never retried.
+    def ws_url(self, client_id: str) -> str:
+        """The event-socket URL for ``client_id`` (http->ws, https->wss).
+
+        May carry userinfo like the base URL; never log it, use ``safe_url``.
+        """
+        parts = urlsplit(self.base_url)
+        scheme = "wss" if parts.scheme == "https" else "ws"
+        path = parts.path.rstrip("/") + "/ws"
+        return urlunsplit((scheme, parts.netloc, path, urlencode({"clientId": client_id}), ""))
+
+    async def _post(self, path: str, payload: dict[str, Any]) -> httpx.Response:
+        """POST ``path`` once. Never retried.
 
         A retry here could re-execute a side effect ComfyUI already received;
         GenerationService owns the at-most-once decision (``submission_unknown``
@@ -124,9 +135,15 @@ class ComfyClient:
             raise ComfyUnavailable(
                 "upstream_error", f"ComfyUI returned HTTP {response.status_code} for {safe_path}"
             )
+        return response
+
+    async def post_json(self, path: str, payload: dict[str, Any]) -> Any:
+        """POST ``path`` once and parse the JSON reply."""
+        response = await self._post(path, payload)
         try:
             return response.json()
         except ValueError:
+            safe_path = redact_url(path) if "//" in path else path
             raise ComfyUnavailable(
                 "upstream_malformed", f"ComfyUI returned a non-JSON response for {safe_path}"
             ) from None
@@ -150,7 +167,17 @@ class ComfyClient:
 
     async def cancel_pending(self, prompt_id: str) -> None:
         """Remove a not-yet-started prompt from ComfyUI's own queue."""
-        await self.post_json("/queue", {"delete": [prompt_id]})
+        # ComfyUI answers /queue and /interrupt with an empty 200: no JSON.
+        await self._post("/queue", {"delete": [prompt_id]})
+
+    async def cancel_job(self, prompt_id: str) -> None:
+        """Interrupt ``prompt_id`` only if it is the running prompt.
+
+        ComfyUI ignores a targeted interrupt for any other prompt, so this can
+        never stop someone else's job. (Without ``prompt_id`` it would be a
+        global interrupt; that form is never sent.)
+        """
+        await self._post("/interrupt", {"prompt_id": prompt_id})
 
     async def __aenter__(self) -> "ComfyClient":
         return self

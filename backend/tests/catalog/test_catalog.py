@@ -660,3 +660,41 @@ class ComfyClientTest(CatalogTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ComboForms(unittest.TestCase):
+    def test_newer_form_legacy_fallback_and_type_inference(self) -> None:
+        from app.catalog.normalize import _combo_choices, _project_input
+
+        def normalize_project(spec: Any, opts: dict[str, Any]) -> Any:
+            return _project_input("X", "i", [spec, opts], {}, False)
+
+        self.assertEqual(_combo_choices("COMBO", {"options": ["a", "b"]}), ["a", "b"])
+        self.assertEqual(_combo_choices(["x", "y"], {}), ["x", "y"])
+        self.assertEqual(_combo_choices("COMBO", {"options": []}), [])
+        from app.catalog.normalize import same_choice
+
+        self.assertTrue(same_choice(1, 1.0))
+        self.assertFalse(same_choice(True, 1))
+        self.assertFalse(same_choice("1", 1))
+        projected, _ = normalize_project("COMBO", {"options": [8, 10.5, "x", True, None, [1]], "default": 8})
+        self.assertEqual(projected["choices"], [8, 10.5, "x", True])
+        self.assertEqual(projected["default"], 8)
+
+    def test_remote_route_lists_are_filled_in_place(self) -> None:
+        class Stub:
+            async def get_json(self, path: str) -> Any:
+                if path == "/internal/list":
+                    return {"files": ["a.safetensors", "b.safetensors"]}
+                raise ComfyUnavailable("upstream_unreachable", "down")
+
+        def combo(route: str) -> dict[str, Any]:
+            return {"input": {"required": {"m": ["COMBO", {"remote": {"route": route, "response_key": "files"}}]}}}
+
+        raw = {"A": combo("/internal/list"), "B": combo("/gone"), "C": combo("//evil.example/x")}
+        service = CatalogService.__new__(CatalogService)
+        service._client = Stub()  # type: ignore[attr-defined]
+        asyncio.run(service._fill_remote_combos(raw))
+        self.assertEqual(raw["A"]["input"]["required"]["m"][1]["options"], ["a.safetensors", "b.safetensors"])
+        self.assertNotIn("options", raw["B"]["input"]["required"]["m"][1])
+        self.assertNotIn("options", raw["C"]["input"]["required"]["m"][1])

@@ -1,12 +1,3 @@
-.coord/
-data/
-__pycache__/
-*.py[cod]
-.venv/
-node_modules/
-frontend/.svelte-kit/
-frontend/build/
-
 # ==========================================
 # SvelteKit & JavaScript / Node
 # ==========================================
@@ -56,8 +47,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Root-anchored: a bare lib/ also ignored frontend/src/lib.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -117,3 +109,15 @@ Desktop.ini
 *.njsproj
 *.sln
 *.swp
+
+# Local agent coordination state (tokens, handoffs)
+.dibs/
+
+.coord/
+data/
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+frontend/.svelte-kit/
+frontend/build/

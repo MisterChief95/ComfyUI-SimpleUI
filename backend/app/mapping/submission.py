@@ -26,6 +26,7 @@ import copy
 import random
 from typing import Any, Literal
 
+from ..catalog.normalize import same_choice
 from ..contracts import ControlDescriptor, ControlSchema, ErrorDetail
 
 SeedPolicy = Literal["fixed", "random", "increment"]
@@ -77,9 +78,9 @@ def build_submission_graph(
     """Deep-copy ``graph`` and apply ``{binding_id: encoded value}``.
 
     Values arrive encoded exactly as ``ControlDescriptor.value`` is: integers as
-    decimal strings, floats as numbers, enums and files as strings. They are
-    decoded back to the JSON types ComfyUI expects. Anything not named in
-    ``edits`` is left byte-identical to the stored graph.
+    decimal strings, floats as numbers, booleans as JSON booleans, enums and files
+    as strings. They are decoded back to the JSON types ComfyUI expects. Anything
+    not named in ``edits`` is left byte-identical to the stored graph.
     """
     if schema.blocking:
         raise SubmissionError(
@@ -148,20 +149,25 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
         _check_bounds(control, value, binding)
         return value
     if control.logical_type == "boolean":
+        # A real JSON boolean is the contract; the exact strings "true"/"false"
+        # are accepted too because earlier clients sent checkboxes that way.
+        if isinstance(raw, str) and raw in ("true", "false"):
+            return raw == "true"
         if not isinstance(raw, bool):
             raise SubmissionError(
                 "invalid_value", f"{control.label} must be true or false.", binding
             )
         return raw
     if control.logical_type == "enum":
-        available = {o.value for o in control.options or [] if o.available}
-        if raw not in available:
-            raise SubmissionError(
-                "invalid_value",
-                f"{raw!r} is not an installed choice for {control.label}.",
-                binding,
-            )
-        return raw
+        # The option itself is returned, so ComfyUI gets the type it listed.
+        for option in control.options or []:
+            if option.available and same_choice(raw, option.value):
+                return option.value
+        raise SubmissionError(
+            "invalid_value",
+            f"{raw!r} is not an installed choice for {control.label}.",
+            binding,
+        )
     if control.logical_type in ("string", "file"):
         if not isinstance(raw, str):
             raise SubmissionError("invalid_value", f"{control.label} must be text.", binding)

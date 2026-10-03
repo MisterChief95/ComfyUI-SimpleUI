@@ -1,0 +1,37 @@
+{
+  "_comment": "GEN-003/RELEASE-001: captured live from a real ComfyUI 0.35.0 installation (a CUDA GPU, torch 2.13.0+cu132) via GET /history/{prompt_id} on 2026-09-16. Confirms a real, previously-unmodeled shape: SaveWEBM's history entry carries an 'animated': [true] sibling key next to the real 'images' descriptor list. The synthetic tests/fixtures/outputs/history_video.json fixture never modeled this and _apply_history mis-scanned it as a malformed output, downgrading a fully successful save from 'ready' to 'partial' -- fixed in backend/app/generations/service.py and folded into that synthetic fixture too (see its own updated _comment). This exact graph shape was also submitted through the running application's own UI and correctly reached output_state 'ready' with the produced .webm indexed into the gallery as media_kind 'video' and rendered inline (UI-006). The checkpoint filename is redacted to a placeholder and the prompt_id replaced with a fixture-shaped UUID; everything else, including the real 'animated' key, is exactly what ComfyUI returned.",
+  "live-video-00000000-0000-4000-9000-000000000002": {
+    "prompt": [
+      3,
+      "live-video-00000000-0000-4000-9000-000000000002",
+      {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "placeholder-checkpoint-a.safetensors"}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a small blue sphere on a white background", "clip": ["1", 1]}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry, low quality", "clip": ["1", 1]}},
+        "4": {"class_type": "EmptyLatentImage", "inputs": {"width": 256, "height": 256, "batch_size": 2}},
+        "5": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "seed": 7, "steps": 6, "cfg": 4.0, "sampler_name": "euler", "scheduler": "simple", "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["4", 0], "denoise": 1.0}},
+        "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
+        "7": {"class_type": "SaveWEBM", "inputs": {"images": ["6", 0], "filename_prefix": "gen3_live_video_test", "codec": "vp9", "fps": 8.0, "crf": 32.0}}
+      },
+      {"client_id": "gen3-video-precheck", "create_time": 1789608493792},
+      ["7"]
+    ],
+    "outputs": {
+      "7": {
+        "images": [
+          {"filename": "gen3_live_video_test_00001_.webm", "subfolder": "", "type": "output"}
+        ],
+        "animated": [true]
+      }
+    },
+    "status": {
+      "status_str": "success",
+      "completed": true,
+      "messages": [
+        ["execution_start", {"prompt_id": "live-video-00000000-0000-4000-9000-000000000002", "timestamp": 1789608493793}],
+        ["execution_cached", {"nodes": ["1", "3"], "prompt_id": "live-video-00000000-0000-4000-9000-000000000002", "timestamp": 1789608493794}],
+        ["execution_success", {"prompt_id": "live-video-00000000-0000-4000-9000-000000000002", "timestamp": 1789608494769}]
+      ]
+    }
+  }
+}

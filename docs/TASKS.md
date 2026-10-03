@@ -1,6 +1,28 @@
 # Implementation tasks
 
-These are task specifications; live status is maintained by the coordination CLI. The reviewed import payload is [tasks.json](tasks.json). Each task retains its stable ID, title, priority, dependencies, work areas, description, and acceptance criteria. Work areas are reservation guidance, not already-held locks. P0 precedes P1 when dependencies permit; P1 still belongs to the first release. There are no effort estimates until compatibility fixtures are established.
+These are task specifications; live status is maintained by the coordination CLI (the `dibs`
+plugin's SQLite store — `.coord/tasks.sqlite3` below and in [tasks.json](tasks.json) is this
+document's original, now-superseded path). The reviewed import payload is [tasks.json](tasks.json). Each task retains its stable ID, title, priority, dependencies, work areas, description, and acceptance criteria. Work areas are reservation guidance, not already-held locks. P0 precedes P1 when dependencies permit; P1 still belongs to the first release. There are no effort estimates until compatibility fixtures are established. This file is kept as the original planning record and is **not** rewritten task-by-task as work completes — see [RELEASE_REVIEW.md](RELEASE_REVIEW.md) for current, evidence-backed status and [COMPATIBILITY.md](COMPATIBILITY.md) for what has actually been observed against a live ComfyUI installation.
+
+## Reconciliation notes (2026-09-16, DOCS-001)
+
+Two deviations from the graph below, both by explicit user request, not technical necessity:
+
+- **PWA-001 is cancelled**, not merely pending. It required real Android/Chrome device
+  testing over trusted HTTPS that was never available in this environment; the user chose to
+  drop it rather than keep it open. Nothing below that names PWA-001 should be read as still
+  scheduled.
+- **RELEASE-001's live dependency graph no longer includes PWA-001** (only `VERIFY-001`), so
+  it could proceed without Android support. Its own acceptance criteria were amended to
+  require no PWA/offline/service-worker claims instead. `tasks.json` below is left exactly as
+  originally imported, per this project's own rule not to rewrite import payloads after the
+  fact — read the amendment on the live RELEASE-001 task (`dibs show RELEASE-001`) or
+  [RELEASE_REVIEW.md](RELEASE_REVIEW.md) for the current acceptance criteria actually used.
+
+All other tasks below reflect what was actually delivered; see [RELEASE_REVIEW.md](RELEASE_REVIEW.md)'s
+requirement table for evidence per task, and its "Known limitations" section for gaps found
+during review that were never their own task (an unwired backup-folder setting; the
+application never opening ComfyUI's own live WebSocket).
 
 When importing acceptance criteria, also incorporate the review regressions assigned to task IDs in ARCHITECTURE.md's Release evidence and WORKFLOW_MAPPING.md's Required verification. These clarify existing tasks without adding tasks or changing dependencies.
 

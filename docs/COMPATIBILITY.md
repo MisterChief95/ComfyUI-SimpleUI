@@ -1,42 +1,67 @@
 # ComfyUI compatibility record
 
-Owner task: COMPAT-001. This file records what has actually been established about the
-ComfyUI installation this application targets, and what has not.
+Owner task: COMPAT-001, reopened by GEN-003/RELEASE-001. This file records what has actually
+been established about the ComfyUI installation this application targets, and what has not.
 
-## Status: live gate blocked
+## Status: live gate open for image and video (2026-09-16)
 
-**No ComfyUI installation was reachable on this development host.** Nothing in this record
-or in `tests/fixtures/` is observed behavior. The fixture set is synthetic and is labelled
-as such in `tests/fixtures/MANIFEST.json`.
+A real ComfyUI installation (0.35.0) was reachable this session and was exercised **through
+the running application itself**, not curl alone: one image generation and one separate
+video generation were each submitted from the actual Generate page, reconciled by
+`GenerationService`, correctly reached `output_state: 'ready'`, and rendered inline (UI-006).
+The evidence lives in `tests/fixtures/catalog/capabilities.live.json` and
+`tests/fixtures/outputs/history_{image,video}.live.json`, alongside (not replacing) the
+original synthetic set. `tests/fixtures/MANIFEST.json`'s `live_gate` reflects this.
 
-Discovery was limited to explicit configuration, as the task requires. What was checked:
+This does **not** mean everything is verified: upload (`POST /upload/image`) remains
+unprobed. The live ComfyUI WebSocket and targeted running-job cancellation were exercised on
+2026-10-02 (GEN-004, ComfyUI 0.38.0; see below). See "Still not established" below and
+`capabilities.live.json`'s `release_blockers_remaining`.
 
-| Check | Result |
-| --- | --- |
-| Environment variables matching `COMFY*` | none present |
-| `http://127.0.0.1:8188/system_stats` | connection refused |
-| `http://localhost:8188/system_stats` | connection refused |
-| `http://127.0.0.1:8000/system_stats` and `:8189` | connection refused |
-| Directory scan for names containing `comfy` under the user profile, Program Files, Program Files (x86), and drive roots | only this repository matched |
-| Repository configuration convention | none exists yet; `backend/` is not implemented |
+### What the live capture found
 
-A guessed path is not explicit configuration. FOUNDATION-001 owns the real configuration
-surface (ComfyUI URL plus input, output, and temp roots); until an operator supplies it,
-there is nothing legitimate to connect to.
+- **Confirmed:** `GET /object_info`, `GET /system_stats`, `POST /prompt`, `GET /history`,
+  `GET /queue` all behave as documented. 2673 node classes and 34 installed custom node
+  packs were observed (listed in `capabilities.live.json`; ComfyUI 0.35.0, Python 3.13.13,
+  torch 2.13.0+cu132, one CUDA device).
+- **A real bug the synthetic fixtures missed:** `SaveWEBM`'s history entry carries an
+  `"animated": [true]` sibling key next to the real `images` descriptor list. The output
+  scanner in `GenerationService._apply_history` treated that boolean as a malformed
+  descriptor and downgraded a fully successful video save from `ready` to `partial`. Fixed
+  in GEN-003; the synthetic `outputs/history_video.json` fixture now models this key too.
+- **Superseded 2026-10-02 (GEN-004):** at capture time the application never opened
+  ComfyUI's `/ws` endpoint, so every state transition came from history/queue reconciliation
+  (hence GEN-003's reconciliation-publishes-events design). `generations/listener.py` now
+  holds one `/ws?clientId=<submission client id>` connection and feeds
+  `GenerationService.process_event()`. Observed live on 0.38.0: `execution_start`,
+  `execution_cached`, `executing`, `progress`, `progress_state`, `executed`,
+  `execution_success`, and `execution_interrupted` all reach the owning profile's
+  `/api/events`. History reconciliation remains the terminal authority. Latent preview
+  frames are implemented (metadata frame type 4, with the legacy type 1 attributed to the
+  executing prompt) but have not been observed live, because the local ComfyUI ran
+  without `--preview-method`.
+- **Cancellation:** `POST /queue` with a `delete` body works for a still-pending job —
+  confirmed by three attempts, two of which lost the race on this fast GPU (the job was
+  promoted to running, or fully cache-hit and completed, before the delete landed and it
+  silently no-op'd) and one of which cleanly removed a job that then never appeared in
+  history. This empirically confirms the documented risk below rather than contradicting
+  it. **2026-10-02 (GEN-004):** ComfyUI 0.38.0's `POST /interrupt {"prompt_id"}` interrupts
+  only when that prompt is the running one and otherwise logs and skips. Cancelling a running
+  job live produced `execution_interrupted` for it, and the queued job behind it still
+  succeeded. Older builds ignore `prompt_id` and interrupt globally, so targeted interrupt
+  is only used when the recorded ComfyUI version is at least 0.38.0 (GEN-005).
 
-### Not established
+### Still not established
 
-- ComfyUI revision, version, Python and torch versions, device.
-- Installed custom node packs.
-- Real `object_info` output from this machine's installation.
-- Any real image generation.
-- Any real video generation.
-- Real output descriptor shapes, especially for video.
-- Whether this installation exposes a per-job cancellation route.
-
-These are release blockers, recorded in `tests/fixtures/catalog/capabilities.synthetic.json`
-and repeated at the end of this file. VERIFY-001 cannot claim image or video support from
-fixtures alone.
+- The exact ComfyUI git revision (`/system_stats` reports a version string, not a commit).
+- `POST /upload/image` / the actual video-input loader contract (INPUT-001's own tests are
+  the only coverage; not exercised live).
+- Output descriptor shapes for video packs other than the core `SaveWEBM` (e.g.
+  VideoHelperSuite, present in the installed node packs but not exercised).
+- Running-job cancellation on ComfyUI builds older than 0.38.0 (deliberately disabled there).
+- Live latent preview frames (needs ComfyUI started with `--preview-method`).
+- Submission's `node_errors` partial-acceptance path against a live installation (only
+  synthetic `history_edge_cases.json` and its regression tests cover this).
 
 ## What the fixture set does establish
 
@@ -116,37 +141,63 @@ matching must not be the sole rejection test.
 
 ## Release blockers
 
-1. No live ComfyUI revision, node pack list, or device report recorded.
-2. No real image generation captured. Required before claiming image support.
-3. No real video generation captured. Required before claiming video support.
-4. Video output descriptor shapes are assumed from upstream source, not observed.
-5. Cancellation capability is unprobed; running-job cancellation stays unavailable.
-6. No real loader contract confirmed for video inputs; there is no universal video upload route.
+1. ~~No live ComfyUI revision, node pack list, or device report recorded.~~ **Resolved
+   2026-09-16** — see `capabilities.live.json`.
+2. ~~No real image generation captured. Required before claiming image support.~~
+   **Resolved 2026-09-16** — reproduced end to end through the running application.
+3. ~~No real video generation captured. Required before claiming video support.~~
+   **Resolved 2026-09-16** — reproduced end to end through the running application; this
+   capture also caught and fixed a real reconciliation bug (GEN-003).
+4. ~~Video output descriptor shapes are assumed from upstream source, not observed.~~
+   **Resolved for `SaveImage`/`SaveWEBM` 2026-09-16.** Other video-capable packs (e.g.
+   VideoHelperSuite) remain assumed, not observed.
+5. **Partially resolved 2026-09-16.** Pending-job cancellation (`POST /queue` delete) is
+   confirmed working, including its documented race risk on a fast installation.
+   Running-job cancellation remains correctly unavailable by construction (the app never
+   calls `POST /interrupt`) and is therefore still unprobed by design, not by omission.
+   **Resolved for ComfyUI ≥ 0.38.0 on 2026-10-02**: targeted `POST /interrupt` was verified
+   live (GEN-004) and is version-gated (GEN-005).
+6. No real loader contract confirmed for image/mask/video uploads; `POST /upload/image`
+   was not exercised live. Still open.
 
-### VERIFY-001 release decision — 2026-09-12 (America/Phoenix)
+### VERIFY-001 release decision — 2026-09-12 (America/Phoenix), superseded 2026-09-16
 
-Live-ComfyUI image and video generation evidence has **not** been captured in this
-environment. No ComfyUI instance is available for this verification run, and VERIFY-001
-does not treat synthetic results as live evidence. In its place, the repository has only:
+The original decision below is kept for history; GEN-003/RELEASE-001 superseded it once a
+live ComfyUI installation became reachable.
 
-- synthetic compatibility inputs and expected results under `tests/fixtures/`;
-- `backend/tests/generations/test_generations.py` (GEN-002), which replays synthetic image,
-  video, fully-cached, partial-failure, duplicate-delivery, disk-full, and restart histories;
-- `backend/tests/media/test_capture.py` and `backend/tests/media/test_filters_history.py`
-  (MEDIA-002), which verify private output capture, gallery ownership, missing files, and
-  retained history against temporary files.
+> Live-ComfyUI image and video generation evidence has **not** been captured in this
+> environment. No ComfyUI instance is available for this verification run, and VERIFY-001
+> does not treat synthetic results as live evidence. In its place, the repository has only:
+>
+> - synthetic compatibility inputs and expected results under `tests/fixtures/`;
+> - `backend/tests/generations/test_generations.py` (GEN-002), which replays synthetic image,
+>   video, fully-cached, partial-failure, duplicate-delivery, disk-full, and restart histories;
+> - `backend/tests/media/test_capture.py` and `backend/tests/media/test_filters_history.py`
+>   (MEDIA-002), which verify private output capture, gallery ownership, missing files, and
+>   retained history against temporary files.
+>
+> Accordingly, release claims for real image generation and real video generation are
+> explicitly blocked. A release decision must wait for the manual live run described below;
+> no installation, startup, connection attempt, or fabricated live result was performed by
+> VERIFY-001.
 
-Accordingly, release claims for real image generation and real video generation are
-explicitly blocked. A release decision must wait for the manual live run described below;
-no installation, startup, connection attempt, or fabricated live result was performed by
-VERIFY-001.
+### RELEASE-001 release decision — 2026-09-16
 
-## Reopening the live gate
+A real ComfyUI installation was reachable and was exercised through the running application
+for one image and one separate video generation, each reaching `output_state: 'ready'` with
+no manual intervention. Blockers 1 through 4 above are resolved; blocker 5 is partially
+resolved (pending-job cancellation confirmed, running-job cancellation correctly stays
+disabled by construction); blocker 6 (upload/loader contracts) remains open and is not
+claimed here. Release claims for image and video generation are therefore supportable;
+claims about upload-driven inputs, running-job cancellation, or any node pack beyond the
+ones actually exercised are not, and must not be implied by omission elsewhere in the docs.
 
-An operator configures the ComfyUI URL and folder roots through the configuration surface
-FOUNDATION-001 provides, starts ComfyUI, and a follow-up capture run then records
-`/system_stats`, the installed node packs, a sanitized `object_info`, one real image run and
-one real video run with their events and history, and a cancellation probe. Add those files
-beside the synthetic ones, set their `provenance` to `live` in the manifest, fill in the
-installation block of the capability record, and flip `live_gate`. Sanitize every capture:
-no real prompt text, no real filenames, no host paths, no credentials.
+## Reopening further gates
+
+The remaining unverified surface — `POST /upload/image` and the actual video-input loader
+contract, and a genuine per-job running cancellation probe (if a future ComfyUI or node
+pack exposes one) — follows the same procedure that opened the image/video gate: exercise
+it through the running application (not curl alone) against a reachable ComfyUI, add a
+sanitized capture beside the existing live ones, and update `capabilities.live.json`'s
+`release_blockers_remaining`. Sanitize every capture: no real prompt text, no real
+filenames, no host paths, no credentials.

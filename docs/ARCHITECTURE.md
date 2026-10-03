@@ -4,7 +4,7 @@
 
 The first release is a personal/home service. Python and ComfyUI run on the same machine, with explicit filesystem paths supplied during setup. Browsers and installed PWAs may run on other devices on the home network. ComfyUI remains responsible for model loading, GPU execution, and its execution queue.
 
-Users import ComfyUI API JSON and receive grouped generation controls automatically. A mapping editor resolves uncertain labels, groups, widget choices, and exposure. No node canvas, regular workflow JSON importer, automatic model installation, public registration, administrator role, native Android build, or distributed backend is planned initially.
+Users import ComfyUI API JSON and receive grouped generation controls automatically. A designer lets each profile build its own run page from those controls, using named sections, hidden controls, labels, and widget choices ([UI_DESIGNER.md](UI_DESIGNER.md)). No node canvas, regular workflow JSON importer, automatic model installation, public registration, administrator role, native Android build, or distributed backend is planned initially.
 
 Image and video generation are first-release requirements. Compatibility is metadata-driven rather than a whitelist of model families. Custom nodes that require special frontend behavior may need an explicit adapter; the UI must state this without pretending to support them.
 
@@ -97,9 +97,9 @@ Suggested states: submitting, submission_unknown, queued, running, succeeded, fa
 
 Track execution status separately from output availability (pending, ready, partial, unavailable). ComfyUI can accept valid output branches while reporting errors for others; a successful submission response is not proof that the whole workflow will execute. Persist returned node_errors and affected outputs even when a prompt ID is returned. Show partial results and validation warnings explicitly. Node completion events are not whole-job completion; reconcile terminal execution with history, including cached nodes that emit no fresh execution event. [Execution and validation implementation](https://raw.githubusercontent.com/Comfy-Org/ComfyUI/master/execution.py)
 
-Event delivery is advisory: reconnect fetches the current owned generation snapshot rather than depending on replay of every WebSocket frame. Throttle previews and bound subscriber queues; a slow phone must not stall reconciliation. Retain generation success if later indexing or capture fails, but display the output error and allow ingestion retry without rerunning the workflow.
+A supervised backend task keeps one websocket to ComfyUI (client id `simpleui`, the id prompts are submitted with), forwards its events and throttled, owner-only latent previews to `/api/events`, and reconciles after every reconnect; frame shapes are in [API.md](API.md). Event delivery is advisory: reconnect fetches the current owned generation snapshot rather than depending on replay of every WebSocket frame. Throttle previews and bound subscriber queues; a slow phone must not stall reconciliation. Retain generation success if later indexing or capture fails, but display the output error and allow ingestion retry without rerunning the workflow.
 
-Cancellation must target an owned prompt. Current upstream source includes a per-job cancellation route; older installations may lack it. Probe capability and test its behavior. Do not fall back to a global interrupt based on a stale queue check: it can stop another job. Disable unsafe running cancellation and explain the unavailable capability. Never expose global queue/history clearing. [ComfyUI server implementation](https://raw.githubusercontent.com/Comfy-Org/ComfyUI/master/server.py)
+Cancellation must target an owned prompt. Current upstream source includes a per-job cancellation route; older installations may lack it. Probe capability and test its behavior. Do not fall back to a global interrupt based on a stale queue check: it can stop another job. Running cancellation sends `POST /interrupt` with the `prompt_id` (ComfyUI 0.38.0 ignores it unless that prompt is running); the call is never made without a `prompt_id`. Disable unsafe running cancellation and explain the unavailable capability. Never expose global queue/history clearing. [ComfyUI server implementation](https://raw.githubusercontent.com/Comfy-Org/ComfyUI/master/server.py)
 
 The backend queue does not replace ComfyUI's queue. Apply bounded per-profile submissions and a global pending cap; surface busy state without exposing other users' prompts. Browser disconnects do not cancel work.
 
@@ -181,6 +181,13 @@ Desktop: control pane and large result pane. Tablet: narrower controls with coll
 Feature visibility does not alter graph topology. Disabling video hides its UI entry points and blocks new video submissions when classifiable; it does not delete prior outputs or interrupt work. Hiding advanced inputs preserves their values. Privacy enforcement, ownership checks, and traversal protection are never optional settings.
 
 ## PWA delivery
+
+**Cancelled for this release (2026-09-16, DOCS-001), by explicit user request.** PWA-001
+required real Android/Chrome device testing over trusted HTTPS that was never available in
+this environment. None of the following was implemented: no manifest, no service worker, no
+install flow. The app is a responsive web UI reachable from a phone or tablet browser only.
+The design below is kept as a reference if this is revisited later, not as a description of
+current behavior — see [RELEASE_REVIEW.md](RELEASE_REVIEW.md) for the current release shape.
 
 Provide a manifest, application icons, standalone display, and a narrowly scoped service worker caching only versioned public shell assets. API responses, uploads, thumbnails, and generated media use private/no-store behavior and bypass service-worker caches. Offline mode shows a connection message; it never queues a generation for later submission. Reconnect restores owned jobs from the backend.
 

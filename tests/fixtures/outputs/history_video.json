@@ -1,5 +1,5 @@
 {
-  "_comment": "Three video descriptor shapes the media adapter must classify. Only the SaveVideo/SaveWEBM shapes come from core nodes; the 'gifs' shape represents a common third-party pack. None of these is verified against a live installation. Keys beginning with an underscore are fixture commentary.",
+  "_comment": "Three video descriptor shapes the media adapter must classify. Only the SaveVideo/SaveWEBM shapes come from core nodes; the 'gifs' shape represents a common third-party pack. Keys beginning with an underscore are fixture commentary. Node 11 (SaveWEBM) is confirmed against a live ComfyUI 0.35.0 install including its real 'animated' sibling key (GEN-003) -- the rest remain unverified guesses.",
   "00000000-0000-4000-8000-000000000002": {
     "prompt": [0, "00000000-0000-4000-8000-000000000002", {}, {"client_id": "SYNTHETIC-CLIENT-ID"}, ["8"]],
     "outputs": {
@@ -11,7 +11,8 @@
       "11": {
         "images": [
           {"filename": "SimpleUI_fixture-webm_00001_.webm", "subfolder": "SimpleUI", "type": "output"}
-        ]
+        ],
+        "animated": [true]
       },
       "12": {
         "gifs": [

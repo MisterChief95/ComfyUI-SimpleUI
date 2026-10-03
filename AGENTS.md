@@ -29,18 +29,18 @@ Read the relevant documents before implementing a task:
 | [docs/tasks.json](docs/tasks.json) | Reviewed initial backlog, including review additions |
 | [docs/AGENT_COORDINATION.md](docs/AGENT_COORDINATION.md) | Full CLI, storage, reservation, and recovery contract |
 
-**`.coord/tasks.sqlite3` is the live task/status source.** Use the CLI, not direct SQL writes. JSON/Markdown task documents and exported snapshots do not supersede current ownership or completion evidence. Later user-requested tasks may be added through a separate structured import without rewriting the original release backlog.
+**`.dibs/tasks.sqlite3` is the live task/status source.** Use the CLI, not direct SQL writes. JSON/Markdown task documents and exported snapshots do not supersede current ownership or completion evidence. Later user-requested tasks may be added through a separate structured import without rewriting the original release backlog.
 
 ## Before editing: claim and reserve
 
 Read-only inspection needs no claim. Before writing repository files, use an appropriate task and reserve the exact files or subtrees you will edit. Do not repurpose a completed task or claim an unrelated task merely to obtain locks. For authorized work absent from the backlog, import a small new task specification through the CLI first; include dependencies and acceptance criteria.
 
-Run commands from the repository root. Common options belong **after the command**. Give each agent a distinct, stable `--actor`. Use default text output for compact inspection; use `--json` for programmatic access, especially to capture lease tokens and revisions from mutations.
+Run commands from the repository root. Resolve `<DIBS_SCRIPT>` to `../../scripts/dibs.py` relative to the installed dibs `SKILL.md` (currently `C:/Users/brend/.codex/plugins/cache/dibs/dibs/1.4.0/scripts/dibs.py`). Pass `--workspace "."` on every command. Common options belong **after the command**. Give each agent a distinct, stable `--actor`. Use default text output for compact inspection; use `--json` for programmatic access, especially to capture lease tokens and revisions from mutations.
 
 ```cmd
-python tools/agent_coord.py next
-python tools/agent_coord.py show COMPAT-001
-python tools/agent_coord.py claim COMPAT-001 --actor agent-compat --reserve-tree tests/fixtures --reserve-file docs/COMPATIBILITY.md --json
+python "<DIBS_SCRIPT>" next --workspace "." --actor agent-compat
+python "<DIBS_SCRIPT>" show COMPAT-001 --workspace "." --actor agent-compat
+python "<DIBS_SCRIPT>" claim COMPAT-001 --workspace "." --actor agent-compat --reserve-tree tests/fixtures --reserve-file docs/COMPATIBILITY.md --json
 ```
 
 These are examples: choose the task that matches the user's request and current readiness. `claim-next` also exists, but its reservations must fit the task you will execute. A claim does **not** automatically reserve the task's listed work areas. Translate prose/globs into concrete `--reserve-file` or `--reserve-tree` paths. Reserve shared manifests, lockfiles, schemas, and migration files explicitly; use `--resource git-index` before Git staging/index operations. Never stage another worker's changes accidentally.
@@ -48,15 +48,15 @@ These are examples: choose the task that matches the user's request and current 
 Save the returned `lease_token` and `task.revision`. Never put tokens in tracked files. Every successful task mutation, including a heartbeat or note, increments the revision; carry forward the new value. Defaults are a **10-minute lease** with a **heartbeat every 60 seconds**. Choose a suitable bounded lease before a long blocking operation and stop editing if ownership expires.
 
 ```cmd
-python tools/agent_coord.py heartbeat COMPAT-001 --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 1 --json
-python tools/agent_coord.py note COMPAT-001 --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 2 --message "Recorded findings; next action is to capture the video fixture." --json
+python "<DIBS_SCRIPT>" heartbeat COMPAT-001 --workspace "." --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 1 --json
+python "<DIBS_SCRIPT>" note COMPAT-001 --workspace "." --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 2 --message "Recorded findings; next action is to capture the video fixture." --json
 ```
 
 Numbers above assume that exact sequence; use actual returned revisions. `reserve` and `release` accept the same literal path/resource flags plus your token and revision. Acquire additional reservations before touching additional files. Reservations are cooperative, not OS-enforced; an expired reservation still blocks other writers.
 
 ## Finish with evidence or a useful handoff
 
-Validate the task's acceptance criteria. Save a uniquely named handoff JSON file under `.coord/`, such as `.coord/agent-compat-handoff.json`:
+Validate the task's acceptance criteria. Save a uniquely named handoff JSON file under `.dibs/`, such as `.dibs/agent-compat-handoff.json`:
 
 ```json
 {
@@ -69,7 +69,7 @@ Validate the task's acceptance criteria. Save a uniquely named handoff JSON file
 ```
 
 ```cmd
-python tools/agent_coord.py complete COMPAT-001 --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 3 --file .coord/agent-compat-handoff.json --ack-quiescent --json
+python "<DIBS_SCRIPT>" complete COMPAT-001 --workspace "." --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 3 --file .dibs/agent-compat-handoff.json --ack-quiescent --json
 ```
 
 Use `complete` only after the requirements are met. It records evidence and releases reservations atomically. Use `block` with specific blockers and next steps when you cannot proceed, or `review` to hand off for review; both require a handoff and `--ack-quiescent`. A standalone `handoff` keeps your lease. `resume` claims deliberately blocked/reviewed work with a fresh lease after dependencies pass. Only **done** prerequisites unblock dependent tasks.
@@ -82,10 +82,10 @@ Use `complete` only after the requirements are met. It records evidence and rele
 - Reclaim an expired task only after confirming the old worker is stopped/quiescent. Use `reclaim TASK --actor NEW_AGENT --revision N --ack-quiescent`; it returns a new token while retaining reservations. It cannot seize a live lease.
 - Use `amend` for an existing task specification, with the expected revision and owner token if claimed, or explicit `--ack-unowned` if unowned. Keep affected planning documents and the task spec consistent. Do not reset progress through import.
 - The existing database is already initialized. **Do not recreate it, overwrite it, or re-import merely to reset status.** First-time setup on a genuinely new workspace is documented in the full coordination guide.
-- Use `backup` for a consistent SQLite copy and `export` for a readable status snapshot; choose new filenames. Never copy only a live database file while ignoring its journal/WAL. Keep `.coord/`, private data, and credentials out of version control.
+- Use `backup` for a consistent SQLite copy and `export` for a readable status snapshot; choose new filenames. Never copy only a live database file while ignoring its journal/WAL. Keep `.dibs/`, private data, and credentials out of version control.
 - This machine currently uses the tested `delete` journal fallback because bundled SQLite lacks the required WAL fix. Do not force WAL past the version gate or put the store on a network/cloud-sync drive.
 
-CLI exit codes: `0` success, `2` conflict, `3` invalid input, `4` storage/runtime failure, `5` missing task/database. Use `python tools/agent_coord.py COMMAND --help` for exact options.
+CLI exit codes: `0` success, `1` internal tool error (report; do not retry), `2` conflict, `3` invalid input, `4` storage/runtime failure, `5` missing task/database. Use `python "<DIBS_SCRIPT>" COMMAND --help` for exact options.
 
 ## Implementation boundaries
 

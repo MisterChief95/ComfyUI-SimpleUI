@@ -29,13 +29,14 @@ from .contracts import ApiError, ErrorCode, ErrorDetail, ErrorEnvelope, Health
 from .events import EventBroker
 from .events.routes import router as events_router
 from .generations.routes import router as generations_router
-from .generations.service import GenerationService
+from .generations.listener import ComfyListener
+from .generations.service import GenerationService, version_supports_targeted_interrupt
 from .generations.store import GenerationStore
 from .media import MediaService
 from .media import router as media_router
 from .settings.routes import router as settings_router
 from .settings.service import SettingsStore
-from .storage.db import Database
+from .storage.db import Database, in_thread
 from .storage.repository import Repository
 from .uploads import UploadService
 from .uploads import router as uploads_router
@@ -96,10 +97,33 @@ def create_app(config: Config | None = None) -> FastAPI:
     # multi-user mode cannot be enabled over an un-indexed output folder.
     auth.baseline_gate = media.baseline_status
     generation_events = EventBroker()
+    async def targeted_interrupt_supported() -> bool:
+        installation = (await catalog.snapshot()).capabilities.get("installation") or {}
+        return version_supports_targeted_interrupt(installation.get("comfyui_version"))
+
     generations = GenerationService(
         GenerationStore(database), comfy, media=media, events=generation_events,
         global_pending_cap=settings.host_value("pending_cap"),
         profile_pending_cap=settings.host_value("pending_cap"),
+        # /interrupt {"prompt_id"} is only targeted on ComfyUI >= 0.38.0 (docs/API.md);
+        # gated on the catalog's recorded version, read at cancel time.
+        targeted_interrupt_supported=targeted_interrupt_supported,
+    )
+
+    def retention() -> dict[str, bool]:
+        return {
+            profile["id"]: bool(settings.profile(profile["id"])["store_history"])
+            for profile in auth.list_profiles()
+        }
+
+    async def resync() -> None:
+        """Recover terminal states missed while the event socket was down."""
+        await generations.reconcile(history_retention=await in_thread(retention))
+
+    listener = ComfyListener(
+        generations, comfy,
+        previews_enabled=lambda owner_id: bool(settings.profile(owner_id)["live_previews"]),
+        on_connect=resync,
     )
 
     @asynccontextmanager
@@ -109,16 +133,14 @@ def create_app(config: Config | None = None) -> FastAPI:
         # Restart/disconnect recovery: pick up wherever ComfyUI's own queue and
         # history say each still-active generation actually is. Best-effort --
         # an unreachable ComfyUI must not block the app from serving.
-        retention = {
-            profile["id"]: bool(settings.profile(profile["id"])["store_history"])
-            for profile in auth.list_profiles()
-        }
         reconciled = asyncio.create_task(
-            generations.reconcile_if_due(history_retention=retention)
+            generations.reconcile_if_due(history_retention=retention())
         )
+        listener.start()
         try:
             yield
         finally:
+            await listener.stop()
             startup.cancel()
             reconciled.cancel()
             await asyncio.gather(startup, reconciled, return_exceptions=True)
