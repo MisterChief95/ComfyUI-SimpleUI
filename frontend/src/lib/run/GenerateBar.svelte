@@ -2,6 +2,7 @@
 	// Always-visible bar at the bottom of the run page (above the tab bar on a
 	// phone, because the page is a flex column that ends here).
 	import type { SeedPolicy } from '$lib/contracts';
+	import Icon from '$lib/ui/Icon.svelte';
 	import { isTerminal } from './status';
 	import type { RunState } from './run.svelte';
 
@@ -22,6 +23,7 @@
 <div class="bar">
 	{#if message}<p class="msg" role="alert">{message}</p>{/if}
 	<div class="row actions">
+		<span class="hint">Generate <kbd>Ctrl / ⌘ + Enter</kbd></span>
 		<label class="seed">
 			<span class="sr-only">Seed policy</span>
 			<select
@@ -52,6 +54,7 @@
 			title="Generate (Ctrl+Enter)"
 			onclick={() => run.submit()}
 		>
+			<Icon name="generate" size={16} />
 			{run.submitting ? 'Submitting…' : 'Generate'}
 		</button>
 	</div>
@@ -64,7 +67,21 @@
 			max(var(--page-pad), env(safe-area-inset-left));
 		background: var(--color-surface-1);
 		border-top: 1px solid var(--color-border);
-		box-shadow: 0 -4px 12px light-dark(rgb(20 24 34 / 0.06), rgb(0 0 0 / 0.3));
+		box-shadow: 0 -1px 8px light-dark(rgb(24 28 36 / 0.03), rgb(0 0 0 / 0.15));
+	}
+	.hint {
+		margin-right: auto;
+		color: var(--color-text-muted);
+		font-size: var(--text-xs);
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	kbd {
+		padding: 0.25rem 0.4rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.625rem;
 	}
 	.msg {
 		margin: 0 0 var(--space-2);
@@ -86,16 +103,24 @@
 		white-space: nowrap;
 	}
 	.generate {
-		flex: 2 1 8rem;
+		flex: 2 1 10rem;
 		max-width: 16rem;
 		font-weight: 650;
 	}
 	@media (max-width: 767px) {
+		.hint {
+			display: none;
+		}
 		.seed {
 			max-width: none;
 		}
 		.generate {
 			max-width: none;
+		}
+	}
+	@media (min-width: 768px) and (max-width: 1099px) {
+		.hint kbd {
+			display: none;
 		}
 	}
 </style>

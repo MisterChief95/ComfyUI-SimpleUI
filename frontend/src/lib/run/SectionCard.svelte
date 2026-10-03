@@ -5,6 +5,9 @@
 	import ControlRow from '$lib/controls/ControlRow.svelte';
 	import AspectRatio from '$lib/controls/AspectRatio.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import type { RunState, ViewEntry, ViewSection } from './run.svelte';
 
 	let { run, section }: { run: RunState; section: ViewSection } = $props();
@@ -55,7 +58,7 @@
 	</div>
 {/snippet}
 
-<section class="card section" class:off={!on} id={`sec-${section.id}`}>
+<section class="card section" class:off={!on} class:expanded={open} id={`sec-${section.id}`}>
 	<div class="headrow">
 		<button
 			type="button"
@@ -64,7 +67,7 @@
 			aria-controls={bodyId}
 			onclick={() => run.toggle(section)}
 		>
-			<Icon name={open ? 'chevron-down' : 'chevron-right'} size={18} />
+			<span class="chevron" class:open><Icon name="chevron-right" size={18} /></span>
 			<span class="title">{section.title}</span>
 			{#if modified}<span class="badge badge-accent" title="Modified controls"
 					>{modified} changed</span
@@ -85,7 +88,11 @@
 		{/if}
 	</div>
 	{#if open && section.rows}
-		<div class="rows" id={bodyId}>
+		<div
+			class="rows"
+			id={bodyId}
+			transition:slide={{ duration: prefersReducedMotion.current ? 0 : 180, easing: cubicOut }}
+		>
 			{#each section.rows as row (row.id)}
 				<!-- Row → column → control: on phones the columns stack in that reading order. -->
 				<div class="grid" data-cols={row.columns.length}>
@@ -100,7 +107,12 @@
 			{/each}
 		</div>
 	{:else if open}
-		<div class="grid" id={bodyId} data-cols={section.columns}>
+		<div
+			class="grid"
+			id={bodyId}
+			data-cols={section.columns}
+			transition:slide={{ duration: prefersReducedMotion.current ? 0 : 180, easing: cubicOut }}
+		>
 			{#each section.entries as entry (entry.control.binding_id)}
 				{@render cell(entry)}
 			{/each}
@@ -119,6 +131,9 @@
 		align-items: center;
 		gap: var(--space-2);
 		padding-right: var(--space-3);
+	}
+	.expanded .headrow {
+		border-bottom: 1px solid var(--color-border);
 	}
 	.headrow .switch {
 		flex: none;
@@ -145,10 +160,25 @@
 	}
 	.title {
 		font-weight: 650;
+		letter-spacing: -0.015em;
+	}
+	.chevron {
+		display: flex;
+		transition: rotate 180ms ease-out;
+	}
+	.chevron.open {
+		rotate: 90deg;
+	}
+	.head:hover {
+		background: var(--color-surface-2);
 	}
 	.count {
 		margin-left: auto;
 		font-size: var(--text-xs);
+		font-variant-numeric: tabular-nums;
+		padding: 0.15rem 0.45rem;
+		background: var(--color-surface-2);
+		border-radius: var(--radius-sm);
 	}
 	.badge {
 		margin-left: var(--space-1);
@@ -157,7 +187,7 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-3);
-		padding: var(--space-1) var(--space-3) var(--space-3);
+		padding: var(--space-2) var(--space-3) var(--space-3);
 	}
 	.cell {
 		min-width: 0;
@@ -166,9 +196,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
-		padding-bottom: var(--space-3);
+		padding-block: var(--space-2) var(--space-3);
 	}
 	.rows .grid {
+		padding-top: 0;
 		padding-bottom: 0;
 	}
 	.column {

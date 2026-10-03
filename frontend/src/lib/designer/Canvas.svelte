@@ -588,6 +588,7 @@
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 		overscroll-behavior: contain;
 		padding: var(--space-3);
 		background: var(--color-bg);

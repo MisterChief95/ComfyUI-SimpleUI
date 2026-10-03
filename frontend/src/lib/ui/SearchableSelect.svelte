@@ -229,6 +229,7 @@
 		right: 0;
 		max-height: min(18rem, 50vh);
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 		overscroll-behavior: contain;
 		margin: 0;
 		padding: 0.25rem;

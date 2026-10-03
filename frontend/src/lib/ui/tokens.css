@@ -32,23 +32,24 @@
 	color-scheme: light dark;
 
 	/* Surfaces: bg < surface-1 < surface-2 < surface-3 (raised/hover). */
-	--color-bg: light-dark(#f4f5f8, #0e1014);
-	--color-surface-1: light-dark(#ffffff, #15181e);
-	--color-surface-2: light-dark(#eceef3, #1c2027);
-	--color-surface-3: light-dark(#e1e4eb, #262b34);
+	--color-bg: light-dark(#f4f5f6, #131417);
+	--color-surface-1: light-dark(#ffffff, #1b1d21);
+	--color-surface-2: light-dark(#eff0f2, #24272d);
+	--color-surface-3: light-dark(#e3e5e8, #33373f);
+	--color-field: light-dark(#f7f8f9, #17191d);
 	--color-bg-elevated: var(--color-surface-1); /* legacy name */
-	--color-border: light-dark(#d5d9e2, #2a303b);
-	--color-border-strong: light-dark(#b6bcc9, #3d4554);
+	--color-border: light-dark(#e0e3e7, #2e3239);
+	--color-border-strong: light-dark(#bac0c9, #515864);
 	--color-overlay: light-dark(rgb(20 24 34 / 0.45), rgb(0 0 0 / 0.6));
 
-	--color-text: light-dark(#161922, #e8eaef);
-	--color-text-muted: light-dark(#575e6e, #9aa2b1);
-	--color-text-faint: light-dark(#7d8494, #6c7483);
+	--color-text: light-dark(#24272e, #edf0f4);
+	--color-text-muted: light-dark(#606772, #a9b0bc);
+	--color-text-faint: light-dark(#6e7683, #919ba9);
 
-	--color-accent: light-dark(#c4560a, #f08a3c);
-	--color-accent-hover: light-dark(#a94809, #f79a55);
-	--color-accent-soft: light-dark(rgb(196 86 10 / 0.12), rgb(240 138 60 / 0.16));
-	--color-accent-text: light-dark(#ffffff, #1b1004);
+	--color-accent: light-dark(#343944, #dce1e9);
+	--color-accent-hover: light-dark(#1e222a, #ffffff);
+	--color-accent-soft: light-dark(#e8eaee, #353a44);
+	--color-accent-text: light-dark(#ffffff, #1b1d21);
 
 	--color-danger: light-dark(#b3241d, #ff7b72);
 	--color-danger-soft: light-dark(rgb(179 36 29 / 0.1), rgb(255 123 114 / 0.15));
@@ -57,27 +58,28 @@
 	--color-warning: light-dark(#a15c00, #fbbf24);
 	--color-warning-soft: light-dark(rgb(161 92 0 / 0.12), rgb(251 191 36 / 0.14));
 
-	--shadow-1: 0 1px 2px light-dark(rgb(20 24 34 / 0.08), rgb(0 0 0 / 0.4));
-	--shadow-2: 0 4px 14px light-dark(rgb(20 24 34 / 0.12), rgb(0 0 0 / 0.5));
-	--shadow-3: 0 12px 36px light-dark(rgb(20 24 34 / 0.2), rgb(0 0 0 / 0.65));
+	--shadow-1: 0 1px 3px light-dark(rgb(24 28 36 / 0.04), rgb(0 0 0 / 0.18));
+	--shadow-2: 0 8px 24px light-dark(rgb(24 28 36 / 0.1), rgb(0 0 0 / 0.35));
+	--shadow-3: 0 20px 60px light-dark(rgb(24 28 36 / 0.16), rgb(0 0 0 / 0.5));
 
 	--space-1: 0.25rem;
 	--space-2: 0.5rem;
 	--space-3: 1rem;
 	--space-4: 1.5rem;
 	--space-5: 2rem;
-	--radius-sm: 0.3125rem;
+	--radius-sm: 0.375rem;
 	--radius: 0.5rem;
 	--radius-lg: 0.75rem;
 	--radius-full: 999px;
 
-	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-sans:
+		'Inter', 'Segoe UI Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
 	--text-xs: 0.75rem;
 	--text-sm: 0.8125rem;
 	--text-base: 0.9375rem;
 	--text-lg: 1.0625rem;
-	--text-xl: 1.375rem;
+	--text-xl: 1.75rem;
 
 	/* Minimum comfortable touch target (~44 CSS px). Inputs and buttons use
 	   --control-h, which stays 44px on touch and shrinks for a mouse. */
@@ -99,7 +101,7 @@
 
 @media (min-width: 768px) {
 	:root {
-		--page-pad: var(--space-4);
+		--page-pad: 1.25rem;
 	}
 }
 
@@ -148,6 +150,7 @@
 
 html {
 	-webkit-text-size-adjust: 100%;
+	scrollbar-gutter: stable;
 	scrollbar-width: thin;
 	scrollbar-color: var(--color-border-strong) transparent;
 }
@@ -176,7 +179,7 @@ h4 {
 	margin: 0 0 var(--space-2);
 	line-height: 1.2;
 	font-weight: 650;
-	letter-spacing: -0.01em;
+	letter-spacing: -0.025em;
 }
 h1 {
 	font-size: var(--text-xl);
@@ -237,11 +240,11 @@ textarea {
 	display: block;
 	width: 100%;
 	min-height: var(--control-h);
-	padding: 0 0.625rem;
+	padding: 0 0.75rem;
 	font-size: var(--input-font);
 	line-height: 1.3;
 	color: var(--color-text);
-	background: var(--color-surface-2);
+	background: var(--color-field);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius);
 	transition:
@@ -250,9 +253,10 @@ textarea {
 }
 
 :where(textarea) {
-	padding: 0.5rem 0.625rem;
+	padding: 0.5rem 0.75rem;
 	min-height: 4.5rem;
 	resize: vertical;
+	scrollbar-gutter: stable;
 }
 
 :where(select) {
@@ -263,6 +267,12 @@ textarea {
 	background-position: right 0.6rem center;
 }
 
+/* Native picker rows need an opaque surface, even when the select is borderless. */
+:where(option, optgroup) {
+	color: var(--color-text);
+	background-color: var(--color-surface-1);
+}
+
 :where(input, select, textarea)::placeholder {
 	color: var(--color-text-faint);
 }
@@ -271,10 +281,25 @@ textarea {
 	border-color: var(--color-border-strong);
 }
 
-:where(input, select, textarea):focus-visible {
+:where(input, select, textarea):focus {
 	outline: none;
-	border-color: var(--color-accent);
-	box-shadow: 0 0 0 3px var(--color-accent-soft);
+	box-shadow: none;
+}
+
+:where(input, select, textarea):focus-visible {
+	border-color: var(--color-border-strong);
+}
+
+:where(
+	input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']),
+	select,
+	textarea
+):focus-visible {
+	background-color: var(--color-surface-2);
+}
+
+:where(input[type='checkbox'], input[type='radio']):focus-visible {
+	box-shadow: inset 0 0 0 2px var(--color-text-muted);
 }
 
 :where(input, select, textarea):disabled {
@@ -304,12 +329,12 @@ textarea {
 	cursor: pointer;
 }
 :where(input[type='range'])::-webkit-slider-runnable-track {
-	height: 0.3125rem;
+	height: 0.25rem;
 	border-radius: var(--radius-full);
 	background: var(--color-surface-3);
 }
 :where(input[type='range'])::-moz-range-track {
-	height: 0.3125rem;
+	height: 0.25rem;
 	border-radius: var(--radius-full);
 	background: var(--color-surface-3);
 }
@@ -317,7 +342,7 @@ textarea {
 	appearance: none;
 	width: 1.25rem;
 	height: 1.25rem;
-	margin-top: -0.4375rem;
+	margin-top: -0.5rem;
 	border-radius: 50%;
 	border: 2px solid var(--color-surface-1);
 	background: var(--color-accent);
@@ -335,7 +360,12 @@ textarea {
 	outline: none;
 }
 :where(input[type='range']):focus-visible::-webkit-slider-thumb {
-	box-shadow: 0 0 0 4px var(--color-accent-soft);
+	background: var(--color-accent-hover);
+	transform: scale(1.15);
+}
+:where(input[type='range']):focus-visible::-moz-range-thumb {
+	background: var(--color-accent-hover);
+	transform: scale(1.15);
 }
 :where(input[type='range']):disabled {
 	opacity: 0.5;
@@ -379,12 +409,20 @@ input[type='checkbox'].switch:checked::after {
 	background: var(--color-accent-text);
 }
 input[type='checkbox'].switch:focus-visible {
-	outline: 2px solid var(--color-accent);
-	outline-offset: 2px;
+	outline: none;
+	box-shadow: inset 0 0 0 2px var(--color-text-muted);
 }
 input[type='checkbox'].switch:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+	:where(input, select, textarea):focus-visible,
+	input[type='checkbox'].switch:focus-visible {
+		outline: 2px solid Highlight;
+		outline-offset: 2px;
+	}
 }
 
 /* ---- Buttons ------------------------------------------------------------- */
@@ -432,6 +470,7 @@ input[type='checkbox'].switch:disabled {
 	color: var(--color-accent-text);
 	background: var(--color-accent);
 	border-color: transparent;
+	box-shadow: var(--shadow-1);
 }
 .btn-primary:hover:not(:disabled) {
 	background: var(--color-accent-hover);
@@ -474,7 +513,6 @@ input[type='checkbox'].switch:disabled {
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-lg);
 	padding: var(--space-3);
-	box-shadow: var(--shadow-1);
 }
 
 /* Filter/jump pill. Toggle with aria-pressed="true" (or .active). */
@@ -490,21 +528,25 @@ input[type='checkbox'].switch:disabled {
 	line-height: 1;
 	white-space: nowrap;
 	color: var(--color-text-muted);
-	background: var(--color-surface-2);
-	border: 1px solid var(--color-border);
+	background: transparent;
+	border: 1px solid transparent;
 	border-radius: var(--radius-full);
 	cursor: pointer;
 	text-decoration: none;
 }
 .chip:hover {
 	color: var(--color-text);
-	border-color: var(--color-border-strong);
+	background: var(--color-surface-2);
 }
 .chip[aria-pressed='true'],
 .chip.active {
 	color: var(--color-accent);
 	background: var(--color-accent-soft);
 	border-color: transparent;
+}
+.chip:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 @media (pointer: coarse) {
 	/* Visually compact, but the tap area reaches ~44px. */
@@ -604,7 +646,37 @@ input[type='checkbox'].switch:disabled {
 	}
 }
 
-/* A modal <dialog> (ui/Sheet.svelte) freezes the page behind it. */
+/* Expand only the selected image; keep the rest of the page out of the crossfade. */
+:root.opening-media::view-transition-old(root) {
+	display: none;
+}
+:root.opening-media::view-transition-new(root) {
+	animation: none;
+}
+::view-transition-group(media-zoom) {
+	animation-duration: 320ms;
+	animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(media-zoom),
+::view-transition-new(media-zoom) {
+	animation: none;
+	mix-blend-mode: normal;
+	height: 100%;
+	overflow: clip;
+}
+::view-transition-old(media-zoom) {
+	object-fit: contain;
+}
+::view-transition-new(media-zoom) {
+	object-fit: cover;
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(media-zoom) {
+		animation: none;
+	}
+}
+
+/* A modal <dialog> freezes the page behind it. */
 body:has(dialog[open]) {
 	overflow: hidden;
 }

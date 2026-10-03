@@ -4,6 +4,9 @@
 	// controls) and the bar pinned at the bottom; tablet/desktop: controls and
 	// result as two self-scrolling columns.
 	import { onDestroy, onMount, tick } from 'svelte';
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { isolatePopoverInput } from '$lib/ui/isolateInput';
@@ -78,7 +81,9 @@
 	let queueOpen = $state(false);
 	const blocking = $derived(run.schema?.blocking ?? []);
 	const warnings = $derived(run.schema?.warnings ?? []);
+	let warningsOpen = $state(false);
 	const shortcutsId = $props.id();
+	const warningsId = `${shortcutsId}-warnings`;
 	let shortcutsEnabled = $state(true);
 
 	function onkeydown(event: KeyboardEvent): void {
@@ -140,7 +145,7 @@
 <div class="page-full run">
 	<header class="top">
 		<label class="switcher">
-			<span class="sr-only">Workflow</span>
+			<span class="workspace-label">Generation / Workflow</span>
 			<select
 				aria-label="Workflow"
 				value={workflowId}
@@ -153,12 +158,15 @@
 				{/each}
 			</select>
 		</label>
-		<a class="btn" href={`/workflows/${workflowId}`} aria-label="Open designer" title="Design"
-			><Icon name="design" size={16} /> <span class="lbl">Design</span></a
+		<a
+			class="btn btn-ghost"
+			href={`/workflows/${workflowId}`}
+			aria-label="Open designer"
+			title="Design"><Icon name="design" size={16} /> <span class="lbl">Design</span></a
 		>
 		<button
 			type="button"
-			class="btn"
+			class="btn btn-ghost"
 			aria-label="Presets"
 			disabled={run.loading || run.schema === null}
 			onclick={() => {
@@ -168,9 +176,12 @@
 		>
 			<Icon name="bookmark" size={16} /> <span class="lbl">Presets</span>
 		</button>
-		<button type="button" class="btn" onclick={() => (queueOpen = true)}>Queue</button>
-		<button type="button" class="btn" popovertarget={shortcutsId} aria-label="Keyboard shortcuts"
-			>?</button
+		<button type="button" class="btn btn-ghost" onclick={() => (queueOpen = true)}>Queue</button>
+		<button
+			type="button"
+			class="btn btn-ghost btn-icon"
+			popovertarget={shortcutsId}
+			aria-label="Keyboard shortcuts">?</button
 		>
 		<div id={shortcutsId} popover class="shortcuts" {@attach isolatePopoverInput}>
 			<strong>Keyboard shortcuts</strong>
@@ -212,12 +223,33 @@
 					</div>
 				{/if}
 				{#if warnings.length > 0}
-					<details class="notice">
-						<summary>{warnings.length} mapping warning{warnings.length === 1 ? '' : 's'}</summary>
-						{#each warnings as detail (detail.code + (detail.field ?? ''))}<p>
-								{detail.message}
-							</p>{/each}
-					</details>
+					<div class="notice">
+						<button
+							type="button"
+							class="warning-toggle"
+							aria-expanded={warningsOpen}
+							aria-controls={warningsId}
+							onclick={() => (warningsOpen = !warningsOpen)}
+						>
+							<span class="warning-chevron" class:open={warningsOpen}
+								><Icon name="chevron-right" size={16} /></span
+							>
+							{warnings.length} mapping warning{warnings.length === 1 ? '' : 's'}
+						</button>
+						{#if warningsOpen}
+							<div
+								id={warningsId}
+								transition:slide={{
+									duration: prefersReducedMotion.current ? 0 : 180,
+									easing: cubicOut
+								}}
+							>
+								{#each warnings as detail (detail.code + (detail.field ?? ''))}<p>
+										{detail.message}
+									</p>{/each}
+							</div>
+						{/if}
+					</div>
 				{/if}
 
 				<div class="toolbar" bind:clientHeight={toolbarH}>
@@ -229,7 +261,7 @@
 							disabled={run.modifiedCount === 0 && !run.modifiedOnly}
 							onclick={() => (run.modifiedOnly = !run.modifiedOnly)}
 						>
-							Show modified only{run.modifiedCount ? ` (${run.modifiedCount})` : ''}
+							Modified only{run.modifiedCount ? ` (${run.modifiedCount})` : ''}
 						</button>
 						{#if run.modifiedCount}
 							<button type="button" class="chip" onclick={() => run.resetAll()}>Reset all</button>
@@ -300,6 +332,7 @@
 <style>
 	.run {
 		min-width: 0;
+		--space-3: 0.75rem;
 	}
 	.top {
 		flex: none;
@@ -315,6 +348,25 @@
 		flex: 1 1 0;
 		min-width: 6rem;
 		max-width: 24rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.workspace-label {
+		padding-inline: var(--space-2);
+		font-size: 0.625rem;
+		font-weight: 650;
+		letter-spacing: 0.02em;
+		color: var(--color-text-faint);
+	}
+	.switcher select {
+		font-weight: 650;
+		background-color: transparent;
+		border-color: transparent;
+		padding-left: var(--space-2);
+	}
+	.switcher select:focus-visible {
+		background-color: var(--color-surface-2);
 	}
 	.status {
 		margin-left: auto;
@@ -354,6 +406,9 @@
 		.lbl {
 			display: none;
 		}
+		.workspace-label {
+			display: none;
+		}
 	}
 	.state {
 		padding: var(--page-pad);
@@ -367,6 +422,7 @@
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 		overscroll-behavior: contain;
 		display: flex;
 		flex-direction: column;
@@ -384,6 +440,7 @@
 		background: var(--color-surface-1);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-1);
 	}
 	.controls {
 		container: run / inline-size;
@@ -403,6 +460,7 @@
 		margin-inline: calc(-1 * var(--page-pad));
 		padding: var(--space-2) var(--page-pad);
 		background: var(--color-bg);
+		border-bottom: 1px solid var(--color-border);
 	}
 	.draft {
 		margin: 0;
@@ -420,7 +478,7 @@
 	}
 	.jump {
 		display: flex;
-		gap: var(--space-2);
+		gap: var(--space-1);
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -438,12 +496,44 @@
 	.notice p {
 		margin: var(--space-1) 0 0;
 	}
+	.warning-toggle {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.warning-chevron {
+		display: flex;
+		transition: rotate 180ms ease-out;
+	}
+	.warning-chevron.open {
+		rotate: 90deg;
+	}
 	.err-box {
 		color: var(--color-danger);
 		border-color: var(--color-danger);
 	}
 
 	@media (min-width: 768px) {
+		.toolbar {
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+		}
+		.jump {
+			flex: 1 1 12rem;
+			min-width: 0;
+		}
+		.draft {
+			flex-basis: 100%;
+		}
 		.body {
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) 0.75rem clamp(
@@ -454,11 +544,13 @@
 			gap: 0;
 			padding: 0;
 			overflow: hidden;
+			scrollbar-gutter: auto;
 		}
 		.controls {
 			overflow-y: auto;
+			scrollbar-gutter: stable;
 			overscroll-behavior: contain;
-			padding: 0 var(--page-pad) var(--space-3);
+			padding: var(--space-3) var(--page-pad);
 			grid-column: 1;
 			grid-row: 1;
 			min-height: 0;

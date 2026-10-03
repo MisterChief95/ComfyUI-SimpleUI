@@ -81,6 +81,7 @@
 		min-height: 0;
 		margin: 0;
 		overflow: auto;
+		scrollbar-gutter: stable;
 		white-space: pre;
 		font-family: var(--font-mono);
 		font-size: var(--text-sm);
