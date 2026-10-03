@@ -127,6 +127,13 @@ test('validateValue checks int syntax and exact bounds without rounding', () => 
 	assert.equal(validateValue(seed, '1.5'), 'Enter a whole number');
 	assert.equal(validateValue(seed, ''), 'Enter a whole number');
 	assert.equal(validateValue(seed, '1e3'), 'Enter a whole number');
+	assert.equal(validateValue(seed, '--1'), 'Enter a whole number');
+	assert.equal(validateValue(seed, '01'), 'Enter a whole number');
+	assert.ok(validateValue(seed, Number('9007199254740993')));
+	assert.equal(validateValue(seed, '9007199254740993'), null);
+	const slider = { ...seed, component: 'slider' } as ControlDescriptor;
+	assert.equal(validateValue(slider, '1.5'), 'Enter a whole number');
+	assert.equal(validateValue(slider, '9007199254740993'), null);
 	const free = { logical_type: 'int', component: 'number', constraints: null } as ControlDescriptor;
 	assert.equal(validateValue(free, '-7'), null);
 	const ranged = {

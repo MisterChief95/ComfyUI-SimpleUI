@@ -26,6 +26,7 @@ is never turned into a float and never JSON.parsed in a browser
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -103,7 +104,13 @@ def parse_graph(payload: bytes | str) -> dict[str, Any]:
         document = json.loads(
             text, parse_constant=_reject_constant, object_pairs_hook=_no_duplicate_keys
         )
-    except json.JSONDecodeError as exc:
+    except GraphImportError:
+        raise
+    except RecursionError as exc:
+        raise GraphImportError(
+            "graph_too_deep", "The workflow JSON is nested too deeply to import."
+        ) from exc
+    except ValueError as exc:
         raise GraphImportError(
             "malformed_json", f"The workflow is not valid JSON: {exc}"
         ) from exc
@@ -159,7 +166,7 @@ def _as_node_map(document: Any) -> dict[str, Any]:
                 field=f"{node_id}.inputs",
             )
 
-    _check_depth(document)
+    _check_values(document)
     return document
 
 
@@ -171,18 +178,25 @@ def _is_node_map(value: Any) -> bool:
     )
 
 
-def _check_depth(value: Any, depth: int = 0) -> None:
+def _check_values(value: Any, depth: int = 0, field: str = "") -> None:
     if depth > MAX_DEPTH:
         raise GraphImportError(
             "graph_too_deep",
             f"The workflow nests JSON more than {MAX_DEPTH} levels deep.",
         )
+    if isinstance(value, float) and not math.isfinite(value):
+        raise GraphImportError(
+            "non_finite_number",
+            "The workflow contains a number outside the finite floating-point range. "
+            "Correct the value in ComfyUI and export again.",
+            field=field,
+        )
     if isinstance(value, dict):
-        for item in value.values():
-            _check_depth(item, depth + 1)
+        for key, item in value.items():
+            _check_values(item, depth + 1, f"{field}.{key}" if field else key)
     elif isinstance(value, list):
-        for item in value:
-            _check_depth(item, depth + 1)
+        for index, item in enumerate(value):
+            _check_values(item, depth + 1, f"{field}[{index}]")
 
 
 def looks_like_link(value: Any) -> bool:

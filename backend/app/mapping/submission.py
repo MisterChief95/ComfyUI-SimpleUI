@@ -25,6 +25,7 @@ from __future__ import annotations
 import copy
 import math
 import random
+import re
 from typing import Any, Literal
 
 from ..catalog.normalize import same_choice
@@ -150,7 +151,7 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
             )
         try:
             value = float(raw)
-        except ValueError as exc:
+        except (ValueError, OverflowError) as exc:
             raise SubmissionError(
                 "invalid_value", f"{control.label} must be a number.", binding
             ) from exc
@@ -203,8 +204,11 @@ def _as_exact_int(raw: Any, binding: str) -> int:
         )
     if isinstance(raw, int):
         return raw
-    if isinstance(raw, str) and raw.lstrip("-").isdigit():
-        return int(raw)
+    if isinstance(raw, str) and re.fullmatch(r"-?(0|[1-9][0-9]*)", raw):
+        try:
+            return int(raw)
+        except ValueError:
+            pass  # Python's integer digit limit is also a validation failure.
     raise SubmissionError(
         "invalid_value",
         f"{binding} must be a whole number sent as a decimal string, so that a 64-bit "

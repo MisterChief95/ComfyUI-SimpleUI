@@ -11,6 +11,7 @@
 	import { session } from '$lib/session.svelte';
 	import { lastWorkflow } from './lastWorkflow.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
+	import { navCollapsed } from './navCollapsed.svelte';
 
 	// The one place to add a destination. Generate returns to the last run page.
 	const items = $derived<{ match: string; href: string; label: string; icon: IconName }[]>([
@@ -48,7 +49,7 @@
 	</header>
 {/if}
 
-<nav aria-label="Main">
+<nav aria-label="Main" class:collapsed={navCollapsed.value}>
 	<div class="brand" aria-hidden="true">
 		<span class="mark">S</span>
 		<span class="brand-name">SimpleUI</span>
@@ -67,6 +68,16 @@
 			</li>
 		{/each}
 	</ul>
+	<button
+		type="button"
+		class="collapse"
+		title={navCollapsed.value ? 'Expand sidebar' : 'Collapse sidebar'}
+		aria-label={navCollapsed.value ? 'Expand sidebar' : 'Collapse sidebar'}
+		aria-expanded={!navCollapsed.value}
+		onclick={() => navCollapsed.toggle()}
+	>
+		<Icon name="menu" size={20} />
+	</button>
 	{#if profile}
 		<div class="profile">
 			<span class="who" title={profile.name}
@@ -128,7 +139,8 @@
 		padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 	}
 	.brand,
-	.profile {
+	.profile,
+	.collapse {
 		display: none;
 	}
 	ul {
@@ -268,52 +280,72 @@
 
 	/* ---- desktop: labelled rail ---- */
 	@media (min-width: 1200px) {
-		nav {
+		.collapse {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			align-self: center;
+			width: var(--touch-target);
+			height: var(--touch-target);
+			border: 0;
+			border-radius: var(--radius);
+			background: none;
+			color: var(--color-text-muted);
+			cursor: pointer;
+		}
+		.collapse:hover {
+			background: var(--color-surface-2);
+			color: var(--color-text);
+		}
+		nav:not(.collapsed) {
 			padding: var(--space-3);
 			padding-left: max(var(--space-3), env(safe-area-inset-left));
-		}
-		.brand {
-			justify-content: flex-start;
-			padding: 0 var(--space-1);
-		}
-		.brand-name {
-			display: inline;
-			font-weight: 700;
-			letter-spacing: -0.01em;
-		}
-		a {
-			justify-content: flex-start;
-			gap: 0.75rem;
-			padding: 0 0.75rem;
-			font-size: var(--text-base);
-		}
-		.label {
-			position: static;
-			width: auto;
-			height: auto;
-			overflow: visible;
-			clip-path: none;
-		}
-		.profile {
-			align-items: stretch;
-			padding-top: var(--space-3);
-			border-top: 1px solid var(--color-border);
-		}
-		.who-name {
-			display: inline;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-		.switch {
-			width: auto;
-			padding: 0 0.875rem;
-		}
-		.switch-icon {
-			display: none;
-		}
-		.switch-label {
-			display: inline;
+			.collapse {
+				align-self: flex-start;
+			}
+			.brand {
+				justify-content: flex-start;
+				padding: 0 var(--space-1);
+			}
+			.brand-name {
+				display: inline;
+				font-weight: 700;
+				letter-spacing: -0.01em;
+			}
+			a {
+				justify-content: flex-start;
+				gap: 0.75rem;
+				padding: 0 0.75rem;
+				font-size: var(--text-base);
+			}
+			.label {
+				position: static;
+				width: auto;
+				height: auto;
+				overflow: visible;
+				clip-path: none;
+			}
+			.profile {
+				align-items: stretch;
+				padding-top: var(--space-3);
+				border-top: 1px solid var(--color-border);
+			}
+			.who-name {
+				display: inline;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.switch {
+				width: auto;
+				padding: 0 0.875rem;
+			}
+			.switch-icon {
+				display: none;
+			}
+			.switch-label {
+				display: inline;
+			}
 		}
 	}
 </style>
