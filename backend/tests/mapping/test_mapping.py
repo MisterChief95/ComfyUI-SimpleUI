@@ -99,6 +99,29 @@ class ImportValidation(unittest.TestCase):
             parse_graph((GRAPHS / "rejected" / "duplicate_keys.api.json").read_bytes())
         self.assertEqual(caught.exception.detail.code, "duplicate_key")
 
+    def test_overflowing_json_numbers_name_the_input(self) -> None:
+        for value in ("1e400", "-1e400"):
+            with (
+                self.subTest(value=value),
+                self.assertRaises(GraphImportError) as caught,
+            ):
+                parse_graph(
+                    '{"1":{"class_type":"Example","inputs":{"value":' + value + "}}}"
+                )
+            self.assertEqual(caught.exception.detail.code, "non_finite_number")
+            self.assertEqual(caught.exception.detail.field, "1.inputs.value")
+
+    def test_parser_limits_return_import_errors(self) -> None:
+        for value, code in (
+            ("[" * 2000 + "0" + "]" * 2000, "graph_too_deep"),
+            ("9" * 5000, "malformed_json"),
+        ):
+            with self.subTest(code=code), self.assertRaises(GraphImportError) as caught:
+                parse_graph(
+                    '{"1":{"class_type":"Example","inputs":{"value":' + value + "}}}"
+                )
+            self.assertEqual(caught.exception.detail.code, code)
+
     def test_ui_export_gets_an_actionable_message(self) -> None:
         with self.assertRaises(GraphImportError) as caught:
             parse_graph((GRAPHS / "rejected" / "ui_export_not_api.json").read_bytes())
@@ -491,6 +514,24 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
 
 class SeedsAndTransport(unittest.TestCase):
     """Exact seeds, fixed-by-default policy, and batch size versus requests."""
+
+    def test_invalid_numeric_edits_are_validation_errors_and_preserve_graph(
+        self,
+    ) -> None:
+        graph, schema = schema_for("image_basic.api.json")
+        before = json.dumps(graph)
+        for value in ("--1", "01", "\u00b2", "\u0661", "9" * 5000, True, 1.5):
+            with (
+                self.subTest(value=str(value)[:20]),
+                self.assertRaises(SubmissionError) as caught,
+            ):
+                build_submission_graph(graph, schema, {"5:seed": value})
+            self.assertEqual(caught.exception.detail.code, "invalid_value")
+            self.assertEqual(caught.exception.detail.field, "5:seed")
+        with self.assertRaises(SubmissionError) as caught:
+            build_submission_graph(graph, schema, {"5:cfg": 10**400})
+        self.assertEqual(caught.exception.detail.code, "invalid_value")
+        self.assertEqual(json.dumps(graph), before)
 
     def test_large_seeds_survive_exactly(self) -> None:
         graph, schema = schema_for("image_large_seed.api.json")

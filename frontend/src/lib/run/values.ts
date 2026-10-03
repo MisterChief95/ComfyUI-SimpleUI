@@ -59,6 +59,8 @@ export function validateValue(control: ControlDescriptor, value: EditValue): str
 	const c = control.constraints;
 	if (type === 'int') {
 		if (typeof value === 'boolean') return 'Enter a whole number';
+		if (typeof value === 'number' && !Number.isSafeInteger(value))
+			return 'Enter a whole number as text to preserve its exact value';
 		const min = c?.exact_min ?? (c?.min != null ? String(Math.ceil(c.min)) : null);
 		const max = c?.exact_max ?? (c?.max != null ? String(Math.floor(c.max)) : null);
 		if (!/^-?(0|[1-9][0-9]*)$/.test(text)) return 'Enter a whole number';
