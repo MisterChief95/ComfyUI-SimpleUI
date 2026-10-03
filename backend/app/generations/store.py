@@ -8,7 +8,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..storage.db import Database
-from ..storage.repository import PageResult, _decode_cursor, _encode_cursor, new_id, now_ms
+from ..storage.repository import (
+    PageResult,
+    _decode_cursor,
+    _encode_cursor,
+    new_id,
+    now_ms,
+)
 
 ACTIVE = ("submitting", "submission_unknown", "queued", "running")
 TERMINAL = frozenset(("succeeded", "failed", "cancelled", "interrupted", "unknown"))
@@ -31,7 +37,9 @@ class AcceptedGeneration:
 def _decode(row: Any) -> dict[str, Any]:
     item = dict(row)
     for column in ("graph_json", "effective_values_json", "error_json"):
-        item[column.removesuffix("_json")] = json.loads(item[column]) if item[column] else None
+        item[column.removesuffix("_json")] = (
+            json.loads(item[column]) if item[column] else None
+        )
     return item
 
 
@@ -65,11 +73,14 @@ class GenerationStore:
             ).fetchone()
             if existing is not None:
                 if existing["request_fingerprint"] != fingerprint:
-                    raise GenerationConflict("client request key was already used for another payload")
+                    raise GenerationConflict(
+                        "client request key was already used for another payload"
+                    )
                 return AcceptedGeneration(_decode(existing), False)
 
             global_count = conn.execute(
-                f"SELECT COUNT(*) FROM generations WHERE status IN ({placeholders})", ACTIVE
+                f"SELECT COUNT(*) FROM generations WHERE status IN ({placeholders})",
+                ACTIVE,
             ).fetchone()[0]
             owner_count = conn.execute(
                 f"SELECT COUNT(*) FROM generations WHERE owner_id = ? AND status IN ({placeholders})",
@@ -83,25 +94,42 @@ class GenerationStore:
                 "INSERT INTO generations (id, owner_id, workflow_id, workflow_revision,"
                 " mapping_revision, client_request_key, request_fingerprint, status, created_ms, updated_ms)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, 'submitting', ?, ?)",
-                (generation_id, owner_id, workflow_id, workflow_revision, mapping_revision,
-                 request_key, fingerprint, stamp, stamp),
+                (
+                    generation_id,
+                    owner_id,
+                    workflow_id,
+                    workflow_revision,
+                    mapping_revision,
+                    request_key,
+                    fingerprint,
+                    stamp,
+                    stamp,
+                ),
             )
             graph, effective_values = resolve()  # key exists in this transaction first
             conn.execute(
                 "UPDATE generations SET graph_json = ?, effective_values_json = ? WHERE id = ?",
-                (json.dumps(graph, separators=(",", ":")),
-                 json.dumps(effective_values, separators=(",", ":")), generation_id),
+                (
+                    json.dumps(graph, separators=(",", ":")),
+                    json.dumps(effective_values, separators=(",", ":")),
+                    generation_id,
+                ),
             )
-            row = conn.execute("SELECT * FROM generations WHERE id = ?", (generation_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM generations WHERE id = ?", (generation_id,)
+            ).fetchone()
         return AcceptedGeneration(_decode(row), True)
 
     def get(self, owner_id: str, generation_id: str) -> dict[str, Any] | None:
         row = self.db.query_one(
-            "SELECT * FROM generations WHERE id = ? AND owner_id = ?", (generation_id, owner_id)
+            "SELECT * FROM generations WHERE id = ? AND owner_id = ?",
+            (generation_id, owner_id),
         )
         return _decode(row) if row else None
 
-    def last_effective_value(self, owner_id: str, workflow_id: str | None, binding_id: str) -> Any:
+    def last_effective_value(
+        self, owner_id: str, workflow_id: str | None, binding_id: str
+    ) -> Any:
         """The value this owner most recently submitted for ``binding_id`` in a workflow.
 
         Seed ``increment`` advances from this. Uses the caller's connection, so
@@ -116,8 +144,13 @@ class GenerationStore:
         return row["value"] if row else None
 
     def recent_prompts(
-        self, owner_id: str, workflow_id: str, binding_id: str,
-        query: str = "", cursor: str | None = None, limit: int = 20,
+        self,
+        owner_id: str,
+        workflow_id: str,
+        binding_id: str,
+        query: str = "",
+        cursor: str | None = None,
+        limit: int = 20,
     ) -> PageResult:
         params: list[Any] = [owner_id, workflow_id, binding_id, query]
         after = ""
@@ -133,24 +166,31 @@ class GenerationStore:
             " WHERE g.owner_id = ? AND g.workflow_id = ? AND j.key = ?"
             " AND j.type = 'text' AND length(trim(j.value)) > 0"
             " AND instr(lower(j.value), lower(?)) > 0)"
-            " SELECT id, created_ms, text FROM ranked WHERE rank = 1" + after
-            + " ORDER BY created_ms DESC, id DESC LIMIT ?", params,
+            " SELECT id, created_ms, text FROM ranked WHERE rank = 1"
+            + after
+            + " ORDER BY created_ms DESC, id DESC LIMIT ?",
+            params,
         )
         page = [dict(row) for row in rows[:limit]]
         return PageResult(page, _encode_cursor(page[-1]) if len(rows) > limit else None)
 
     def owner_for_prompt(self, prompt_id: str) -> tuple[str, str] | None:
         row = self.db.query_one(
-            "SELECT owner_id, id FROM generations WHERE upstream_prompt_id = ?", (prompt_id,)
+            "SELECT owner_id, id FROM generations WHERE upstream_prompt_id = ?",
+            (prompt_id,),
         )
         return (row["owner_id"], row["id"]) if row else None
 
     def active(self) -> list[dict[str, Any]]:
         placeholders = ",".join("?" for _ in ACTIVE)
-        return [_decode(row) for row in self.db.query(
-            f"SELECT * FROM generations WHERE status IN ({placeholders}) OR output_state = 'pending'"
-            " OR error_json LIKE '%\"output_capture\"%' ORDER BY created_ms", ACTIVE
-        )]
+        return [
+            _decode(row)
+            for row in self.db.query(
+                f"SELECT * FROM generations WHERE status IN ({placeholders}) OR output_state = 'pending'"
+                " OR error_json LIKE '%\"output_capture\"%' ORDER BY created_ms",
+                ACTIVE,
+            )
+        ]
 
     def update(
         self,
@@ -164,8 +204,11 @@ class GenerationStore:
     ) -> bool:
         with self.db.write() as conn:
             assignments, values = ["updated_ms = ?"], [now_ms()]
-            for column, value in (("status", status), ("upstream_prompt_id", prompt_id),
-                                  ("output_state", output_state)):
+            for column, value in (
+                ("status", status),
+                ("upstream_prompt_id", prompt_id),
+                ("output_state", output_state),
+            ):
                 if value is not None:
                     assignments.append(f"{column} = ?")
                     values.append(value)
@@ -174,7 +217,11 @@ class GenerationStore:
                     "SELECT error_json FROM generations WHERE id = ? AND owner_id = ?",
                     (generation_id, owner_id),
                 ).fetchone()
-                merged = json.loads(current["error_json"]) if current and current["error_json"] else {}
+                merged = (
+                    json.loads(current["error_json"])
+                    if current and current["error_json"]
+                    else {}
+                )
                 merged.update(error)
                 assignments.append("error_json = ?")
                 values.append(json.dumps(merged, separators=(",", ":")))
@@ -197,8 +244,12 @@ class GenerationStore:
             error.pop(key, None)
             conn.execute(
                 "UPDATE generations SET error_json = ?, updated_ms = ? WHERE id = ? AND owner_id = ?",
-                (json.dumps(error, separators=(",", ":")) if error else None,
-                 now_ms(), generation_id, owner_id),
+                (
+                    json.dumps(error, separators=(",", ":")) if error else None,
+                    now_ms(),
+                    generation_id,
+                    owner_id,
+                ),
             )
 
     def purge_snapshot(self, owner_id: str, generation_id: str) -> None:

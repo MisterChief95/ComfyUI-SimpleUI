@@ -123,7 +123,9 @@ class SweepTest(UploadTestCase):
 
     def test_upload_within_the_grace_period_is_kept(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        removed = self.uploads.sweep_abandoned(grace_ms=24 * 60 * 60 * 1000, now=now_ms() + 1)
+        removed = self.uploads.sweep_abandoned(
+            grace_ms=24 * 60 * 60 * 1000, now=now_ms() + 1
+        )
         self.assertEqual(removed, 0)
         self.assertIsNotNone(self.uploads.get(OWNER, row["id"]))
 
@@ -135,7 +137,12 @@ class SweepTest(UploadTestCase):
                 "INSERT INTO generations (id, owner_id, client_request_key, request_fingerprint,"
                 " graph_json, status, created_ms, updated_ms) VALUES"
                 " ('g1', ?, 'k1', 'f1', ?, 'queued', ?, ?)",
-                (OWNER, f'{{"1": {{"inputs": {{"image": "{staged_name}"}}}}}}', now_ms(), now_ms()),
+                (
+                    OWNER,
+                    f'{{"1": {{"inputs": {{"image": "{staged_name}"}}}}}}',
+                    now_ms(),
+                    now_ms(),
+                ),
             )
         removed = self.uploads.sweep_abandoned(grace_ms=0, now=now_ms() + 1)
         self.assertEqual(removed, 0)

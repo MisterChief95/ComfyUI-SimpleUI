@@ -17,8 +17,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
-
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
 from app.mapping import parse_graph
@@ -32,11 +30,16 @@ from app.mapping.corrections import (
 from app.storage import Database
 from app.storage.repository import Repository, RevisionConflict
 from app.workflows import WorkflowService
+from pydantic import ValidationError
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 GRAPHS = FIXTURES / "graphs"
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
 SNAPSHOT = CatalogSnapshot(
     nodes=CATALOG.nodes,
@@ -66,7 +69,9 @@ class CorrectionTestCase(unittest.TestCase):
         self.service = WorkflowService(self.repo)
         self.other = self.repo.create_profile("Other")
 
-    def import_graph(self, name: str = "image_basic.api.json", owner: str = "default") -> str:
+    def import_graph(
+        self, name: str = "image_basic.api.json", owner: str = "default"
+    ) -> str:
         workflow_id, _ = self.service.import_workflow(
             owner, name, (GRAPHS / name).read_bytes()
         )
@@ -121,7 +126,9 @@ class StructuralSignature(CorrectionTestCase):
         graph["5"]["inputs"]["cfg"] = 8.0  # an int/float swap is not a repair
         self.assertEqual(structural_signature(graph), before)
         # The exact content hash is deliberately separate and does move.
-        self.assertNotEqual(content_hash(graph), content_hash(graph_of("image_basic.api.json")))
+        self.assertNotEqual(
+            content_hash(graph), content_hash(graph_of("image_basic.api.json"))
+        )
 
     def test_changing_a_node_class_changes_the_signature(self) -> None:
         graph = graph_of("image_basic.api.json")
@@ -153,7 +160,11 @@ class LayoutSurvivesLiteralEdits(CorrectionTestCase):
         self.save(
             workflow_id,
             NEGATIVE,
-            {"label": "Things to avoid", "group": "advanced", "help_text": "Kept per profile."},
+            {
+                "label": "Things to avoid",
+                "group": "advanced",
+                "help_text": "Kept per profile.",
+            },
         )
         corrected = self.controls(workflow_id)[NEGATIVE]
         self.assertEqual(corrected.label, "Things to avoid")
@@ -166,7 +177,9 @@ class LayoutSurvivesLiteralEdits(CorrectionTestCase):
 
     def test_a_literal_edit_keeps_the_corrected_layout(self) -> None:
         workflow_id = self.import_graph()
-        self.save(workflow_id, NEGATIVE, {"label": "Things to avoid", "group": "advanced"})
+        self.save(
+            workflow_id, NEGATIVE, {"label": "Things to avoid", "group": "advanced"}
+        )
 
         # Only literals change: the structure, and so the signature, is identical.
         edited = graph_of("image_basic.api.json")
@@ -186,7 +199,9 @@ class LayoutSurvivesLiteralEdits(CorrectionTestCase):
     def test_reset_returns_the_untouched_base_schema(self) -> None:
         workflow_id = self.import_graph()
         before = self.schema(workflow_id).model_dump()
-        self.save(workflow_id, NEGATIVE, {"label": "Things to avoid", "group": "advanced"})
+        self.save(
+            workflow_id, NEGATIVE, {"label": "Things to avoid", "group": "advanced"}
+        )
         self.assertNotEqual(self.schema(workflow_id).model_dump(), before)
 
         removed = self.service.reset_corrections("default", workflow_id)
@@ -208,14 +223,18 @@ class StaleCorrectionsRequireRepair(CorrectionTestCase):
 
         schema = self.schema(workflow_id)
         control = {c.binding_id: c for c in schema.controls}[NEGATIVE]
-        self.assertNotEqual(control.label, "Things to avoid")  # base label, not the stale one
+        self.assertNotEqual(
+            control.label, "Things to avoid"
+        )  # base label, not the stale one
         self.assertIn(
             "mapping_correction_stale", {warning.code for warning in schema.warnings}
         )
 
         exported = self.service.export_corrections("default", workflow_id, SNAPSHOT)
         self.assertEqual([c.stale for c in exported], [True])
-        self.assertEqual(exported[0].presentation.label, "Things to avoid")  # kept for repair
+        self.assertEqual(
+            exported[0].presentation.label, "Things to avoid"
+        )  # kept for repair
 
     def test_repairing_a_stale_correction_re_applies_it(self) -> None:
         workflow_id = self.import_graph()
@@ -223,11 +242,17 @@ class StaleCorrectionsRequireRepair(CorrectionTestCase):
         changed = graph_of("image_basic.api.json")
         changed["3"]["inputs"]["clip"] = ["1", 0]  # a different connection
         self.replace_graph(workflow_id, changed)
-        self.assertTrue(self.service.export_corrections("default", workflow_id, SNAPSHOT)[0].stale)
+        self.assertTrue(
+            self.service.export_corrections("default", workflow_id, SNAPSHOT)[0].stale
+        )
 
         # Saving again against the current structure is the repair.
-        self.save(workflow_id, NEGATIVE, {"label": "Things to avoid"}, expected_revision=1)
-        self.assertFalse(self.service.export_corrections("default", workflow_id, SNAPSHOT)[0].stale)
+        self.save(
+            workflow_id, NEGATIVE, {"label": "Things to avoid"}, expected_revision=1
+        )
+        self.assertFalse(
+            self.service.export_corrections("default", workflow_id, SNAPSHOT)[0].stale
+        )
         self.assertEqual(self.controls(workflow_id)[NEGATIVE].label, "Things to avoid")
 
     def test_a_correction_that_binds_to_nothing_is_reported_not_dropped(self) -> None:
@@ -241,7 +266,9 @@ class StaleCorrectionsRequireRepair(CorrectionTestCase):
         self.replace_graph(workflow_id, renumbered)
         schema = self.schema(workflow_id)
         self.assertIn("mapping_correction_stale", {w.code for w in schema.warnings})
-        self.assertEqual(len(self.service.export_corrections("default", workflow_id, SNAPSHOT)), 1)
+        self.assertEqual(
+            len(self.service.export_corrections("default", workflow_id, SNAPSHOT)), 1
+        )
 
 
 class TemplatesCarryPresentationOnly(CorrectionTestCase):
@@ -269,7 +296,9 @@ class TemplatesCarryPresentationOnly(CorrectionTestCase):
     def test_a_display_range_narrows_but_never_widens(self) -> None:
         workflow_id = self.import_graph()
         declared = self.controls(workflow_id)["5:steps"].constraints
-        self.save(workflow_id, "5:steps", {"display_min": 10.0, "display_max": 10_000.0})
+        self.save(
+            workflow_id, "5:steps", {"display_min": 10.0, "display_max": 10_000.0}
+        )
         narrowed = self.controls(workflow_id)["5:steps"].constraints
         self.assertEqual(narrowed.min, 10.0)
         self.assertEqual(narrowed.max, declared.max)  # the widened bound is ignored
@@ -279,7 +308,12 @@ class TemplatesCarryPresentationOnly(CorrectionTestCase):
         self.save(
             workflow_id,
             "5:steps",
-            {"display_min": 10.0, "display_max": 100.0, "display_default": 25.0, "display_step": 5.0},
+            {
+                "display_min": 10.0,
+                "display_max": 100.0,
+                "display_default": 25.0,
+                "display_step": 5.0,
+            },
         )
         control = self.controls(workflow_id)["5:steps"]
         self.assertEqual(control.value, "25")
@@ -330,7 +364,9 @@ class TemplatesDoNotSpread(CorrectionTestCase):
         workflow_id = self.import_graph()
         self.save(workflow_id, NEGATIVE, {"label": "From template"}, scope="node_class")
         self.save(workflow_id, NEGATIVE, {"label": "From this workflow"})
-        self.assertEqual(self.controls(workflow_id)[NEGATIVE].label, "From this workflow")
+        self.assertEqual(
+            self.controls(workflow_id)[NEGATIVE].label, "From this workflow"
+        )
 
 
 class ProfileIsolation(CorrectionTestCase):
@@ -342,17 +378,25 @@ class ProfileIsolation(CorrectionTestCase):
 
         # Same graph, imported by the other profile: the template is theirs alone.
         theirs = self.import_graph(owner=self.other)
-        self.assertNotEqual(self.controls(theirs, owner=self.other)[NEGATIVE].label, "Private label")
+        self.assertNotEqual(
+            self.controls(theirs, owner=self.other)[NEGATIVE].label, "Private label"
+        )
         self.assertEqual(self.repo.list_mapping_overrides(self.other, theirs), [])
         self.assertEqual(
             self.service.export_corrections(self.other, theirs, SNAPSHOT), []
         )
 
-    def test_another_profile_cannot_read_or_reset_a_workflow_it_does_not_own(self) -> None:
+    def test_another_profile_cannot_read_or_reset_a_workflow_it_does_not_own(
+        self,
+    ) -> None:
         workflow_id = self.import_graph()
         self.save(workflow_id, NEGATIVE, {"label": "Private label"})
-        self.assertIsNone(self.service.control_schema(self.other, workflow_id, SNAPSHOT))
-        self.assertIsNone(self.service.export_corrections(self.other, workflow_id, SNAPSHOT))
+        self.assertIsNone(
+            self.service.control_schema(self.other, workflow_id, SNAPSHOT)
+        )
+        self.assertIsNone(
+            self.service.export_corrections(self.other, workflow_id, SNAPSHOT)
+        )
         self.assertEqual(self.service.reset_corrections(self.other, workflow_id), 0)
         # Untouched for the owner.
         self.assertEqual(self.controls(workflow_id)[NEGATIVE].label, "Private label")
@@ -379,7 +423,10 @@ class RevisionConflicts(CorrectionTestCase):
 
         # Reloading and saving from the current revision succeeds.
         self.assertEqual(
-            self.save(workflow_id, NEGATIVE, {"label": "Second"}, expected_revision=1).revision, 2
+            self.save(
+                workflow_id, NEGATIVE, {"label": "Second"}, expected_revision=1
+            ).revision,
+            2,
         )
         self.assertEqual(self.controls(workflow_id)[NEGATIVE].label, "Second")
 
@@ -398,13 +445,17 @@ class RevisionConflicts(CorrectionTestCase):
     def test_saving_is_refused_while_the_catalog_is_unavailable(self) -> None:
         """Unvalidated controls must not become the key of a saved correction."""
         workflow_id = self.import_graph()
-        offline = CatalogSnapshot(nodes={}, freshness=CatalogFreshness(state="unavailable"))
+        offline = CatalogSnapshot(
+            nodes={}, freshness=CatalogFreshness(state="unavailable")
+        )
         with self.assertRaises(CorrectionError) as caught:
             self.service.save_correction(
                 "default",
                 workflow_id,
                 offline,
-                SaveCorrection(binding_id=NEGATIVE, presentation=Presentation(label="x")),
+                SaveCorrection(
+                    binding_id=NEGATIVE, presentation=Presentation(label="x")
+                ),
             )
         self.assertEqual(caught.exception.status, 409)
 

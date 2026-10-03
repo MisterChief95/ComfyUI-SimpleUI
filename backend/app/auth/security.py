@@ -51,7 +51,12 @@ def hash_password(password: str) -> str:
     """Return an encoded ``scrypt$n$r$p$salt$hash`` string. Never store plaintext."""
     salt = secrets.token_bytes(16)
     derived = hashlib.scrypt(
-        password.encode("utf-8"), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=_DKLEN
+        password.encode("utf-8"),
+        salt=salt,
+        n=_SCRYPT_N,
+        r=_SCRYPT_R,
+        p=_SCRYPT_P,
+        dklen=_DKLEN,
     )
     return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${_b64(salt)}${_b64(derived)}"
 

@@ -143,7 +143,9 @@ class Database:
                 "CREATE TABLE IF NOT EXISTS schema_migrations ("
                 " version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_ms INTEGER NOT NULL)"
             )
-            applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+            applied = {
+                row[0] for row in conn.execute("SELECT version FROM schema_migrations")
+            }
             conn.autocommit = False
             for version, script in _migration_files(self._migrations_dir):
                 if version in applied:

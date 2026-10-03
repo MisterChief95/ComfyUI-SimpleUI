@@ -20,9 +20,15 @@ from tests.uploads.support import png_bytes
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
-SNAPSHOT = CatalogSnapshot(freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={})
+SNAPSHOT = CatalogSnapshot(
+    freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={}
+)
 PASSWORD = "default-password"
 
 
@@ -64,23 +70,30 @@ class UploadBindingTest(AuthTestCase):
     def import_graph(self, client):
         body = (FIXTURES / "graphs" / "image_loader_input.api.json").read_bytes()
         response = self.post(
-            client, "/api/workflows?name=Loader",
-            content=body, headers={"content-type": "application/json"},
+            client,
+            "/api/workflows?name=Loader",
+            content=body,
+            headers={"content-type": "application/json"},
         )
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["id"]
 
     def upload(self, client, kind: str, filename: str, data: bytes) -> str:
-        response = self.post(client, f"/api/uploads?kind={kind}&filename={filename}", content=data)
+        response = self.post(
+            client, f"/api/uploads?kind={kind}&filename={filename}", content=data
+        )
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["id"]
 
     def submit(self, client, workflow_id: str, edits: dict, request_key: str = "req-1"):
         return self.post(
-            client, "/api/generations",
+            client,
+            "/api/generations",
             json={
-                "workflow_id": workflow_id, "request_key": request_key,
-                "seed_policy": "fixed", "edits": edits,
+                "workflow_id": workflow_id,
+                "request_key": request_key,
+                "seed_policy": "fixed",
+                "edits": edits,
             },
         )
 
@@ -93,10 +106,16 @@ class UploadBindingTest(AuthTestCase):
         self.assertEqual(response.status_code, 201, response.text)
 
         submitted_value = self.upstream.last_graph["2"]["inputs"]["image"]
-        self.assertNotEqual(submitted_value, upload_id, "the raw upload id must never reach ComfyUI")
-        self.assertTrue(submitted_value.startswith("simpleui/default/"), submitted_value)
+        self.assertNotEqual(
+            submitted_value, upload_id, "the raw upload id must never reach ComfyUI"
+        )
+        self.assertTrue(
+            submitted_value.startswith("simpleui/default/"), submitted_value
+        )
 
-    def test_a_foreign_upload_id_is_refused_and_nothing_is_left_half_submitted(self) -> None:
+    def test_a_foreign_upload_id_is_refused_and_nothing_is_left_half_submitted(
+        self,
+    ) -> None:
         self.enable_multi_user(PASSWORD)
         owner = self.local_client()
         self.login(owner, "Default", PASSWORD)

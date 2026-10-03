@@ -297,11 +297,14 @@ class AuthService:
         if multi_user:
             return None
         profile = self.db.query_one(
-            "SELECT id, name, is_default FROM profiles WHERE id = ?", (DEFAULT_PROFILE_ID,)
+            "SELECT id, name, is_default FROM profiles WHERE id = ?",
+            (DEFAULT_PROFILE_ID,),
         )
         if profile is None:  # pragma: no cover - migration 001 guarantees it
             return None
-        return Principal(profile["id"], profile["name"], bool(profile["is_default"]), None)
+        return Principal(
+            profile["id"], profile["name"], bool(profile["is_default"]), None
+        )
 
     def login(self, name: str, password: str) -> str:
         if not self.multi_user_enabled():
@@ -349,7 +352,11 @@ class AuthService:
     def list_profiles(self) -> list[dict[str, Any]]:
         """Names only: a login picker needs them, and nothing else is exposed."""
         return [
-            {"id": row["id"], "name": row["name"], "is_default": bool(row["is_default"])}
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "is_default": bool(row["is_default"]),
+            }
             for row in self.db.query(
                 "SELECT id, name, is_default FROM profiles ORDER BY is_default DESC, name"
             )
@@ -391,7 +398,9 @@ class AuthService:
             )
             # Other devices keep working only if the owner wanted that; a
             # password change is the cheap way to evict a forgotten session.
-            conn.execute("DELETE FROM sessions WHERE profile_id = ?", (principal.profile_id,))
+            conn.execute(
+                "DELETE FROM sessions WHERE profile_id = ?", (principal.profile_id,)
+            )
 
     # --- mode switch ------------------------------------------------------
 
@@ -403,7 +412,9 @@ class AuthService:
         )
         return int(row["n"]) if row else 0
 
-    def activate_multi_user(self, default_password: str, timeout: float = DRAIN_TIMEOUT_S) -> None:
+    def activate_multi_user(
+        self, default_password: str, timeout: float = DRAIN_TIMEOUT_S
+    ) -> None:
         """Turn on multi-user mode, giving Default the supplied password.
 
         Order matters: cheap preconditions first, then close admission, then a

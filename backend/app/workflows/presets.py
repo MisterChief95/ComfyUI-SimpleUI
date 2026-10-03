@@ -21,7 +21,9 @@ MAX_VALUES = 500
 MAX_VALUES_BYTES = 256 * 1024
 _SAFE_INT = 2**53
 
-PresetName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+PresetName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
+]
 BindingId = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 Scalar = str | bool | int | Annotated[float, Field(allow_inf_nan=False)]
 PresetValues = Annotated[dict[BindingId, Scalar], Field(max_length=MAX_VALUES)]
@@ -30,10 +32,13 @@ PresetValues = Annotated[dict[BindingId, Scalar], Field(max_length=MAX_VALUES)]
 def normalize_values(values: dict[str, Scalar]) -> dict[str, Scalar]:
     """Big integers become ExactInt strings; the serialized form must fit the cap."""
     out = {
-        key: str(v) if type(v) is int and abs(v) >= _SAFE_INT else v for key, v in values.items()
+        key: str(v) if type(v) is int and abs(v) >= _SAFE_INT else v
+        for key, v in values.items()
     }
     if len(json.dumps(out, allow_nan=False).encode()) > MAX_VALUES_BYTES:
-        raise ValueError(f"preset values may serialize to at most {MAX_VALUES_BYTES} bytes")
+        raise ValueError(
+            f"preset values may serialize to at most {MAX_VALUES_BYTES} bytes"
+        )
     return out
 
 

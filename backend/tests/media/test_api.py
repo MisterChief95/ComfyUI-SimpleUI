@@ -10,11 +10,10 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from PIL import Image
-
 from app.media import MediaService
 from app.media import router as media_router
 from app.storage import DEFAULT_PROFILE_ID
+from PIL import Image
 
 # Absolute: under `discover -s tests` the top-level package is tests/ itself,
 # so a relative import climbs out of it.
@@ -62,7 +61,10 @@ class MediaApiTestCase(AuthTestCase):
         return path
 
     def own_media(self, owner_id: str = DEFAULT_PROFILE_ID) -> dict[str, dict]:
-        return {item["filename"]: item for item in self.media.list_media(owner_id, None, 50)["items"]}
+        return {
+            item["filename"]: item
+            for item in self.media.list_media(owner_id, None, 50)["items"]
+        }
 
 
 class GalleryTest(MediaApiTestCase):
@@ -196,7 +198,9 @@ class VideoStreamingTest(MediaApiTestCase):
         response = self.client.get(self.url, headers={"range": "bytes=999999-"})
 
         self.assertEqual(response.status_code, 416)
-        self.assertEqual(response.headers["content-range"], f"bytes */{len(VIDEO_BYTES)}")
+        self.assertEqual(
+            response.headers["content-range"], f"bytes */{len(VIDEO_BYTES)}"
+        )
 
 
 class DeleteTest(MediaApiTestCase):
@@ -267,12 +271,17 @@ class PrivacyTest(MediaApiTestCase):
                 self.assertEqual(client.get(url).status_code, 404)
         # A range request is not a way around it either.
         self.assertEqual(
-            client.get(f"/api/media/{video}/file", headers={"range": "bytes=0-3"}).status_code,
+            client.get(
+                f"/api/media/{video}/file", headers={"range": "bytes=0-3"}
+            ).status_code,
             404,
         )
         self.assertEqual(client.head(f"/api/media/{video}/file").status_code, 404)
         self.assertEqual(
-            self.put(client, f"/api/media/{image}", json={"favorite": True}).status_code, 404
+            self.put(
+                client, f"/api/media/{image}", json={"favorite": True}
+            ).status_code,
+            404,
         )
         self.assertTrue((self.media.thumbnails / f"{image}.jpg").is_file())
 
@@ -284,7 +293,10 @@ class PrivacyTest(MediaApiTestCase):
         self.assertEqual(len(client.get("/api/media").json()["items"]), 2)
         self.assertEqual(client.get(f"/api/media/{image}/thumbnail").status_code, 200)
         self.assertEqual(
-            self.put(client, f"/api/media/{image}", json={"favorite": True}).status_code, 200
+            self.put(
+                client, f"/api/media/{image}", json={"favorite": True}
+            ).status_code,
+            200,
         )
         self.assertTrue(self.own_media()["owned-by-default.png"]["favorite"])
 
@@ -304,7 +316,9 @@ class ImportRouteTest(MediaApiTestCase):
 
         refused = self.post(self.lan_client(), "/api/media/import")
         self.assertEqual(refused.status_code, 403)
-        self.assertEqual(self.media.list_media(DEFAULT_PROFILE_ID, None, 50)["items"], [])
+        self.assertEqual(
+            self.media.list_media(DEFAULT_PROFILE_ID, None, 50)["items"], []
+        )
 
         accepted = self.post(self.local_client(), "/api/media/import")
         self.assertEqual(accepted.status_code, 200)

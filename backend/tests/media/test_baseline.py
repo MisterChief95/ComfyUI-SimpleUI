@@ -18,6 +18,7 @@ from .support import MediaTestCase
 
 
 class BaselineImportTest(MediaTestCase):
+<<<<<<< Updated upstream
     def test_import_precomputes_image_thumbnails_without_ffmpeg(self) -> None:
         self.png("one.png")
         self.video("clip.mp4")
@@ -43,6 +44,11 @@ class BaselineImportTest(MediaTestCase):
         self.assertFalse(list(self.media.thumbnails.glob("*.part")))
 
     def test_existing_files_are_indexed_under_default_with_unknown_metadata(self) -> None:
+=======
+    def test_existing_files_are_indexed_under_default_with_unknown_metadata(
+        self,
+    ) -> None:
+>>>>>>> Stashed changes
         self.png("one.png")
         self.png("nested/two.png")
         self.video("clip.mp4")
@@ -52,7 +58,9 @@ class BaselineImportTest(MediaTestCase):
 
         self.assertEqual(counts["indexed"], 3)
         items = self.gallery()
-        self.assertEqual({item["filename"] for item in items}, {"one.png", "two.png", "clip.mp4"})
+        self.assertEqual(
+            {item["filename"] for item in items}, {"one.png", "two.png", "clip.mp4"}
+        )
         self.assertEqual({item["media_kind"] for item in items}, {"image", "video"})
         # Old files have no execution record; the card says unknown rather than
         # inventing a workflow or prompt for them.
@@ -114,7 +122,10 @@ class BaselineImportTest(MediaTestCase):
 
         self.assertEqual(self.filenames(), {"first.png", "second.png"})
         self.assertEqual(
-            [row["relative_path"] for row in self.db.query("SELECT relative_path FROM unresolved_media")],
+            [
+                row["relative_path"]
+                for row in self.db.query("SELECT relative_path FROM unresolved_media")
+            ],
             ["late.png"],
         )
 
@@ -137,7 +148,9 @@ class BaselineImportTest(MediaTestCase):
         self.png("later.png", root=moved)
         self.assertEqual(self.media.import_baseline()["unresolved"], 1)
 
-    def test_a_different_folder_behind_the_same_path_also_needs_confirming(self) -> None:
+    def test_a_different_folder_behind_the_same_path_also_needs_confirming(
+        self,
+    ) -> None:
         """Same configured path, different volume/folder identity."""
         self.png("old.png")
         self.media.import_baseline()
@@ -151,7 +164,9 @@ class BaselineImportTest(MediaTestCase):
         self.media.import_baseline(explicit=True)
         self.assertIn("someone-elses.png", self.filenames())
 
-    def test_a_deleted_file_becomes_unavailable_instead_of_failing_the_scan(self) -> None:
+    def test_a_deleted_file_becomes_unavailable_instead_of_failing_the_scan(
+        self,
+    ) -> None:
         self.png("keep.png")
         gone = self.png("gone.png")
         self.media.import_baseline()

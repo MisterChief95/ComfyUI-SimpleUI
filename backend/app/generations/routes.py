@@ -22,8 +22,8 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from ..comfy_client import ComfyUnavailable
 from ..auth.routes import CurrentPrincipal, Mutation
+from ..comfy_client import ComfyUnavailable
 from ..contracts import Id, Model, Page
 from ..mapping import SeedPolicy, SubmissionError, build_submission_graph, resolve_seed
 from ..mapping.input_adapters import InputAdapterError, bind_upload
@@ -96,27 +96,43 @@ def _public(row: dict[str, Any]) -> GenerationInfo:
 
 
 def _can_retry(row: dict[str, Any]) -> bool:
-    return row["status"] in ("succeeded", "failed", "cancelled", "interrupted") and bool(
-        row.get("graph_json") or row.get("graph")
-    )
+    return row["status"] in (
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted",
+    ) and bool(row.get("graph_json") or row.get("graph"))
 
 
 def _detail(row: dict[str, Any]) -> GenerationDetail:
-    return GenerationDetail(**_public(row).model_dump(), effective_values=row.get("effective_values"))
+    return GenerationDetail(
+        **_public(row).model_dump(), effective_values=row.get("effective_values")
+    )
 
 
-@router.post("", response_model=GenerationDetail, status_code=201, dependencies=[Mutation])
+@router.post(
+    "", response_model=GenerationDetail, status_code=201, dependencies=[Mutation]
+)
 async def submit_generation(
     request: Request, principal: CurrentPrincipal, body: SubmitRequest
 ) -> GenerationDetail:
     state = request.app.state
     snapshot = await state.catalog.snapshot()
-    schema = await in_thread(state.workflows.control_schema, principal.owner_id, body.workflow_id, snapshot)
+    schema = await in_thread(
+        state.workflows.control_schema, principal.owner_id, body.workflow_id, snapshot
+    )
     if schema is None:
         raise HTTPException(404, "Workflow was not found.")
-    workflow = await in_thread(state.repository.get_workflow, principal.owner_id, body.workflow_id)
+    workflow = await in_thread(
+        state.repository.get_workflow, principal.owner_id, body.workflow_id
+    )
     revision = int(workflow["current_revision"])
-    graph = await in_thread(state.repository.get_workflow_graph, principal.owner_id, body.workflow_id, revision)
+    graph = await in_thread(
+        state.repository.get_workflow_graph,
+        principal.owner_id,
+        body.workflow_id,
+        revision,
+    )
 
     profile_settings = await in_thread(state.settings.profile, principal.owner_id)
     seed_policy: SeedPolicy = body.seed_policy or profile_settings["seed_policy"]
@@ -138,7 +154,11 @@ async def submit_generation(
             continue
         try:
             staged_edits[control.binding_id] = await in_thread(
-                bind_upload, control, state.uploads, principal.owner_id, staged_edits[control.binding_id]
+                bind_upload,
+                control,
+                state.uploads,
+                principal.owner_id,
+                staged_edits[control.binding_id],
             )
         except InputAdapterError as exc:
             raise HTTPException(422, str(exc)) from exc
@@ -159,8 +179,14 @@ async def submit_generation(
                 )
                 if last not in (None, ""):
                     current = int(last)
-            maximum = int(control.constraints.exact_max) if control.constraints and control.constraints.exact_max else DEFAULT_SEED_MAX
-            edits[control.binding_id] = str(resolve_seed(current, seed_policy, maximum=maximum))
+            maximum = (
+                int(control.constraints.exact_max)
+                if control.constraints and control.constraints.exact_max
+                else DEFAULT_SEED_MAX
+            )
+            edits[control.binding_id] = str(
+                resolve_seed(current, seed_policy, maximum=maximum)
+            )
         submission_graph = build_submission_graph(graph, schema, edits)
         return submission_graph, edits
 
@@ -168,7 +194,11 @@ async def submit_generation(
         row = await generations.submit(
             principal.owner_id,
             request_key=body.request_key,
-            request_payload={"workflow_id": body.workflow_id, "edits": body.edits, "seed_policy": seed_policy},
+            request_payload={
+                "workflow_id": body.workflow_id,
+                "edits": body.edits,
+                "seed_policy": seed_policy,
+            },
             resolve=resolve,
             workflow_id=body.workflow_id,
             workflow_revision=revision,
@@ -195,36 +225,58 @@ async def list_generations(
     await _reconcile_before_read(request, principal.owner_id)
     try:
         page = await in_thread(
-            request.app.state.repository.list_generations, principal.owner_id, cursor, limit, status == "active"
+            request.app.state.repository.list_generations,
+            principal.owner_id,
+            cursor,
+            limit,
+            status == "active",
         )
     except ValueError as exc:  # a cursor the client edited or truncated
         raise HTTPException(400, "Malformed generations cursor.") from exc
-    return Page[GenerationInfo](items=[_public(row) for row in page.items], next_cursor=page.next_cursor)
+    return Page[GenerationInfo](
+        items=[_public(row) for row in page.items], next_cursor=page.next_cursor
+    )
 
 
 class RetryRequest(Model):
     request_key: Id
 
 
-@router.post("/{generation_id}/retry", response_model=GenerationDetail, status_code=201, dependencies=[Mutation])
+@router.post(
+    "/{generation_id}/retry",
+    response_model=GenerationDetail,
+    status_code=201,
+    dependencies=[Mutation],
+)
 async def retry_generation(
-    request: Request, generation_id: str, principal: CurrentPrincipal, body: RetryRequest
+    request: Request,
+    generation_id: str,
+    principal: CurrentPrincipal,
+    body: RetryRequest,
 ) -> GenerationDetail:
     state = request.app.state
     await _reconcile_before_read(request, principal.owner_id)
-    source = await in_thread(state.generations.store.get, principal.owner_id, generation_id)
+    source = await in_thread(
+        state.generations.store.get, principal.owner_id, generation_id
+    )
     if source is None:
         raise HTTPException(404, "Generation was not found.")
     if not _can_retry(source):
-        raise HTTPException(409, "Retry requires a finished generation with a retained execution snapshot. Uncertain executions must be reconciled first.")
+        raise HTTPException(
+            409,
+            "Retry requires a finished generation with a retained execution snapshot. Uncertain executions must be reconciled first.",
+        )
     settings = await in_thread(state.settings.profile, principal.owner_id)
     try:
         row = await state.generations.submit(
-            principal.owner_id, request_key=body.request_key,
+            principal.owner_id,
+            request_key=body.request_key,
             request_payload={"retry_generation_id": generation_id},
             resolve=lambda: (source["graph"], source["effective_values"] or {}),
-            workflow_id=source["workflow_id"], workflow_revision=source["workflow_revision"],
-            mapping_revision=source["mapping_revision"], store_history=settings["store_history"],
+            workflow_id=source["workflow_id"],
+            workflow_revision=source["workflow_revision"],
+            mapping_revision=source["mapping_revision"],
+            store_history=settings["store_history"],
         )
     except GenerationConflict as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -235,7 +287,8 @@ async def retry_generation(
 
 @router.get("/recent-prompts", response_model=Page[RecentPrompt])
 async def recent_prompts(
-    request: Request, principal: CurrentPrincipal,
+    request: Request,
+    principal: CurrentPrincipal,
     workflow_id: Annotated[str, Query(min_length=1, max_length=128)],
     binding_id: Annotated[str, Query(min_length=1, max_length=256)],
     q: Annotated[str, Query(max_length=500)] = "",
@@ -244,21 +297,38 @@ async def recent_prompts(
 ) -> Page[RecentPrompt]:
     state = request.app.state
     snapshot = await state.catalog.snapshot()
-    schema = await in_thread(state.workflows.control_schema, principal.owner_id, workflow_id, snapshot)
+    schema = await in_thread(
+        state.workflows.control_schema, principal.owner_id, workflow_id, snapshot
+    )
     if schema is None:
         raise HTTPException(404, "Workflow was not found.")
-    if not any(c.binding_id == binding_id and c.logical_type == "string" for c in schema.controls):
+    if not any(
+        c.binding_id == binding_id and c.logical_type == "string"
+        for c in schema.controls
+    ):
         raise HTTPException(422, "Choose a string control from this workflow.")
     settings = await in_thread(state.settings.profile, principal.owner_id)
     if not settings["store_history"]:
         return Page[RecentPrompt](items=[])
     try:
-        page = await in_thread(state.generations.store.recent_prompts,
-                               principal.owner_id, workflow_id, binding_id, q, cursor, limit)
+        page = await in_thread(
+            state.generations.store.recent_prompts,
+            principal.owner_id,
+            workflow_id,
+            binding_id,
+            q,
+            cursor,
+            limit,
+        )
     except ValueError as exc:
         raise HTTPException(400, "Malformed prompt cursor.") from exc
-    return Page[RecentPrompt](items=[RecentPrompt(text=row["text"], created_ms=str(row["created_ms"]))
-                                   for row in page.items], next_cursor=page.next_cursor)
+    return Page[RecentPrompt](
+        items=[
+            RecentPrompt(text=row["text"], created_ms=str(row["created_ms"]))
+            for row in page.items
+        ],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get("/{generation_id}", response_model=GenerationDetail)
@@ -294,7 +364,9 @@ async def _reconcile_before_read(request: Request, owner_id: str) -> None:
     """
     profile_settings = await in_thread(request.app.state.settings.profile, owner_id)
     generations: GenerationService = request.app.state.generations
-    await generations.reconcile_if_due(history_retention={owner_id: profile_settings["store_history"]})
+    await generations.reconcile_if_due(
+        history_retention={owner_id: profile_settings["store_history"]}
+    )
 
 
 @router.post("/{generation_id}/cancel", status_code=204, dependencies=[Mutation])

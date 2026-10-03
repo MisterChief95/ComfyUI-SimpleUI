@@ -58,7 +58,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="Show profile names and whether they have a password")
     for name, help_text in (
-        ("set-password", "Set a profile's password and sign that profile out everywhere"),
+        (
+            "set-password",
+            "Set a profile's password and sign that profile out everywhere",
+        ),
         ("unlock", "Clear the in-database sessions for one profile"),
     ):
         p = sub.add_parser(name, help=help_text)
@@ -99,7 +102,9 @@ def _run(db: Database, args: argparse.Namespace) -> int:
                 (hash_password(password), profile_id),
             )
             conn.execute("DELETE FROM sessions WHERE profile_id = ?", (profile_id,))
-        print(f"Password updated for {args.profile!r}; its other sessions were signed out.")
+        print(
+            f"Password updated for {args.profile!r}; its other sessions were signed out."
+        )
         return 0
 
     if args.command == "unlock":
@@ -113,7 +118,9 @@ def _run(db: Database, args: argparse.Namespace) -> int:
         return 0
 
     # disable-multi-user
-    extra = db.query_one("SELECT COUNT(*) AS n FROM profiles WHERE id != ?", (DEFAULT_PROFILE_ID,))
+    extra = db.query_one(
+        "SELECT COUNT(*) AS n FROM profiles WHERE id != ?", (DEFAULT_PROFILE_ID,)
+    )
     if extra and int(extra["n"]) > 0:
         print(
             "Refused: other profiles still exist. Disabling multi-user mode would expose their "
@@ -124,7 +131,8 @@ def _run(db: Database, args: argparse.Namespace) -> int:
         return 2
     with db.write() as conn:
         conn.execute(
-            "UPDATE profiles SET password_hash = NULL WHERE id = ?", (DEFAULT_PROFILE_ID,)
+            "UPDATE profiles SET password_hash = NULL WHERE id = ?",
+            (DEFAULT_PROFILE_ID,),
         )
         conn.execute("DELETE FROM sessions")
         write_host(conn, MULTI_USER_ENABLED, False)

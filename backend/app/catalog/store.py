@@ -46,8 +46,12 @@ class CatalogStore:
         if row is None:
             return None
         record = dict(row)
-        record["normalized"] = json.loads(record["normalized_json"]) if record["normalized_json"] else None
-        record["error"] = json.loads(record["error_json"]) if record["error_json"] else None
+        record["normalized"] = (
+            json.loads(record["normalized_json"]) if record["normalized_json"] else None
+        )
+        record["error"] = (
+            json.loads(record["error_json"]) if record["error_json"] else None
+        )
         return record
 
     def load_raw(self) -> Any | None:

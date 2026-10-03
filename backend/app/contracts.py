@@ -94,9 +94,7 @@ class Revisioned(Model):
 
 # --- control descriptors --------------------------------------------------
 
-LogicalType = Literal[
-    "string", "int", "float", "boolean", "enum", "file", "unknown"
-]
+LogicalType = Literal["string", "int", "float", "boolean", "enum", "file", "unknown"]
 
 Component = Literal[
     "text",

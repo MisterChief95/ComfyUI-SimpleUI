@@ -148,7 +148,9 @@ class UploadService:
             with Image.open(path) as image:
                 image.verify()
         except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
-            raise UploadError("invalid_image", "That file is not a readable image.") from exc
+            raise UploadError(
+                "invalid_image", "That file is not a readable image."
+            ) from exc
 
     # --- reading --------------------------------------------------------------
 
@@ -168,7 +170,11 @@ class UploadService:
         return "other"
 
     def list_uploads(
-        self, owner_id: str, cursor: str | None, limit: int, media_kind: str | None = None
+        self,
+        owner_id: str,
+        cursor: str | None,
+        limit: int,
+        media_kind: str | None = None,
     ) -> PageResult:
         """Filtered, cursor-paginated listing for "selection filtering" in the UI.
 
@@ -179,10 +185,13 @@ class UploadService:
         """
         self._maybe_sweep()
         limit = max(1, min(limit, 200))
-        rows = [dict(r) for r in self.db.query(
-            "SELECT * FROM uploads WHERE owner_id = ? ORDER BY created_ms DESC, id DESC",
-            (owner_id,),
-        )]
+        rows = [
+            dict(r)
+            for r in self.db.query(
+                "SELECT * FROM uploads WHERE owner_id = ? ORDER BY created_ms DESC, id DESC",
+                (owner_id,),
+            )
+        ]
         if media_kind:
             rows = [r for r in rows if self.classify(r) == media_kind]
         start = 0
@@ -194,7 +203,9 @@ class UploadService:
                     start = index
                     break
         page = rows[start : start + limit]
-        next_cursor = _encode_cursor(page[-1]) if len(rows) > start + limit and page else None
+        next_cursor = (
+            _encode_cursor(page[-1]) if len(rows) > start + limit and page else None
+        )
         return PageResult(items=page, next_cursor=next_cursor)
 
     # --- staging into ComfyUI's input directory -------------------------------
@@ -209,7 +220,9 @@ class UploadService:
         """
         row = self.get(owner_id, upload_id)
         if row is None:
-            raise UploadError("upload_missing", "That upload was not found; choose a replacement.")
+            raise UploadError(
+                "upload_missing", "That upload was not found; choose a replacement."
+            )
         kind = self.classify(row)
         if kind not in STAGEABLE_KINDS:
             raise UploadError(
@@ -224,14 +237,18 @@ class UploadService:
         source = self.private_root / row["storage_path"]
         if not source.is_file():
             raise UploadError(
-                "upload_missing", "The uploaded file is no longer available; choose a replacement."
+                "upload_missing",
+                "The uploaded file is no longer available; choose a replacement.",
             )
         input_root = self._input_root()
-        staged_relative = f"simpleui/{owner_id}/{row['id']}{Path(row['storage_path']).suffix}"
+        staged_relative = (
+            f"simpleui/{owner_id}/{row['id']}{Path(row['storage_path']).suffix}"
+        )
         target = self._safe_join(input_root, staged_relative)
         if target is None:
             raise UploadError(
-                "input_dir_unavailable", "The configured ComfyUI input folder is unusable."
+                "input_dir_unavailable",
+                "The configured ComfyUI input folder is unusable.",
             )
         target.parent.mkdir(parents=True, exist_ok=True)
         temp = target.with_suffix(target.suffix + ".part")
@@ -241,7 +258,8 @@ class UploadService:
         except OSError as exc:
             temp.unlink(missing_ok=True)
             raise UploadError(
-                "input_dir_unavailable", "Could not stage the upload into the ComfyUI input folder."
+                "input_dir_unavailable",
+                "Could not stage the upload into the ComfyUI input folder.",
             ) from exc
         with self.db.write() as conn:
             conn.execute(
@@ -261,11 +279,13 @@ class UploadService:
             root = Path(raw).resolve(strict=True)
         except OSError as exc:
             raise UploadError(
-                "input_dir_unavailable", "The configured ComfyUI input folder is unavailable."
+                "input_dir_unavailable",
+                "The configured ComfyUI input folder is unavailable.",
             ) from exc
         if not root.is_dir():
             raise UploadError(
-                "input_dir_unavailable", "The configured ComfyUI input folder is not a directory."
+                "input_dir_unavailable",
+                "The configured ComfyUI input folder is not a directory.",
             )
         return root
 
@@ -301,13 +321,20 @@ class UploadService:
         self._last_sweep = now
         self.sweep_abandoned()
 
-    def sweep_abandoned(self, *, grace_ms: int = DEFAULT_GRACE_MS, now: int | None = None) -> int:
+    def sweep_abandoned(
+        self, *, grace_ms: int = DEFAULT_GRACE_MS, now: int | None = None
+    ) -> int:
         """Delete uploads older than ``grace_ms`` that no retained generation
         snapshot still references. Called lazily (see ``_maybe_sweep``); this
         codebase has no background job scheduler and this task does not add one.
         """
         cutoff = (now_ms() if now is None else now) - grace_ms
-        rows = [dict(r) for r in self.db.query("SELECT * FROM uploads WHERE created_ms < ?", (cutoff,))]
+        rows = [
+            dict(r)
+            for r in self.db.query(
+                "SELECT * FROM uploads WHERE created_ms < ?", (cutoff,)
+            )
+        ]
         removed = 0
         for row in rows:
             if self._is_referenced(row):

@@ -22,13 +22,15 @@ def fixture_files():
     """Every fixture file on disk, excluding this test and the manifest."""
     skip = {ROOT / "MANIFEST.json", Path(__file__).resolve()}
     return sorted(
-        p for p in ROOT.rglob("*")
+        p
+        for p in ROOT.rglob("*")
         if p.is_file() and p not in skip and p.suffix in {".json", ".jsonl", ".md"}
     )
 
 
 def strict_load(path):
     """Parse JSON the way the importer must: no NaN/Infinity, no duplicate keys."""
+
     def no_duplicates(pairs):
         seen = set()
         for key, _ in pairs:
@@ -65,7 +67,9 @@ class ManifestMatchesDisk(unittest.TestCase):
 
     def test_provenance_is_declared_and_known(self):
         for entry in MANIFEST["files"]:
-            self.assertIn(entry["provenance"], MANIFEST["provenance_values"], entry["path"])
+            self.assertIn(
+                entry["provenance"], MANIFEST["provenance_values"], entry["path"]
+            )
 
 
 class FixturesParse(unittest.TestCase):
@@ -118,7 +122,7 @@ class ExactIntegerTransport(unittest.TestCase):
     def test_seed_exceeds_javascript_safe_range(self):
         graph = strict_load(ROOT / "graphs" / "image_large_seed.api.json")
         for node in ("5", "6"):
-            self.assertGreater(graph[node]["inputs"]["seed"], 2 ** 53)
+            self.assertGreater(graph[node]["inputs"]["seed"], 2**53)
 
 
 class NoPrivateData(unittest.TestCase):
@@ -130,14 +134,22 @@ class NoPrivateData(unittest.TestCase):
                     self.assertNotIn(needle.lower(), text)
 
     def test_sanitized_projection_withholds_shared_input_filenames(self):
-        raw = (ROOT / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8")
-        projection = strict_load(ROOT / "catalog" / "sanitized_projection.expected.json")
+        raw = (ROOT / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+        projection = strict_load(
+            ROOT / "catalog" / "sanitized_projection.expected.json"
+        )
         withheld = projection["must_not_appear_in_projection"]
         self.assertTrue(withheld)
         rendered = json.dumps(projection["nodes"])
         for name in withheld:
-            self.assertIn(name, raw, "fixture drift: name should exist in the raw catalog")
-            self.assertNotIn(name, rendered, "shared input filename leaked into the projection")
+            self.assertIn(
+                name, raw, "fixture drift: name should exist in the raw catalog"
+            )
+            self.assertNotIn(
+                name, rendered, "shared input filename leaked into the projection"
+            )
 
 
 class LiveGate(unittest.TestCase):

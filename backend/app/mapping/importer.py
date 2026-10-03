@@ -104,7 +104,9 @@ def parse_graph(payload: bytes | str) -> dict[str, Any]:
             text, parse_constant=_reject_constant, object_pairs_hook=_no_duplicate_keys
         )
     except json.JSONDecodeError as exc:
-        raise GraphImportError("malformed_json", f"The workflow is not valid JSON: {exc}") from exc
+        raise GraphImportError(
+            "malformed_json", f"The workflow is not valid JSON: {exc}"
+        ) from exc
 
     return _as_node_map(document)
 
@@ -116,7 +118,9 @@ def _as_node_map(document: Any) -> dict[str, Any]:
             "A ComfyUI API workflow is a JSON object mapping node IDs to nodes.",
         )
 
-    if isinstance(document.get("nodes"), list) and isinstance(document.get("links"), list):
+    if isinstance(document.get("nodes"), list) and isinstance(
+        document.get("links"), list
+    ):
         raise GraphImportError(
             "ui_export_not_api",
             "This is a regular ComfyUI workflow export, not API format. In ComfyUI use "
@@ -170,7 +174,8 @@ def _is_node_map(value: Any) -> bool:
 def _check_depth(value: Any, depth: int = 0) -> None:
     if depth > MAX_DEPTH:
         raise GraphImportError(
-            "graph_too_deep", f"The workflow nests JSON more than {MAX_DEPTH} levels deep."
+            "graph_too_deep",
+            f"The workflow nests JSON more than {MAX_DEPTH} levels deep.",
         )
     if isinstance(value, dict):
         for item in value.values():

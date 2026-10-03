@@ -36,7 +36,9 @@ router = APIRouter(prefix="/api")
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
-Name = Annotated[str, StringConstraints(min_length=1, max_length=64, strip_whitespace=True)]
+Name = Annotated[
+    str, StringConstraints(min_length=1, max_length=64, strip_whitespace=True)
+]
 Secret = Annotated[str, StringConstraints(min_length=1, max_length=1024)]
 
 
@@ -152,7 +154,9 @@ def _clear_session_cookies(response: Response) -> None:
     response.delete_cookie(CSRF_COOKIE, path="/")
 
 
-def _session_info(request: Request, principal: Principal | None, multi_user: bool) -> SessionInfo:
+def _session_info(
+    request: Request, principal: Principal | None, multi_user: bool
+) -> SessionInfo:
     if principal is None:
         return SessionInfo(authenticated=False, multi_user=multi_user, anonymous=False)
     return SessionInfo(
@@ -160,7 +164,9 @@ def _session_info(request: Request, principal: Principal | None, multi_user: boo
         multi_user=multi_user,
         anonymous=principal.session_token is None,
         profile=ProfileInfo(
-            id=principal.profile_id, name=principal.name, is_default=principal.is_default
+            id=principal.profile_id,
+            name=principal.name,
+            is_default=principal.is_default,
         ),
         csrf_token=(
             None
@@ -182,7 +188,9 @@ async def read_session(request: Request) -> SessionInfo:
 
 
 @router.post("/session", response_model=SessionInfo, dependencies=[Mutation])
-async def login(request: Request, response: Response, body: LoginRequest) -> SessionInfo:
+async def login(
+    request: Request, response: Response, body: LoginRequest
+) -> SessionInfo:
     service = auth_service(request)
     token = await in_thread(service.login, body.name, body.password)
     _set_session_cookies(request, response, token)
@@ -216,7 +224,9 @@ async def list_profiles(request: Request) -> ProfileList:
     status_code=201,
     dependencies=[Mutation, LocalRequest],
 )
-async def create_profile(request: Request, body: CreateProfileRequest) -> CreatedProfile:
+async def create_profile(
+    request: Request, body: CreateProfileRequest
+) -> CreatedProfile:
     service = auth_service(request)
     profile_id = await in_thread(service.create_profile, body.name, body.password)
     return CreatedProfile(id=profile_id, name=body.name)
@@ -224,7 +234,10 @@ async def create_profile(request: Request, body: CreateProfileRequest) -> Create
 
 @router.post("/profiles/me/password", status_code=204, dependencies=[Mutation])
 async def change_password(
-    request: Request, response: Response, principal: CurrentPrincipal, body: ChangePasswordRequest
+    request: Request,
+    response: Response,
+    principal: CurrentPrincipal,
+    body: ChangePasswordRequest,
 ) -> Response:
     service = auth_service(request)
     await in_thread(

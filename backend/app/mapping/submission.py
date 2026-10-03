@@ -113,7 +113,9 @@ def apply_edits(
         control = by_id.get(binding_id)
         if control is None:
             raise SubmissionError(
-                "unknown_binding", f"No control named {binding_id!r} in this workflow.", binding_id
+                "unknown_binding",
+                f"No control named {binding_id!r} in this workflow.",
+                binding_id,
             )
         if control.component == "readonly":
             raise SubmissionError(
@@ -125,7 +127,9 @@ def apply_edits(
         node = updated.get(control.node_id)
         if node is None:  # pragma: no cover - schema is built from this graph
             raise SubmissionError(
-                "unknown_binding", f"Node {control.node_id} is not in the graph.", binding_id
+                "unknown_binding",
+                f"Node {control.node_id} is not in the graph.",
+                binding_id,
             )
         node["inputs"][control.input_name] = _decode(control, raw)
     return updated
@@ -140,7 +144,9 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
         return value
     if control.logical_type == "float":
         if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
-            raise SubmissionError("invalid_value", f"{control.label} must be a number.", binding)
+            raise SubmissionError(
+                "invalid_value", f"{control.label} must be a number.", binding
+            )
         try:
             value = float(raw)
         except ValueError as exc:
@@ -177,7 +183,9 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
         )
     if control.logical_type in ("string", "file"):
         if not isinstance(raw, str):
-            raise SubmissionError("invalid_value", f"{control.label} must be text.", binding)
+            raise SubmissionError(
+                "invalid_value", f"{control.label} must be text.", binding
+            )
         return raw
     raise SubmissionError(
         "control_not_editable",
@@ -189,7 +197,9 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
 def _as_exact_int(raw: Any, binding: str) -> int:
     """Exact integers travel as decimal strings; a float is refused outright."""
     if isinstance(raw, bool):
-        raise SubmissionError("invalid_value", f"{binding} must be a whole number.", binding)
+        raise SubmissionError(
+            "invalid_value", f"{binding} must be a whole number.", binding
+        )
     if isinstance(raw, int):
         return raw
     if isinstance(raw, str) and raw.lstrip("-").isdigit():
@@ -207,8 +217,16 @@ def _check_exact_bounds(control: ControlDescriptor, value: int, binding: str) ->
     if constraints is None:
         return
     # Exact controls carry string bounds; ordinary INT controls carry numbers.
-    low = int(constraints.exact_min) if constraints.exact_min is not None else _floor(constraints.min)
-    high = int(constraints.exact_max) if constraints.exact_max is not None else _floor(constraints.max)
+    low = (
+        int(constraints.exact_min)
+        if constraints.exact_min is not None
+        else _floor(constraints.min)
+    )
+    high = (
+        int(constraints.exact_max)
+        if constraints.exact_max is not None
+        else _floor(constraints.max)
+    )
     if (low is not None and value < low) or (high is not None and value > high):
         raise SubmissionError(
             "value_out_of_range",
