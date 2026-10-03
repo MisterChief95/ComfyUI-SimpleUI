@@ -6,6 +6,7 @@
 	// original index so typed values (1 vs "1") survive filtering.
 	import type { EnumOption } from '$lib/contracts';
 	import { matchOptions } from './match';
+	import { isolateInput } from './isolateInput';
 
 	let {
 		id,
@@ -134,7 +135,7 @@
 </script>
 
 {#if searchable}
-	<div class="combo" class:open>
+	<div class="combo" class:open {@attach open ? isolateInput : undefined}>
 		<input
 			bind:this={input}
 			{id}

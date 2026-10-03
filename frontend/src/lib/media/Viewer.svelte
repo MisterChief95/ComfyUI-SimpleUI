@@ -4,8 +4,10 @@
 	// Navigation: prev/next buttons, ArrowLeft/ArrowRight, horizontal swipe on images,
 	// and (opt-in, per device) vertical swipe: up = next, down = previous.
 	import { onMount } from 'svelte';
+	import { on } from 'svelte/events';
 	import { MediaQuery } from 'svelte/reactivity';
 	import Icon from '$lib/ui/Icon.svelte';
+	import { isolateInput } from '$lib/ui/isolateInput';
 	import { settingsState } from '$lib/settings.svelte';
 	import GraphJson from './GraphJson.svelte';
 	import MetaValues from './MetaValues.svelte';
@@ -167,9 +169,13 @@
 	});
 
 	function onkeydown(event: KeyboardEvent): void {
+		if (event.defaultPrevented || event.isComposing) return;
 		const target = event.target as HTMLElement;
 		// Let video scrubbing and form fields keep their own arrow keys.
-		if (target.tagName === 'VIDEO' || target.tagName === 'INPUT' || target.tagName === 'SELECT')
+		if (
+			target.closest('video, input, select, textarea, [role="textbox"]') ||
+			target.isContentEditable
+		)
 			return;
 		if (event.key === 'ArrowLeft' && hasPrev) {
 			event.preventDefault();
@@ -220,7 +226,13 @@
 </script>
 
 {#if item}
-	<dialog bind:this={dialog} aria-labelledby={titleId} onclose={() => gallery.close()} {onkeydown}>
+	<dialog
+		{@attach (element) => on(element, 'keydown', onkeydown)}
+		{@attach isolateInput}
+		bind:this={dialog}
+		aria-labelledby={titleId}
+		onclose={() => gallery.close()}
+	>
 		<div class="body" class:with-details={showDetails} bind:this={body}>
 			<div class="view">
 				<header>
@@ -641,6 +653,7 @@
 		border-radius: var(--radius);
 	}
 	.strip {
+		overscroll-behavior: contain;
 		width: 100%;
 		box-sizing: border-box;
 		display: flex;
@@ -694,6 +707,7 @@
 	}
 
 	.details {
+		overscroll-behavior: contain;
 		flex: none;
 		max-height: 45%;
 		overflow-y: auto;
