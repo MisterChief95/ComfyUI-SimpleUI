@@ -608,3 +608,8 @@ input[type='checkbox'].switch:disabled {
 body:has(dialog[open]) {
 	overflow: hidden;
 }
+
+dialog,
+[popover] {
+	overscroll-behavior: contain;
+}

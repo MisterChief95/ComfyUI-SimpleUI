@@ -6,6 +6,7 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/ui/Icon.svelte';
+	import { isolatePopoverInput } from '$lib/ui/isolateInput';
 	import GenerateBar from './GenerateBar.svelte';
 	import PresetsMenu from './PresetsMenu.svelte';
 	import QueuePanel from './QueuePanel.svelte';
@@ -81,7 +82,7 @@
 	let shortcutsEnabled = $state(true);
 
 	function onkeydown(event: KeyboardEvent): void {
-		if (document.querySelector('dialog[open], :popover-open')) return;
+		if (event.defaultPrevented || document.querySelector('dialog[open], :popover-open')) return;
 		const target = event.target;
 		const typing =
 			target instanceof Element &&
@@ -171,7 +172,7 @@
 		<button type="button" class="btn" popovertarget={shortcutsId} aria-label="Keyboard shortcuts"
 			>?</button
 		>
-		<div id={shortcutsId} popover class="shortcuts">
+		<div id={shortcutsId} popover class="shortcuts" {@attach isolatePopoverInput}>
 			<strong>Keyboard shortcuts</strong>
 			<p><kbd>Ctrl/Cmd + Enter</kbd> Generate</p>
 			<p><kbd>P</kbd> Focus first prompt</p>

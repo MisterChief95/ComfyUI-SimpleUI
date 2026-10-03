@@ -9,8 +9,10 @@
 	// Clicking the backdrop, pressing Escape or the close button sets open=false
 	// and calls onclose. `footer` is pinned under the scrolling body.
 	import type { Snippet } from 'svelte';
+	import { on } from 'svelte/events';
 	import { MediaQuery } from 'svelte/reactivity';
 	import Icon from './Icon.svelte';
+	import { isolateInput } from './isolateInput';
 
 	let {
 		open = $bindable(false),
@@ -61,13 +63,14 @@
 </script>
 
 <dialog
+	{@attach (element) => on(element, 'click', backdrop)}
+	{@attach isolateInput}
 	bind:this={dialog}
 	class:drawer
 	class:left={drawer && side === 'left'}
 	class:half={resting}
 	aria-labelledby={titleId}
 	onclose={closed}
-	onclick={backdrop}
 >
 	<header>
 		<h2 id={titleId}>{title}</h2>

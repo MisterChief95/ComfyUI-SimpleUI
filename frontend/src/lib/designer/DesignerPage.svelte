@@ -53,6 +53,7 @@
 
 	// Ctrl/Cmd+S always saves; undo/redo defer to native text undo while typing.
 	function onkeydown(event: KeyboardEvent): void {
+		if (event.defaultPrevented || document.querySelector('dialog[open], :popover-open')) return;
 		if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
 		const key = event.key.toLowerCase();
 		if (key === 's') {
