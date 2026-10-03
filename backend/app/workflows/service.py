@@ -18,6 +18,7 @@ from typing import Any
 from ..catalog.contracts import CatalogSnapshot
 from ..contracts import ControlSchema
 from ..mapping import build_control_schema, parse_graph
+from ..mapping.submission import apply_edits
 from ..mapping.corrections import (
     ALLOWED_COMPONENTS,
     Correction,
@@ -32,7 +33,7 @@ from ..mapping.corrections import (
     workflow_selector,
 )
 from ..storage.repository import Repository, RevisionConflict
-from .layout import LayoutDoc, SaveLayout, WorkflowLayout, stale_bindings
+from .layout import LayoutDoc, SaveLayout, WorkflowLayout, section_items, stale_bindings
 
 
 class WorkflowService:
@@ -108,6 +109,34 @@ class WorkflowService:
         return apply_corrections(
             schema, overrides, snapshot.nodes, signature=structural_signature(graph)
         )
+
+    def replace_values(
+        self,
+        owner_id: str,
+        workflow_id: str,
+        edits: dict[str, Any],
+        expected_revision: int,
+        snapshot: CatalogSnapshot,
+    ) -> tuple[dict[str, Any], int, list[str], list[str]] | None:
+        """Decode edits into a new graph revision; None if not owned."""
+        schema = self.control_schema(owner_id, workflow_id, snapshot)
+        if schema is None:
+            return None
+        if schema.revision != expected_revision:
+            raise RevisionConflict(
+                f"This workflow is at graph revision {schema.revision}, not {expected_revision}. "
+                "Reload it before replacing the graph."
+            )
+        graph = self._repository.get_workflow_graph(owner_id, workflow_id, schema.revision)
+        if graph is None:  # pragma: no cover - written in the same transaction
+            return None
+        updated = apply_edits(graph, schema, edits)
+        revision = self._repository.replace_workflow_graph(
+            owner_id, workflow_id, updated, expected_revision
+        )
+        if revision is None:  # pragma: no cover - deleted between the two reads
+            return None
+        return self._repository.get_workflow(owner_id, workflow_id), revision, [], []
 
     # --- saved corrections ------------------------------------------------
 
@@ -267,10 +296,10 @@ class WorkflowService:
         previous_pairs = {
             (item.width, item.height)
             for section in previous.sections
-            for item in section.items if item.kind == "aspect_ratio"
+            for item in section_items(section) if item.kind == "aspect_ratio"
         } if previous else set()
         for section in request.layout.sections:
-            for item in section.items:
+            for item in section_items(section):
                 if item.kind == "aspect_ratio":
                     for binding in (item.width, item.height):
                         control = controls.get(binding)

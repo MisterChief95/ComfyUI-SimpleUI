@@ -97,9 +97,16 @@ def build_submission_graph(
             field=unresolved[0].binding_id,
         )
 
-    submission = copy.deepcopy(graph)
+    return apply_edits(graph, schema, edits or {})
+
+
+def apply_edits(
+    graph: dict[str, Any], schema: ControlSchema, edits: dict[str, Any]
+) -> dict[str, Any]:
+    """Deep-copy ``graph`` and decode only the bindings named in ``edits``."""
+    updated = copy.deepcopy(graph)
     if not edits:
-        return submission
+        return updated
 
     by_id = {control.binding_id: control for control in schema.controls}
     for binding_id, raw in edits.items():
@@ -115,13 +122,13 @@ def build_submission_graph(
                 "typed adapter.",
                 binding_id,
             )
-        node = submission.get(control.node_id)
+        node = updated.get(control.node_id)
         if node is None:  # pragma: no cover - schema is built from this graph
             raise SubmissionError(
                 "unknown_binding", f"Node {control.node_id} is not in the graph.", binding_id
             )
         node["inputs"][control.input_name] = _decode(control, raw)
-    return submission
+    return updated
 
 
 def _decode(control: ControlDescriptor, raw: Any) -> Any:

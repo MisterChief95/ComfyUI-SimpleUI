@@ -273,6 +273,18 @@ async def get_generation(
     return _detail(row)
 
 
+@router.get("/{generation_id}/graph")
+async def get_generation_graph(
+    request: Request, generation_id: str, principal: CurrentPrincipal
+) -> dict[str, Any]:
+    """The exact ComfyUI API graph this generation submitted; gone once history is cleared."""
+    generations: GenerationService = request.app.state.generations
+    row = await in_thread(generations.store.get, principal.owner_id, generation_id)
+    if row is None or not row.get("graph"):
+        raise HTTPException(404, "The workflow JSON for this generation is not available.")
+    return row["graph"]
+
+
 async def _reconcile_before_read(request: Request, owner_id: str) -> None:
     """Give this request's own generations a fresh look before reading them.
 

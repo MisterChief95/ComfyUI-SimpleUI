@@ -111,6 +111,22 @@ class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
         # just because a seed policy exists (WORKFLOW_MAPPING.md).
         self.assertEqual(detail["effective_values"]["5:seed"], "123456789")
 
+    def test_the_submitted_graph_can_be_read_back_by_its_owner_only(self) -> None:
+        self.enable_multi_user(PASSWORD)
+        owner = self.local_client()
+        self.login(owner, "Default", PASSWORD)
+        workflow_id = self.import_graph(owner)
+        generation_id = self.submit(owner, workflow_id, "req-1").json()["id"]
+
+        graph = owner.get(f"/api/generations/{generation_id}/graph")
+        self.assertEqual(graph.status_code, 200)
+        self.assertIn("5", graph.json())  # node ids are the keys of an API graph
+
+        self.auth.create_profile("Bee", PASSWORD)
+        bee = self.local_client()
+        self.login(bee, "Bee", PASSWORD)
+        self.assertEqual(bee.get(f"/api/generations/{generation_id}/graph").status_code, 404)
+
     def test_repeating_a_request_key_never_resubmits_upstream(self) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)

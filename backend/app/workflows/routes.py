@@ -12,12 +12,13 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from pydantic import StringConstraints
+from pydantic import Field, StringConstraints
 
 from ..auth.routes import CurrentPrincipal, Mutation
 from ..contracts import ControlSchema, ExactInt, Id, Model, Page
 from ..mapping import GraphImportError
 from ..mapping.corrections import Correction, CorrectionError, CorrectionScope, SaveCorrection
+from ..mapping.submission import SubmissionError
 from ..storage.db import in_thread
 from ..storage.repository import LimitExceeded, RevisionConflict
 from .layout import BindingId, SaveLayout, WorkflowLayout
@@ -56,6 +57,11 @@ class ReplaceResult(Model):
     #: Control binding ids only in the new / only in the old schema.
     added: list[BindingId]
     removed: list[BindingId]
+
+
+class ReplaceValues(Model):
+    edits: dict[BindingId, str | bool | int | float] = Field(min_length=1)
+    expected_revision: int = Field(ge=1)
 
 
 @router.get("", response_model=Page[WorkflowInfo])
@@ -120,6 +126,30 @@ async def replace_graph(
             snapshot,
         )
     except GraphImportError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RevisionConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if result is None:
+        raise HTTPException(404, "Workflow was not found.")
+    row, revision, added, removed = result
+    return ReplaceResult(workflow=_info(row), revision=revision, added=added, removed=removed)
+
+
+@router.put("/{workflow_id}/values", response_model=ReplaceResult, dependencies=[Mutation])
+async def replace_values(
+    request: Request, workflow_id: str, principal: CurrentPrincipal, body: ReplaceValues
+) -> ReplaceResult:
+    snapshot = await request.app.state.catalog.snapshot()
+    try:
+        result = await in_thread(
+            request.app.state.workflows.replace_values,
+            principal.owner_id,
+            workflow_id,
+            body.edits,
+            body.expected_revision,
+            snapshot,
+        )
+    except SubmissionError as exc:
         raise HTTPException(422, str(exc)) from exc
     except RevisionConflict as exc:
         raise HTTPException(409, str(exc)) from exc

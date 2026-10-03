@@ -1,6 +1,6 @@
 # User-designed generation UI
 
-Status: implemented (LAYOUT-001, UI-007 … UI-010, REVIEW-001, FEAT-001; follow-ups in the
+Status: implemented (LAYOUT-001, LAYOUT-002 contract/model, UI-007 … UI-010, REVIEW-001, FEAT-001; follow-ups in the
 dibs database). This document is the contract those tasks implement. Change it together with the code if a task needs to deviate.
 
 ## Goal
@@ -20,7 +20,7 @@ Two pages:
 - **Designer** (`/workflows/[id]`): edits the layout and the per-control presentation
   (label, widget, numeric display range, help text) with a live preview.
 
-## Layout document (v1)
+## Layout document (v2)
 
 Stored per **profile + workflow**, presentation only. It never changes the graph, values, or
 execution. Per-control presentation stays in the existing corrections API
@@ -29,11 +29,12 @@ and `order` fields of a correction are legacy: the new UI neither shows nor writ
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "sections": [
     {
       "id": "prompt",
       "title": "Prompt",
+      "mode": "auto",
       "columns": 1,
       "collapsed": false,
       "items": [
@@ -43,6 +44,7 @@ and `order` fields of a correction are legacy: the new UI neither shows nor writ
     {
       "id": "sampling",
       "title": "Sampling",
+      "mode": "auto",
       "columns": 2,
       "collapsed": false,
       "items": [
@@ -55,27 +57,66 @@ and `order` fields of a correction are legacy: the new UI neither shows nor writ
 }
 ```
 
+Each section has one of two bodies. `mode: "auto"` (the default when omitted)
+uses `columns: 1 | 2 | 3` and `items`, as above. `mode: "panels"` uses `rows`
+instead of section-level `columns` and `items`:
+
+```json
+{
+  "id": "settings", "title": "Settings", "mode": "panels", "collapsed": false,
+  "rows": [
+    { "id": "row1", "columns": [
+      { "id": "column1", "items": [{ "kind": "control", "binding_id": "5:steps" }] },
+      { "id": "column2", "items": [{ "kind": "control", "binding_id": "5:cfg" }] }
+    ] }
+  ]
+}
+```
+
+This is exactly section → row → column → existing leaf items. There is no recursive
+row item, deeper nesting, column resizing, or per-panel disclosure. Rows have 1–3
+equal-width columns, collapsing responsively like auto sections. Empty panel sections
+and columns are allowed, so a row whose columns hold no items is valid (the designer
+creates these when adding a row); a row with zero columns is not. Item `span: "full"` fills its column's
+leaf grid in a panel section, not neighboring columns.
+
+The backend accepts v1 and v2. V1 sections have only the original body and are
+normalized in memory to v2 auto sections with order, bindings, and presentation
+preserved. GET does not rewrite storage. An explicit PUT (including one carrying v1)
+persists v2 JSON in the existing `layout_json TEXT` field; no database migration is needed.
+
 Invariants, enforced by the backend on PUT (422 on violation) and by the frontend model:
 
 | Field | Rule |
 | --- | --- |
-| `version` | Literal `1`. |
+| `version` | `2` on responses and explicit saves; legacy `1` accepted and normalized. |
 | `sections` | 0–40 entries. |
 | `section.id` | `^[A-Za-z0-9_-]{1,40}$`, unique within the document. The client generates it. |
 | `section.title` | Trimmed, 1–80 characters. |
-| `section.columns` | `1`, `2`, or `3`. A desktop hint only: phones always use 1 column and tablets at most 2. |
+| `section.mode` | `"auto"` (default) or `"panels"`. Bodies are mutually exclusive; unknown fields are rejected. |
+| auto `section.columns` | `1`, `2`, or `3`. A desktop hint only: phones always use 1 column and tablets at most 2. |
+| panel `section.rows` | 0–40 rows per section, including empty containers. |
+| `row.columns` | 1–3 equal-width columns per row. Each has `items` only, never rows. |
+| `row.id`, `column.id` | Same pattern as section IDs; unique across all rows and columns in the entire document (shared structural namespace, separate from section IDs). |
 | `section.collapsed` | Boolean. The **default** disclosure state on the run page. The user's current open/closed state is per-device (localStorage), not saved here. |
 | `items` | Typed union: `"control"` or `"aspect_ratio"`. No arbitrary widget code. |
 | `item.binding_id` | 1–200 characters. |
 | aspect-ratio item | `{ "kind": "aspect_ratio", "width": "4:width", "height": "4:height", "presets": [[1024,1024],[1152,896]], "span": "full" }`. New pairs require two distinct existing integer bindings; previously saved pairs may retain bindings that became stale. Presets are optional, at most 24 positive integer pairs, each dimension at most 16384. |
 | `item.span` | `"auto"` (one grid cell) or `"full"` (whole row). Defaults to `"auto"`. |
-| total bindings + hidden | At most 1000. An aspect-ratio item counts as two bindings. |
-| uniqueness | A binding appears **at most once** across all sections and `hidden` combined. |
+| `item.when` | Optional binding id (1–200 characters) of a **boolean** control. The item renders on the run page only while that control is on. A reference, not a placement: any number of items may share one condition, placed or not. Omitted when unset. |
+| `section.toggle` | Optional binding id of a **boolean** control rendered as a switch in the section header; the section body (and its disclosure) is available only while it is on. It *places* that control: it counts toward the cap and uniqueness, and placing or hiding the control elsewhere clears the toggle. Omitted when unset. |
+| total bindings + hidden | At most 1000. An aspect-ratio item counts as two bindings; a section toggle counts as one. |
+| uniqueness | A binding appears **at most once** across all sections (all auto and panel leaves and toggles) and `hidden` combined. |
 
 Binding IDs that do not exist in the current schema are **kept** and reported as stale, never
 dropped silently. The frontend shows them in the designer with a "Remove" action. The run
 page ignores absent bindings. If only one half of an aspect-ratio pair survives, it renders
 the surviving numeric field without ratio chips.
+
+Conditions and toggles that name a missing or non-boolean control are ignored (the item or
+section always shows) and flagged in the designer. Controls hidden by a condition or an off
+toggle still submit their current value, exactly like hidden controls. `when` and `toggle`
+are optional fields shared by both section modes.
 
 Controls that exist in the schema but are neither placed nor hidden are **unplaced**. The run
 page renders them in a trailing collapsed section titled "More". The designer lists them under
@@ -87,7 +128,7 @@ explicit and reversible.
 Select a placed integer control as width in the designer, choose another placed integer
 control as height in the inspector, then **Create aspect-ratio control**. The pair moves,
 hides, and unplaces together; **Split dimension controls** restores separate fields. Undo
-reverses either operation. This additive item keeps layout version 1.
+reverses either operation. The same leaf item works in both section modes.
 
 On the run page, size chips set both dimensions, snapping to each binding's declared
 minimum, maximum, and step. **Swap orientation** uses the same constraints. The current
@@ -168,6 +209,21 @@ ran. Layout, corrections and presets persist untouched: `GET .../layout` reports
 no longer exist as `stale_bindings`, and corrections follow the existing stale-signature rules.
 `PATCH /api/workflows/{id}` with `{ name }` renames (1-120 characters).
 
+### Saving default values
+
+`PUT /api/workflows/{id}/values` with `{ edits, expected_revision }` applies `edits` (same
+encoding and validation as `POST /api/generations` edits, against the corrections-applied
+schema) to the current graph and stores it as revision N+1. It returns the replace-graph
+shape with empty `added`/`removed`. A different current revision is a 409; an unknown,
+read-only or invalid edit, or empty `edits`, is a 422; nothing is written in either case.
+Unresolved controls elsewhere do not block it. Layout, corrections and presets are untouched
+because the structural signature ignores literal values.
+
+In the designer, changing any control's value on the canvas drafts a new default (badge
+"default changed", **Revert value** in the inspector). Save sends layout, then corrections,
+then values. Editing a value clears a legacy numeric `display_default` for that control,
+which the inspector no longer offers. Value drafts are not part of layout undo.
+
 ### Related backend fixes in the same task
 
 - **Typed edits.** `POST /api/generations` `edits` values are
@@ -180,6 +236,29 @@ no longer exist as `stale_bindings`, and corrections follow the existing stale-s
   disappeared.
 
 ## Frontend architecture
+
+`layout/model.ts` stays pure, erasable TypeScript. For UI-027:
+
+- `sectionItems(section: LayoutSection): LayoutItem[]` reads all leaves in row/column/item order.
+- `mapSectionItems(section, fn: (items: LayoutItem[]) => LayoutItem[]): LayoutSection`
+  transforms each leaf list immutably while keeping structural IDs and order.
+- `normalizeLayout(doc: LayoutDoc): LayoutDoc` upgrades a valid legacy snapshot to v2 auto.
+  `defaultLayout(schema)` and newly added sections produce v2 auto layouts.
+- `locate(doc, binding)` returns `{section, index}` for auto leaves, or
+  `{section, row, column, index}` for panel leaves; the index is local to the column.
+  A toggle has `index: -1`; hidden is `"hidden"`; unplaced is `null`.
+- `placeControl(doc, binding, sectionId, index?, target?: PanelTarget)` and
+  `moveItem(doc, binding, sectionId, index?, target?: PanelTarget)` accept
+  `PanelTarget = {row: string, column: string}`. Without a target, panels use the
+  first row's first column. An absent or invalid destination is a no-op before
+  removal: the UI must create a row/column before placing into an empty panel section.
+- `resolveLayout` flattens resolved leaves in section order for existing callers.
+  Use `locate` to recover panel placement for rendering. All count, removal, hiding,
+  toggle, condition, span, pairing, and splitting helpers traverse both modes.
+  Pairing keeps the width's column and position; moving/hiding/removing a pair handles both bindings.
+- `MAX_ROWS = 40`, `MAX_COLUMNS = 3`, `MAX_SECTIONS = 40`, `MAX_ITEMS = 1000`.
+  Narrow `section.mode === "panels"` before accessing rows; otherwise use columns/items.
+  UI-027 owns structure editing and full panel rendering.
 
 ```
 src/lib/
