@@ -400,8 +400,9 @@ class MediaService:
         return source_id, root
 
     def locate(self, owner_id: str, media_id: str) -> LocatedMedia | None:
+        # Hidden (deleted) rows resolve to nothing, so file, download, thumbnail, ZIP and queued thumbnail jobs all refuse them.
         row = self.db.query_one(
-            "SELECT m.*, l.source_id, l.relative_path, s.root_path FROM media m JOIN media_locations l ON l.media_id = m.id JOIN media_sources s ON s.id = l.source_id WHERE m.id = ? AND m.owner_id = ?",
+            "SELECT m.*, l.source_id, l.relative_path, s.root_path FROM media m JOIN media_locations l ON l.media_id = m.id JOIN media_sources s ON s.id = l.source_id WHERE m.id = ? AND m.owner_id = ? AND m.hidden = 0",
             (media_id, owner_id),
         )
         if row is None:

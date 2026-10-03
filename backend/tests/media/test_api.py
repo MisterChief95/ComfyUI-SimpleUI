@@ -219,6 +219,20 @@ class DeleteTest(MediaApiTestCase):
         self.assertFalse(copy.exists() or thumb.exists())
         self.assertTrue(original.is_file())
 
+    def test_a_hidden_original_can_no_longer_be_fetched_by_id(self) -> None:
+        self.png("photo.png")
+        self.media.import_baseline()
+        indexed = self.own_media()["photo.png"]["id"]
+        client = self.local_client()
+        self.assertEqual(client.get(f"/api/media/{indexed}/file").status_code, 200)
+
+        self.post(client, "/api/media/delete", json={"ids": [indexed]})
+
+        for tail in ("file", "download", "thumbnail"):
+            self.assertEqual(client.get(f"/api/media/{indexed}/{tail}").status_code, 404, tail)
+        self.assertIsNone(self.media.locate(DEFAULT_PROFILE_ID, indexed))
+        self.assertEqual(self.media.zip_plan(DEFAULT_PROFILE_ID, [indexed])["skipped"][0]["reason"], "unavailable")
+
 
 class PrivacyTest(MediaApiTestCase):
     def setUp(self) -> None:
