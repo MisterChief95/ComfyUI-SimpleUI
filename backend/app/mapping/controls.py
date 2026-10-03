@@ -502,16 +502,18 @@ def _flexible_control(
     (docs/WORKFLOW_MAPPING.md).
     """
     flexible = bool(node_spec.get("flexible_inputs"))
-    warnings.append(
-        ErrorDetail(
-            field=f"{node_id}.inputs.{name}",
-            code="flexible_input" if flexible else "undeclared_input",
-            message=(
-                f"{class_type}.{name} is not enumerated by the node metadata. The imported "
-                "value is preserved and submitted unchanged."
-            ),
+    # Plain scalars on a non-flexible node (e.g. hidden widgets like reconnect) are noise.
+    if flexible or not isinstance(value, (str, int, float, bool)):
+        warnings.append(
+            ErrorDetail(
+                field=f"{node_id}.inputs.{name}",
+                code="flexible_input" if flexible else "undeclared_input",
+                message=(
+                    f"{class_type}.{name} is not enumerated by the node metadata. The imported "
+                    "value is preserved and submitted unchanged."
+                ),
+            )
         )
-    )
     return ControlDescriptor(
         binding_id=f"{node_id}:{name}",
         node_id=node_id,

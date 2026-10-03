@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { settingsState } from '$lib/settings.svelte';
 	import { session } from '$lib/session.svelte';
-	import { describeApiError } from '$lib/api';
+	import { api, describeApiError } from '$lib/api';
 	import type { SettingValue } from '$lib/contracts';
 
 	type Field =
@@ -82,6 +82,28 @@
 			await session.logout();
 		} finally {
 			switching = false;
+		}
+	}
+
+	type CatalogFreshness = {
+		state: string;
+		fetched_ms: string | null;
+		cooldown_active: boolean;
+		error: { message: string } | null;
+	};
+	let catalog = $state<CatalogFreshness | null>(null);
+	let refreshing = $state(false);
+	let catalogError = $state<string | null>(null);
+
+	async function refreshCatalog(): Promise<void> {
+		refreshing = true;
+		catalogError = null;
+		try {
+			catalog = (await api<{ freshness: CatalogFreshness }>('/catalog/refresh', { method: 'POST' })).freshness;
+		} catch (cause) {
+			catalogError = describeApiError(cause);
+		} finally {
+			refreshing = false;
 		}
 	}
 
@@ -191,6 +213,34 @@
 				{#each HOST_FIELDS as field (field.key)}
 					{@render row('host', field, data.host, data.host_writable)}
 				{/each}
+			</section>
+
+			<section class="card">
+				<h2>Node catalog</h2>
+				<div class="setting inline">
+					<div class="text">
+						<span class="label">Refresh node catalog</span>
+						<span class="help muted">
+							Re-read installed ComfyUI nodes after installing or updating a node pack. Reload the
+							workflow afterwards.
+							{#if catalog}
+								{#if catalog.cooldown_active}
+									Skipped: a refresh ran too recently, try again shortly.
+								{:else if catalog.error}
+									Failed: {catalog.error.message}
+								{:else}
+									Updated {new Date(Number(catalog.fetched_ms)).toLocaleTimeString()} ({catalog.state}).
+								{/if}
+							{/if}
+							{#if catalogError}<span class="error" role="alert">{catalogError}</span>{/if}
+						</span>
+					</div>
+					<div class="control">
+						<button type="button" class="btn" onclick={refreshCatalog} disabled={refreshing}>
+							{refreshing ? 'Refreshing…' : 'Refresh'}
+						</button>
+					</div>
+				</div>
 			</section>
 
 			<section class="card">

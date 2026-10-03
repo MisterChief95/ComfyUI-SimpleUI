@@ -45,6 +45,8 @@ python "<DIBS_SCRIPT>" claim COMPAT-001 --workspace "." --actor agent-compat --r
 
 These are examples: choose the task that matches the user's request and current readiness. `claim-next` also exists, but its reservations must fit the task you will execute. A claim does **not** automatically reserve the task's listed work areas. Translate prose/globs into concrete `--reserve-file` or `--reserve-tree` paths. Reserve shared manifests, lockfiles, schemas, and migration files explicitly; use `--resource git-index` before Git staging/index operations. Never stage another worker's changes accidentally.
 
+Unless the user says otherwise, use **one** `--actor` for the whole session — the single current agent — and reuse it for every dibs command. Do not invent a new actor per task or sub-step; only use distinct actors when the user explicitly assigns work to several agents.
+
 Save the returned `lease_token` and `task.revision`. Never put tokens in tracked files. Every successful task mutation, including a heartbeat or note, increments the revision; carry forward the new value. Defaults are a **10-minute lease** with a **heartbeat every 60 seconds**. Choose a suitable bounded lease before a long blocking operation and stop editing if ownership expires.
 
 ```cmd
