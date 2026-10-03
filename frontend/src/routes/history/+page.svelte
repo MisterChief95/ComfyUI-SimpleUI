@@ -196,6 +196,7 @@
 		top: var(--space-3);
 		max-height: calc(100dvh - 2 * var(--space-3));
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 	}
 
 	ul {

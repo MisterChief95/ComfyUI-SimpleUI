@@ -261,6 +261,102 @@ test('Walk off stops at the folder boundary; toggling/resetting discards prior c
 	assert.equal(gallery.continuation, null);
 });
 
+test('filter replacements keep existing tiles while pending or failed and publish only ready results', async () => {
+	const { gallery } = setup({ ':': { items: [item('a'), item('b')], next_cursor: null } }, false);
+	await gallery.load();
+	const original = gallery.items;
+	let release!: (page: unknown) => void;
+	let reject!: (error: Error) => void;
+	let requested!: () => void;
+	const pageRequested = new Promise<void>((resolve) => {
+		requested = resolve;
+	});
+	mockApi((url: string) => {
+		if (url === '/media/collections') return Promise.resolve({ items: [] });
+		if (url.startsWith('/media/tree')) return Promise.resolve({ children: [], breadcrumbs: [] });
+		requested();
+		return new Promise((resolve, fail) => {
+			release = resolve;
+			reject = fail;
+		});
+	});
+	gallery.favorite = 'true';
+	const pending = gallery.apply();
+	await pageRequested;
+	assert.equal(gallery.items, original);
+	assert.equal(gallery.loading, true);
+	reject(new Error('offline'));
+	await pending;
+	assert.equal(gallery.items, original);
+	assert.equal(gallery.error, 'offline');
+	const retry = gallery.load();
+	// Allow the already-resolved tree/collection requests to reach the media request.
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.equal(gallery.items, original);
+	release({ items: [item('b'), item('c')], next_cursor: null });
+	await retry;
+	assert.deepEqual(
+		gallery.items.map((entry: { id: string }) => entry.id),
+		['b', 'c']
+	);
+	assert.equal(gallery.loading, false);
+	assert.equal(gallery.error, null);
+	gallery.dispose();
+});
+
+test('folder replacements preserve tiles and tree until a successful response', async () => {
+	const { gallery } = setup({ ':': { items: [item('a'), item('b')], next_cursor: null } }, false);
+	await gallery.load();
+	const original = gallery.items;
+	const originalTree = gallery.tree;
+	let release!: (page: unknown) => void;
+	let reject!: (error: Error) => void;
+	let requested!: () => void;
+	let pageRequested = new Promise<void>((resolve) => (requested = resolve));
+	mockApi((url: string) => {
+		if (url === '/media/collections') return Promise.resolve({ items: [] });
+		if (url.startsWith('/media/tree'))
+			return Promise.resolve({ path: 'Workflow', children: [], breadcrumbs: [] });
+		requested();
+		return new Promise((resolve, fail) => {
+			release = resolve;
+			reject = fail;
+		});
+	});
+	const pending = gallery.navigate('Workflow');
+	await pageRequested;
+	assert.equal(gallery.items, original);
+	assert.equal(gallery.tree, originalTree);
+	assert.equal(gallery.loading, true);
+	reject(new Error('offline'));
+	await pending;
+	assert.equal(gallery.items, original);
+	assert.equal(gallery.tree, originalTree);
+	assert.equal(gallery.error, 'offline');
+	pageRequested = new Promise<void>((resolve) => (requested = resolve));
+	const retry = gallery.navigate('Workflow');
+	await pageRequested;
+	assert.equal(gallery.items, original);
+	release({ items: [item('b'), item('c')], next_cursor: null });
+	await retry;
+	assert.deepEqual(
+		gallery.items.map((entry: { id: string }) => entry.id),
+		['b', 'c']
+	);
+	assert.equal(gallery.tree.path, 'Workflow');
+	assert.equal(gallery.loading, false);
+	assert.equal(gallery.error, null);
+	// An empty branch still publishes matching metadata, without clearing while pending.
+	pageRequested = new Promise<void>((resolve) => (requested = resolve));
+	const empty = gallery.navigate('Workflow');
+	await pageRequested;
+	assert.equal(gallery.items.length, 2);
+	release({ items: [], next_cursor: null });
+	await empty;
+	assert.deepEqual(gallery.items, []);
+	assert.equal(gallery.tree.path, 'Workflow');
+});
+
 test('failed sibling loads preserve the group for an explicit retry', async () => {
 	const { gallery } = setup({ [`${days[0].path}:`]: { items: [item('a')], next_cursor: null } });
 	await gallery.navigate(days[0].path);
@@ -288,6 +384,7 @@ test('navigation during a boundary request discards the stale response', async (
 	mockApi(() => pending);
 	const loading = gallery.load(false);
 	await gallery.navigate(days[2].path);
+	assert.equal(gallery.items[0].id, 'a');
 	mockApi(async (url: string) =>
 		url.startsWith('/media/tree')
 			? { children: [], breadcrumbs: [] }

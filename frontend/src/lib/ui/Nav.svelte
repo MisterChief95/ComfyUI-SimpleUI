@@ -51,9 +51,10 @@
 
 <nav aria-label="Main" class:collapsed={navCollapsed.value}>
 	<div class="brand" aria-hidden="true">
-		<span class="mark">S</span>
-		<span class="brand-name">SimpleUI</span>
+		<span class="mark"><Icon name="workflows" size={20} /></span>
+		<div class="brand-name"><strong>SimpleUI</strong><span>ComfyUI workspace</span></div>
 	</div>
+	<span class="nav-caption" aria-hidden="true">Workspace</span>
 	<ul>
 		{#each items as item (item.match)}
 			<li>
@@ -62,7 +63,7 @@
 					title={item.label}
 					aria-current={active(item.match) ? 'page' : undefined}
 				>
-					<Icon name={item.icon} size={22} />
+					<Icon name={item.icon} size={20} />
 					<span class="label">{item.label}</span>
 				</a>
 			</li>
@@ -139,6 +140,7 @@
 		padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 	}
 	.brand,
+	.nav-caption,
 	.profile,
 	.collapse {
 		display: none;
@@ -168,6 +170,9 @@
 		text-decoration: none;
 		-webkit-user-select: none;
 		user-select: none;
+		transition:
+			background 0.15s var(--ease),
+			color 0.15s var(--ease);
 	}
 	a[aria-current='page'] {
 		color: var(--color-accent);
@@ -198,19 +203,21 @@
 			grid-column: 1;
 			flex-direction: column;
 			align-items: stretch;
-			gap: var(--space-3);
+			gap: var(--space-2);
 			height: 100dvh;
 			padding: var(--space-3) var(--space-2);
 			padding-left: max(var(--space-2), env(safe-area-inset-left));
 			border-top: 0;
 			border-right: 1px solid var(--color-border);
 			overflow-y: auto;
+			scrollbar-gutter: stable;
 		}
 		.brand {
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			gap: 0.6rem;
+			padding-block: var(--space-2) var(--space-4);
 		}
 		.mark {
 			display: grid;
@@ -218,8 +225,8 @@
 			width: 2rem;
 			height: 2rem;
 			border-radius: var(--radius);
-			background: var(--color-accent);
-			color: var(--color-accent-text);
+			background: var(--color-accent-soft);
+			color: var(--color-accent);
 			font-weight: 800;
 		}
 		.brand-name {
@@ -244,13 +251,7 @@
 			background: var(--color-accent-soft);
 		}
 		a[aria-current='page']::before {
-			top: 25%;
-			bottom: 25%;
-			left: -0.5rem;
-			right: auto;
-			width: 3px;
-			height: auto;
-			border-radius: 0 3px 3px 0;
+			display: none;
 		}
 		.label {
 			/* Icon-only on the rail; the title attribute and aria name remain. */
@@ -292,6 +293,7 @@
 			background: none;
 			color: var(--color-text-muted);
 			cursor: pointer;
+			margin-top: auto;
 		}
 		.collapse:hover {
 			background: var(--color-surface-2);
@@ -308,15 +310,32 @@
 				padding: 0 var(--space-1);
 			}
 			.brand-name {
-				display: inline;
-				font-weight: 700;
-				letter-spacing: -0.01em;
+				display: flex;
+				flex-direction: column;
+				gap: 0.15rem;
+				strong {
+					font-size: var(--text-lg);
+					letter-spacing: -0.03em;
+				}
+				span {
+					font-size: 0.6875rem;
+					color: var(--color-text-muted);
+				}
+			}
+			.nav-caption {
+				display: block;
+				padding: 0 0.75rem;
+				font-size: 0.625rem;
+				font-weight: 650;
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				color: var(--color-text-faint);
 			}
 			a {
 				justify-content: flex-start;
 				gap: 0.75rem;
 				padding: 0 0.75rem;
-				font-size: var(--text-base);
+				font-size: var(--text-sm);
 			}
 			.label {
 				position: static;
@@ -346,6 +365,9 @@
 			.switch-label {
 				display: inline;
 			}
+		}
+		nav .profile {
+			margin-top: 0;
 		}
 	}
 </style>

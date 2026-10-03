@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
+	import { flip } from 'svelte/animate';
+	import { fade } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import { GalleryState } from '$lib/media/gallery.svelte';
+	import { openViewer } from '$lib/media/openViewer';
 	import { workflowNames } from '$lib/media/workflowNames.svelte';
 	import { settingsState } from '$lib/settings.svelte';
 	import { session } from '$lib/session.svelte';
@@ -16,6 +21,14 @@
 	const prefs = new ViewPrefs();
 	const gallery = new GalleryState(prefs);
 	const wide = new MediaQuery('min-width: 768px');
+	type GridEntry = { key: string; group: string | null; item: MediaInfo | null };
+	const gridEntries = $derived(
+		gallery.items.flatMap<GridEntry>((item, index) => {
+			const group = gallery.groupHeader(index);
+			const tile = { key: item.id, group: null, item };
+			return group ? [{ key: `group:${item.id}`, group, item: null }, tile] : [tile];
+		})
+	);
 
 	$effect(() => {
 		void [prefs.sort, prefs.size, prefs.fit, prefs.badges, prefs.walk];
@@ -78,7 +91,14 @@
 			anchor = item.id;
 			return;
 		}
-		if (!comparing) return void gallery.select(item);
+		if (!comparing) {
+			const source =
+				item.media_kind === 'image'
+					? (event.currentTarget as HTMLButtonElement).querySelector('img')
+					: null;
+			void openViewer(source, () => void gallery.select(item));
+			return;
+		}
 		picked = picked.some((p) => p.id === item.id)
 			? picked.filter((p) => p.id !== item.id)
 			: [...picked, item].slice(-2);
@@ -476,7 +496,7 @@
 				{#each gallery.tree.breadcrumbs as crumb, i (crumb.path)}
 					<li>
 						{#if i > 0}<Icon name="chevron-right" size={14} />{/if}
-						{#if crumb.path === gallery.folderPath}
+						{#if crumb.path === gallery.tree.path}
 							<span aria-current="page">{folderName(crumb.path, crumb.name)}</span>
 						{:else}
 							<button type="button" onclick={() => gallery.navigate(crumb.path)}
@@ -529,18 +549,22 @@
 		<p class="muted">Loading…</p>
 	{:else if gallery.items.length === 0}
 		<p class="muted">No media matches these filters.</p>
-	{:else}
-		<ul class="grid" style:--tile={`${tile}px`}>
-			{#each gallery.items as item, index (item.id)}
-				{@const group = gallery.groupHeader(index)}
-				{#if group}<li class="group-header"><h2>{folderName(group, group)}</h2></li>{/if}
-				{@const unavailable = gallery.isUnavailable(item)}
-				<li
-					class="tile"
-					class:fit={prefs.fit}
-					class:unavailable
-					class:picked={picked.some((p) => p.id === item.id) || chosen.includes(item.id)}
-				>
+	{/if}
+	<ul class="grid" style:--tile={`${tile}px`} aria-busy={gallery.loading}>
+		{#each gridEntries as entry (entry.key)}
+			<li
+				class={entry.item ? 'tile' : 'group-header'}
+				class:fit={!!entry.item && prefs.fit}
+				class:unavailable={!!entry.item && gallery.isUnavailable(entry.item)}
+				class:picked={!!entry.item &&
+					(picked.some((p) => p.id === entry.item?.id) || chosen.includes(entry.item.id))}
+				animate:flip={{ duration: prefersReducedMotion.current ? 0 : 220, easing: cubicOut }}
+				in:fade={{ duration: prefersReducedMotion.current ? 0 : 140 }}
+				out:fade={{ duration: prefersReducedMotion.current ? 0 : 100 }}
+			>
+				{#if entry.item}
+					{@const item = entry.item}
+					{@const unavailable = gallery.isUnavailable(item)}
 					<button
 						class="preview"
 						type="button"
@@ -576,20 +600,22 @@
 					>
 						<Star filled={!!item.favorite} />
 					</button>
-				</li>
-			{/each}
-		</ul>
-		{#if gallery.canLoadMore}
-			<div bind:this={sentinel} aria-hidden="true"></div>
-			<button
-				class="btn more"
-				type="button"
-				onclick={() => gallery.load(false)}
-				disabled={gallery.loading}
-			>
-				{gallery.loading ? 'Loading…' : 'Load more'}
-			</button>
-		{/if}
+				{:else if entry.group}
+					<h2>{folderName(entry.group, entry.group)}</h2>
+				{/if}
+			</li>
+		{/each}
+	</ul>
+	{#if gallery.canLoadMore}
+		<div bind:this={sentinel} aria-hidden="true"></div>
+		<button
+			class="btn more"
+			type="button"
+			onclick={() => gallery.load(false)}
+			disabled={gallery.loading}
+		>
+			{gallery.loading ? 'Loading…' : 'Load more'}
+		</button>
 	{/if}
 </div>
 

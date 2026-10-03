@@ -106,5 +106,6 @@
 		overflow-wrap: anywhere;
 		max-height: 9rem;
 		overflow: auto;
+		scrollbar-gutter: stable;
 	}
 </style>

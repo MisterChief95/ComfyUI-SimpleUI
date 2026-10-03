@@ -241,6 +241,7 @@
 	.panel {
 		min-height: 0;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 		overscroll-behavior: contain;
 		padding: var(--space-3);
 		background: var(--color-surface-1);
@@ -270,6 +271,7 @@
 		border-bottom: 1px solid var(--color-danger);
 		max-height: 30dvh;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 	}
 	.notice.info {
 		background: var(--color-surface-2);

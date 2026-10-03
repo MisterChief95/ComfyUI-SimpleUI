@@ -355,6 +355,7 @@
 									? `translate(${view.x}px, ${view.y}px) scale(${view.s})`
 									: undefined}
 								onerror={() => gallery.markUnavailable(item.id)}
+								data-lightbox-image
 							/>
 						{:else if item.media_kind === 'video'}
 							<video
@@ -711,6 +712,7 @@
 		flex: none;
 		max-height: 45%;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 		padding: var(--space-3);
 		padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
 		background: var(--color-surface-1);

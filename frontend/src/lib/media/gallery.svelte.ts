@@ -105,8 +105,6 @@ export class GalleryState {
 
 	navigate(path: string): Promise<void> {
 		this.folderPath = path;
-		this.tree = null;
-		this.items = [];
 		this.continuation = null;
 		this.close();
 		return this.load(true);
@@ -275,11 +273,16 @@ export class GalleryState {
 		this.loading = true;
 		this.error = null;
 		try {
+			let items = reset ? [] : this.items;
+			const itemGroups = reset ? {} : { ...this.itemGroups };
+			let cursor = this.continuation;
+			let siblings = this.siblings;
+			let tree = this.tree;
+			let collections = this.collections;
 			if (reset) {
 				this.continuation = null;
-				this.siblings = [];
 				const path = this.folderPath;
-				const [tree, parent, collections] = await Promise.all([
+				const [nextTree, parent, nextCollections] = await Promise.all([
 					this.fetchTree(path),
 					this.viewPrefs?.walk && isLeaf(path)
 						? this.fetchTree(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')
@@ -287,25 +290,33 @@ export class GalleryState {
 					api<{ items: Collection[] }>('/media/collections')
 				]);
 				if (this.pendingReset) return;
-				this.tree = tree;
-				this.collections = collections.items;
-				this.siblings = parent?.children ?? [];
-				this.firstGroup = path;
-				this.items = [];
-				this.itemGroups = {};
-				this.continuation = { group: path, position: null };
+				tree = nextTree;
+				collections = nextCollections.items;
+				siblings = parent?.children ?? [];
+				cursor = { group: path, position: null };
 			}
 			// Filters can empty entire leaves. Keep advancing until a visible page or the end.
-			while (this.continuation) {
-				const cursor = this.continuation;
+			while (cursor) {
 				const page = await api<MediaPage>(`/media?${this._query(cursor.position, cursor.group)}`);
 				if (this.pendingReset) return;
-				const seen = new Set(this.items.map((item) => item.id));
+				const seen = new Set(items.map((item) => item.id));
 				const added = page.items.filter((item) => !seen.has(item.id));
-				for (const item of added) this.itemGroups[item.id] = cursor.group;
-				this.items = [...this.items, ...added];
-				this.continuation = advance(this.siblings, cursor.group, page.next_cursor);
+				for (const item of added) itemGroups[item.id] = cursor.group;
+				items = [...items, ...added];
+				cursor = advance(siblings, cursor.group, page.next_cursor);
+				// Paging retries resume after any successfully traversed empty leaves.
+				if (!reset) this.continuation = cursor;
 				if (added.length) break;
+			}
+			// Publish replacement results together so surviving keyed tiles can move in place.
+			this.items = items;
+			this.itemGroups = itemGroups;
+			this.continuation = cursor;
+			if (reset) {
+				this.tree = tree;
+				this.collections = collections;
+				this.siblings = siblings;
+				this.firstGroup = this.folderPath;
 			}
 		} catch (cause) {
 			this.error = describeApiError(cause);

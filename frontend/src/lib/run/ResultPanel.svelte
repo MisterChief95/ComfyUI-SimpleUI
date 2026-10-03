@@ -6,6 +6,7 @@
 	import type { GenerationDetail } from '$lib/contracts';
 	import Viewer from '$lib/media/Viewer.svelte';
 	import { GalleryState } from '$lib/media/gallery.svelte';
+	import { openViewer } from '$lib/media/openViewer';
 	import type { RunState } from './run.svelte';
 	import { describeGenerationError, isTerminal, statusInfo } from './status';
 
@@ -48,12 +49,14 @@
 
 	// Lightbox over the recent-outputs strip (plus the shown item if it is not in it).
 	const lightbox = new GalleryState();
-	function openLightbox(): void {
+	function openLightbox(event: MouseEvent): void {
 		if (!shown) return;
+		const item = shown;
 		lightbox.items = tracker.recent.some((item) => item.id === shown.id)
 			? tracker.recent
 			: [shown, ...tracker.recent];
-		void lightbox.select(shown);
+		const source = (event.currentTarget as HTMLButtonElement).querySelector('img');
+		void openViewer(source, () => void lightbox.select(item));
 	}
 	let copyMessage = $state('');
 	let copying = $state(false);
@@ -100,6 +103,17 @@
 </script>
 
 <div class="panel" class:empty>
+	<div class="panel-head">
+		<span class="panel-title"><Icon name="image" size={16} /> Output</span>
+		<a
+			class="btn btn-ghost btn-icon"
+			href="/gallery"
+			aria-label="Open gallery"
+			title="Open gallery"
+		>
+			<Icon name="external" size={16} />
+		</a>
+	</div>
 	{#if latest && !isTerminal(latest.status)}
 		<div class="progress" role="status">
 			<div class="row">
@@ -202,7 +216,11 @@
 			<span class="muted notice" role="status">{run.notice ?? ''}</span>
 		</div>
 	{:else if empty}
-		<p class="muted none">Nothing generated yet. Results appear here.</p>
+		<div class="empty-state">
+			<span class="empty-icon"><Icon name="image" size={32} /></span>
+			<strong>Your next result starts here</strong>
+			<p class="muted none">Choose your settings and generate. Your results appear here.</p>
+		</div>
 	{:else if latest && isTerminal(latest.status) && !failure}
 		<p class="muted none">No output was saved for this run.</p>
 	{/if}
@@ -266,7 +284,40 @@
 		min-width: 0;
 	}
 	.panel.empty {
-		gap: 0;
+		gap: var(--space-3);
+	}
+	.panel-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		flex: none;
+	}
+	.panel-title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-weight: 650;
+		font-size: var(--text-sm);
+	}
+	.empty-state {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		text-align: center;
+		padding: var(--space-3);
+	}
+	.empty-icon {
+		display: grid;
+		place-items: center;
+		width: 3rem;
+		height: 3rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		color: var(--color-text-faint);
 	}
 	.none {
 		margin: 0;
@@ -303,6 +354,7 @@
 		margin: var(--space-2) 0 0;
 		max-height: 14rem;
 		overflow: auto;
+		scrollbar-gutter: stable;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 		font-family: var(--font-mono);
@@ -399,7 +451,7 @@
 		.viewer video {
 			width: 100%;
 			height: auto;
-			max-height: calc(100cqh - 17rem);
+			max-height: max(6rem, calc(100cqh - 17rem));
 		}
 		.strip {
 			flex: 1 1 0;
@@ -410,6 +462,7 @@
 			align-content: start;
 			overflow-x: hidden;
 			overflow-y: auto;
+			scrollbar-gutter: stable;
 		}
 		.thumb {
 			width: auto;
