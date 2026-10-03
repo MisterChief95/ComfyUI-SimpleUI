@@ -5,7 +5,8 @@
 	// and (opt-in, per device) vertical swipe: up = next, down = previous.
 	import { onMount } from 'svelte';
 	import { on } from 'svelte/events';
-	import { MediaQuery } from 'svelte/reactivity';
+	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
+	import type { MediaInfo } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { isolateInput } from '$lib/ui/isolateInput';
 	import { settingsState } from '$lib/settings.svelte';
@@ -91,6 +92,54 @@
 	const index = $derived(gallery.selectedIndex);
 	const hasPrev = $derived(index >= 0 && (index > 0 || gallery.canLoadPrevious));
 	const hasNext = $derived(index >= 0 && (index < gallery.items.length - 1 || gallery.canLoadMore));
+	const decoded = new SvelteSet<string>();
+	let previous = $state.raw<MediaInfo | null>(null);
+	// Keep the outgoing image visible until the requested image has decoded.
+	const shownItem = $derived(
+		item?.media_kind === 'image' &&
+			!gallery.isUnavailable(item) &&
+			!decoded.has(item.id) &&
+			previous?.media_kind === 'image' &&
+			!gallery.isUnavailable(previous)
+			? (previous ?? item)
+			: item
+	);
+	const shownIndex = $derived(gallery.items.findIndex((entry) => entry.id === shownItem?.id));
+	const slides = $derived.by(() => {
+		if (!item) return [];
+		const nearby = index < 0 ? [item] : gallery.items.slice(Math.max(0, index - 2), index + 3);
+		const images = nearby.filter((entry) => entry.id === item.id || entry.media_kind === 'image');
+		// A distant thumbnail jump also retains one outgoing image, so at most six frames stay mounted.
+		const outgoing = previous;
+		if (outgoing?.media_kind === 'image' && !images.some((entry) => entry.id === outgoing.id))
+			images.push(outgoing);
+		return images;
+	});
+
+	function decodeImage(image: HTMLImageElement, id: string): () => void {
+		let active = true;
+		void image.decode().then(
+			() => {
+				if (active) decoded.add(id);
+			},
+			() => {
+				if (active) gallery.markUnavailable(id);
+			}
+		);
+		return () => {
+			active = false;
+			decoded.delete(id);
+		};
+	}
+
+	function step(delta: -1 | 1): void {
+		previous = shownItem;
+		void gallery.step(delta);
+	}
+	function select(entry: MediaInfo): void {
+		previous = shownItem;
+		void gallery.select(entry);
+	}
 
 	// Images at natural size (scrollable) instead of scaled to fit the stage.
 	let full = $state(false);
@@ -179,10 +228,10 @@
 			return;
 		if (event.key === 'ArrowLeft' && hasPrev) {
 			event.preventDefault();
-			gallery.step(-1);
+			step(-1);
 		} else if (event.key === 'ArrowRight' && hasNext) {
 			event.preventDefault();
-			gallery.step(1);
+			step(1);
 		}
 	}
 
@@ -192,7 +241,11 @@
 
 	// A tap on the blank stage (not the image, buttons, or the end of a swipe/pan) closes the viewer.
 	function stageClick(event: MouseEvent): void {
-		if (event.target !== stage || full) return;
+		if (
+			full ||
+			(event.target !== stage && !(event.target as HTMLElement).classList.contains('media-frame'))
+		)
+			return;
 		if (Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) < 10) dialog?.close();
 	}
 
@@ -204,7 +257,10 @@
 		const onControls =
 			target.tagName === 'VIDEO' &&
 			(!vertical || event.clientY > target.getBoundingClientRect().bottom - 64);
-		swipe = full || onControls ? null : { x: event.clientX, y: event.clientY };
+		swipe =
+			full || onControls || target.closest('button')
+				? null
+				: { x: event.clientX, y: event.clientY };
 	}
 
 	function pointerup(event: PointerEvent): void {
@@ -213,13 +269,13 @@
 		const dy = event.clientY - swipe.y;
 		swipe = null;
 		if (vertical && Math.abs(dy) >= 60 && Math.abs(dy) > Math.abs(dx) * 1.5) {
-			if (dy < 0 && hasNext) gallery.step(1);
-			else if (dy > 0 && hasPrev) gallery.step(-1);
+			if (dy < 0 && hasNext) step(1);
+			else if (dy > 0 && hasPrev) step(-1);
 			return;
 		}
 		if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-		if (dx > 0 && hasPrev) gallery.step(-1);
-		else if (dx < 0 && hasNext) gallery.step(1);
+		if (dx > 0 && hasPrev) step(-1);
+		else if (dx < 0 && hasNext) step(1);
 	}
 
 	const titleId = $props.id();
@@ -315,6 +371,7 @@
 					class="stage"
 					class:full
 					class:vertical
+					aria-busy={item.id !== shownItem?.id}
 					bind:this={stage}
 					onpointerdown={(event) => {
 						pointerdown(event);
@@ -325,7 +382,10 @@
 						pointerup(event);
 						zoomUp(event);
 					}}
-					onpointercancel={zoomUp}
+					onpointercancel={(event) => {
+						swipe = null;
+						zoomUp(event);
+					}}
 					onclick={stageClick}
 					ondblclick={() => (view = { s: 1, x: 0, y: 0 })}
 					role="presentation"
@@ -336,50 +396,67 @@
 							class="nav prev btn btn-icon"
 							aria-label="Previous"
 							disabled={gallery.loading}
-							onclick={() => gallery.step(-1)}
+							onclick={() => step(-1)}
 						>
 							<Icon name="chevron-left" size={24} />
 						</button>
 					{/if}
-					{#key item.id}
-						{#if gallery.isUnavailable(item)}
-							<p class="missing" role="status">
-								The file is unavailable. Its gallery and generation records are preserved.
-							</p>
-						{:else if item.media_kind === 'image'}
-							<img
-								src={`/api/media/${item.id}/file`}
-								alt={item.filename}
-								draggable="false"
-								style:transform={full
-									? `translate(${view.x}px, ${view.y}px) scale(${view.s})`
-									: undefined}
-								onerror={() => gallery.markUnavailable(item.id)}
-								data-lightbox-image
-							/>
-						{:else if item.media_kind === 'video'}
-							<video
-								controls
-								autoplay={settingsState.data?.profile.gallery_autoplay === true}
-								muted={settingsState.data?.profile.gallery_autoplay === true}
-								playsinline
-								preload="metadata"
-								src={`/api/media/${item.id}/file`}
-								onerror={() => gallery.markUnavailable(item.id)}
-							>
-								<track kind="captions" />
-							</video>
-						{:else}
-							<p class="muted">Preview is not available for this file type.</p>
-						{/if}
-					{/key}
+					{#each slides as entry (entry.id)}
+						<div
+							class="media-frame"
+							class:current={entry.id === shownItem?.id}
+							aria-hidden={entry.id !== shownItem?.id}
+							inert={entry.id !== shownItem?.id}
+							style:--slide-offset={entry.id === shownItem?.id
+								? 0
+								: gallery.items.findIndex((candidate) => candidate.id === entry.id) < shownIndex
+									? -1
+									: 1}
+						>
+							{#if gallery.isUnavailable(entry)}
+								<p class="missing" role="status">
+									The file is unavailable. Its gallery and generation records are preserved.
+								</p>
+							{:else if entry.media_kind === 'image'}
+								<img
+									{@attach (image) => decodeImage(image, entry.id)}
+									src={`/api/media/${entry.id}/file`}
+									alt={entry.id === shownItem?.id ? entry.filename : ''}
+									decoding="async"
+									draggable="false"
+									style:transform={full
+										? `translate(${view.x}px, ${view.y}px) scale(${view.s})`
+										: undefined}
+									onerror={() => gallery.markUnavailable(entry.id)}
+									data-lightbox-image={entry.id === shownItem?.id ? '' : undefined}
+								/>
+							{:else if entry.media_kind === 'video'}
+								<video
+									controls
+									autoplay={settingsState.data?.profile.gallery_autoplay === true}
+									muted={settingsState.data?.profile.gallery_autoplay === true}
+									playsinline
+									preload="metadata"
+									src={`/api/media/${entry.id}/file`}
+									onerror={() => gallery.markUnavailable(entry.id)}
+								>
+									<track kind="captions" />
+								</video>
+							{:else}
+								<p class="muted">Preview is not available for this file type.</p>
+							{/if}
+						</div>
+					{/each}
+					{#if item.id !== shownItem?.id}
+						<p class="image-loading" role="status">Loading image…</p>
+					{/if}
 					{#if hasNext && !full}
 						<button
 							type="button"
 							class="nav next btn btn-icon"
 							aria-label="Next"
 							disabled={gallery.loading}
-							onclick={() => gallery.step(1)}
+							onclick={() => step(1)}
 						>
 							<Icon name="chevron-right" size={24} />
 						</button>
@@ -405,7 +482,7 @@
 										class="thumb"
 										aria-label={entry.filename}
 										aria-current={entry.id === item.id}
-										onclick={() => gallery.select(entry)}
+										onclick={() => select(entry)}
 									>
 										{#if entry.media_kind !== 'other' && entry.state !== 'unavailable' && !gallery.thumbnailMissing[entry.id]}
 											<img
@@ -605,6 +682,34 @@
 		justify-content: center;
 		padding: 0;
 		touch-action: pan-y;
+		overflow: hidden;
+	}
+	.media-frame {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		translate: calc(var(--slide-offset) * 100%) 0;
+		opacity: 0;
+		pointer-events: none;
+		transition:
+			translate 260ms var(--ease),
+			opacity 220ms var(--ease);
+	}
+	.stage.vertical .media-frame {
+		translate: 0 calc(var(--slide-offset) * 100%);
+	}
+	.media-frame.current {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.image-loading {
+		position: absolute;
+		bottom: 6rem;
+		padding: var(--space-2);
+		border-radius: var(--radius);
+		background: rgb(0 0 0 / 0.5);
 	}
 	.stage img,
 	.stage video {

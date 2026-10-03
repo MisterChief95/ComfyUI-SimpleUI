@@ -281,13 +281,98 @@
 
 	/* ---- desktop: labelled rail ---- */
 	@media (min-width: 1200px) {
+		nav {
+			min-width: 0;
+			padding: var(--space-3) 0.75rem;
+			padding-left: max(0.75rem, env(safe-area-inset-left));
+			overflow-x: hidden;
+			scrollbar-gutter: auto;
+		}
+		/* A fixed icon column keeps every row anchored while the shell changes width. */
+		.brand,
+		a,
+		.profile .who,
+		.switch {
+			display: grid;
+			grid-template-columns: var(--touch-target) minmax(0, 1fr);
+			align-items: center;
+			gap: 0;
+		}
+		.brand {
+			padding: 0;
+			min-height: var(--touch-target);
+		}
+		.mark {
+			justify-self: center;
+		}
+		a,
+		.switch {
+			padding: 0;
+			font-size: var(--text-sm);
+		}
+		a :global(svg),
+		.profile .who :global(svg) {
+			justify-self: center;
+		}
+		.brand-name {
+			display: flex;
+			flex-direction: column;
+			gap: 0.15rem;
+			strong {
+				font-size: var(--text-lg);
+				letter-spacing: -0.03em;
+			}
+			span {
+				font-size: 0.6875rem;
+				color: var(--color-text-muted);
+			}
+		}
+		.nav-caption {
+			display: block;
+			padding: 0 0.75rem;
+			font-size: 0.625rem;
+			font-weight: 650;
+			letter-spacing: 0.12em;
+			text-transform: uppercase;
+			color: var(--color-text-faint);
+		}
+		.label {
+			position: static;
+			width: auto;
+			height: auto;
+			clip-path: none;
+		}
+		.brand-name,
+		.nav-caption,
+		.label,
+		.who-name,
+		.switch-label {
+			min-width: 0;
+			overflow: hidden;
+			white-space: nowrap;
+			transition:
+				opacity 160ms var(--ease),
+				transform var(--sidebar-duration) var(--ease);
+		}
+		nav.collapsed {
+			.brand-name,
+			.nav-caption,
+			.label,
+			.who-name,
+			.switch-label {
+				opacity: 0;
+				transform: translateX(-0.375rem);
+			}
+		}
 		.collapse {
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			align-self: center;
+			align-self: flex-start;
 			width: var(--touch-target);
 			height: var(--touch-target);
+			flex-shrink: 0;
+			padding: 0;
 			border: 0;
 			border-radius: var(--radius);
 			background: none;
@@ -299,75 +384,25 @@
 			background: var(--color-surface-2);
 			color: var(--color-text);
 		}
-		nav:not(.collapsed) {
-			padding: var(--space-3);
-			padding-left: max(var(--space-3), env(safe-area-inset-left));
-			.collapse {
-				align-self: flex-start;
-			}
-			.brand {
-				justify-content: flex-start;
-				padding: 0 var(--space-1);
-			}
-			.brand-name {
-				display: flex;
-				flex-direction: column;
-				gap: 0.15rem;
-				strong {
-					font-size: var(--text-lg);
-					letter-spacing: -0.03em;
-				}
-				span {
-					font-size: 0.6875rem;
-					color: var(--color-text-muted);
-				}
-			}
-			.nav-caption {
-				display: block;
-				padding: 0 0.75rem;
-				font-size: 0.625rem;
-				font-weight: 650;
-				letter-spacing: 0.12em;
-				text-transform: uppercase;
-				color: var(--color-text-faint);
-			}
-			a {
-				justify-content: flex-start;
-				gap: 0.75rem;
-				padding: 0 0.75rem;
-				font-size: var(--text-sm);
-			}
-			.label {
-				position: static;
-				width: auto;
-				height: auto;
-				overflow: visible;
-				clip-path: none;
-			}
-			.profile {
-				align-items: stretch;
-				padding-top: var(--space-3);
-				border-top: 1px solid var(--color-border);
-			}
-			.who-name {
-				display: inline;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				white-space: nowrap;
-			}
-			.switch {
-				width: auto;
-				padding: 0 0.875rem;
-			}
-			.switch-icon {
-				display: none;
-			}
-			.switch-label {
-				display: inline;
-			}
-		}
 		nav .profile {
+			align-items: stretch;
 			margin-top: 0;
+			padding-top: var(--space-3);
+			border-top: 1px solid var(--color-border);
+		}
+		.who-name,
+		.switch-label {
+			display: block;
+			text-overflow: ellipsis;
+		}
+		.switch {
+			width: 100%;
+			min-height: var(--touch-target);
+			text-align: left;
+		}
+		.switch-icon {
+			display: grid;
+			place-items: center;
 		}
 	}
 </style>

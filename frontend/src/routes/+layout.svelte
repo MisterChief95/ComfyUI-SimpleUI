@@ -93,6 +93,8 @@
 		.shell,
 		.shell.has-header {
 			--rail-w: 13.5rem;
+			--sidebar-duration: 240ms;
+			transition: grid-template-columns var(--sidebar-duration) var(--ease);
 		}
 		.shell.collapsed,
 		.shell.collapsed.has-header {
