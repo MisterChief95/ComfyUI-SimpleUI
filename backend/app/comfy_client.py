@@ -24,11 +24,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Self
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
-from typing_extensions import Self
 
 LOGGER = logging.getLogger("simpleui.comfy")
 

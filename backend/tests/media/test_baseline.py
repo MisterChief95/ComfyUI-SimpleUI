@@ -6,16 +6,45 @@ Run from backend/:  python -m unittest discover -s tests -v
 from __future__ import annotations
 
 import os
+import time
 import unittest
+from unittest.mock import patch
 
 from app.auth.service import AuthService, Conflict
-from app.media.service import MediaError
+from app.media.service import MediaError, MediaService
 from app.storage import DEFAULT_PROFILE_ID
 
 from .support import MediaTestCase
 
 
 class BaselineImportTest(MediaTestCase):
+    def test_import_precomputes_image_thumbnails_without_ffmpeg(self) -> None:
+        self.png("one.png")
+        self.video("clip.mp4")
+
+        with patch("app.media.service.shutil.which", return_value=None):
+            self.media.import_baseline()
+
+        image = next(item for item in self.gallery() if item["filename"] == "one.png")
+        poster = self.media.thumbnails / f"{image['id']}.jpg"
+        deadline = time.monotonic() + 3
+        while not poster.is_file() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(
+            poster.is_file(),
+            "image thumbnail should exist before its first-view request",
+        )
+        poster.unlink()
+        restarted = MediaService(self.db, self.settings, self.media.data_dir)
+        self.addCleanup(restarted.close)
+        deadline = time.monotonic() + 3
+        while not poster.is_file() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(poster.is_file(), "startup should recover a missing thumbnail")
+        video = next(item for item in self.gallery() if item["filename"] == "clip.mp4")
+        self.assertFalse((self.media.thumbnails / f"{video['id']}.jpg").exists())
+        self.assertFalse(list(self.media.thumbnails.glob("*.part")))
+
     def test_existing_files_are_indexed_under_default_with_unknown_metadata(
         self,
     ) -> None:

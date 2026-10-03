@@ -96,6 +96,42 @@ class ForeignKeyTest(StorageTestCase):
 
 
 class MigrationTest(StorageTestCase):
+    def test_collections_upgrade_preserves_existing_media_and_restarts(self) -> None:
+        migrations = self.root / "collections-migrations"
+        migrations.mkdir()
+        for script in MIGRATIONS_DIR.glob("*.sql"):
+            if int(script.name[:3]) <= 4:
+                shutil.copy(script, migrations / script.name)
+        path = self.root / "collections-upgrade.sqlite3"
+        old = Database(path, migrations_dir=migrations)
+        media_id = Repository(old).record_media(
+            OWNER,
+            storage_path="existing.png",
+            file_version="existing",
+            media_kind="image",
+            media_type="image/png",
+        )
+        old.close()
+        shutil.copy(
+            MIGRATIONS_DIR / "005_collections.sql", migrations / "005_collections.sql"
+        )
+        upgraded = Database(path, migrations_dir=migrations)
+        try:
+            repo = Repository(upgraded)
+            self.assertEqual(upgraded.schema_version(), 5)
+            self.assertEqual(
+                repo.get_media(OWNER, media_id)["storage_path"], "existing.png"
+            )
+            cid = repo.save_collection(OWNER, "Existing")["id"]
+            self.assertEqual(repo.collection_members(OWNER, cid, [media_id]), 1)
+            self.assertEqual(upgraded.migrate(), [])
+        finally:
+            upgraded.close()
+        restarted = Database(path, migrations_dir=migrations)
+        self.addCleanup(restarted.close)
+        self.assertEqual(Repository(restarted).list_collections(OWNER)[0]["count"], 1)
+        self.assertEqual(restarted.query("PRAGMA foreign_key_check"), [])
+
     def test_shipped_migrations_record_their_versions(self) -> None:
         # Read from the directory, so shipping 003_*.sql is not a test edit.
         latest = max(int(script.name[:3]) for script in MIGRATIONS_DIR.glob("*.sql"))
