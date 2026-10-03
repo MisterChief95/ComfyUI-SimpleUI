@@ -8,7 +8,7 @@
 	import Compare from '$lib/media/Compare.svelte';
 	import type { MediaInfo } from '$lib/contracts';
 	import Viewer from '$lib/media/Viewer.svelte';
-	import { ViewPrefs, type GallerySort } from '$lib/media/viewPrefs.svelte';
+	import { ViewPrefs, MAX_TILE, MIN_TILE, type GallerySort } from '$lib/media/viewPrefs.svelte';
 	import Star from '$lib/media/Star.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Sheet from '$lib/ui/Sheet.svelte';
@@ -57,11 +57,25 @@
 			chosen = [];
 	}
 
-	function open(item: MediaInfo): void {
+	// Last tile clicked in select mode; Shift+click selects everything between it and the new tile.
+	let anchor = '';
+	function open(item: MediaInfo, event: MouseEvent): void {
+		const range = event.shiftKey;
+		if (!selecting && (range || event.ctrlKey || event.metaKey)) toggleSelect();
 		if (selecting) {
-			chosen = chosen.includes(item.id)
-				? chosen.filter((id) => id !== item.id)
-				: [...chosen, item.id];
+			const from = gallery.items.findIndex((i) => i.id === anchor);
+			const to = gallery.items.indexOf(item);
+			if (range && chosen.length && from >= 0) {
+				const ids = gallery.items
+					.slice(Math.min(from, to), Math.max(from, to) + 1)
+					.map((i) => i.id);
+				chosen = [...new Set([...chosen, ...ids])];
+			} else {
+				chosen = chosen.includes(item.id)
+					? chosen.filter((id) => id !== item.id)
+					: [...chosen, item.id];
+			}
+			anchor = item.id;
 			return;
 		}
 		if (!comparing) return void gallery.select(item);
@@ -77,6 +91,7 @@
 	function toggleSelect(): void {
 		selecting = !selecting;
 		chosen = [];
+		anchor = '';
 		comparing = false;
 		picked = [];
 	}
@@ -92,12 +107,22 @@
 		if (await gallery.deleteMany(chosen)) toggleSelect();
 	}
 
-	// This device's size choice wins over the profile setting; either only changes the grid's minimum column width.
-	const tile = $derived(
-		{ small: '7.5rem', large: '13rem' }[
-			prefs.size || String(settingsState.data?.profile.thumbnail_size)
-		] ?? '10rem'
+	// This device's slider wins over the profile setting; either only changes the grid's minimum column width.
+	const profileTile = $derived(
+		{ small: 120, large: 208 }[String(settingsState.data?.profile.thumbnail_size)] ?? 160
 	);
+	const tile = $derived(prefs.size || profileTile);
+
+	// Date folders arrive as bare digits (2026 / 10 / 03); show month and day names instead. Dates are UTC.
+	function folderName(path: string, name: string): string {
+		const m = /^Date\/(\d{4})\/(\d{2})(?:\/(\d{2}))?$/.exec(path);
+		if (!m) return name;
+		const date = new Date(Date.UTC(+m[1], +m[2] - 1, +(m[3] ?? 1)));
+		return date.toLocaleDateString(undefined, {
+			timeZone: 'UTC',
+			...(m[3] ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'long' })
+		});
+	}
 
 	onMount(() => {
 		let disposed = false;
@@ -219,26 +244,16 @@
 			<datalist id="gallery-suggestions">
 				{#each gallery.suggestions as value (value)}<option {value}></option>{/each}
 			</datalist>
+			<small id="search-scope"
+				>Searches retained inputs of the latest 1,000 generations. Imported files have no metadata.</small
+			>
 		</label>
-		<p id="search-scope" class="muted">
-			Latest 1,000 generations; retained scalar controls only. Prompt and Model use stored input
-			names. Imported files have no saved metadata. Large snapshots and controls after the first 200
-			are skipped.
-		</p>
 	</form>
 {/snippet}
 
 <div class="page gallery stack" style:--gap="var(--space-2)">
-	<div class="row">
+	<div class="row toolbar">
 		<h1 class="grow">Gallery</h1>
-		<button
-			type="button"
-			class="btn-icon"
-			aria-label="View settings"
-			onclick={() => (prefsOpen = true)}
-		>
-			<Icon name="settings" />
-		</button>
 		{#if comparing && picked.length === 2}
 			<button type="button" class="btn btn-primary" onclick={() => (showCompare = true)}
 				>Compare</button
@@ -276,26 +291,56 @@
 		{/if}
 		{#if selecting}
 			<button type="button" class="btn" onclick={() => (chosen = gallery.items.map((i) => i.id))}
-				>All</button
+				>Select all</button
 			>
 		{/if}
-		<button type="button" class="btn" aria-pressed={selecting} onclick={toggleSelect}>
-			{selecting ? 'Cancel select' : 'Select'}
-		</button>
-		<button type="button" class="btn" aria-pressed={comparing} onclick={toggleCompare}>
-			{comparing ? `Cancel compare (${picked.length}/2)` : 'Compare'}
-		</button>
-		<button
-			type="button"
-			class="btn"
-			aria-expanded={wide.current ? panelOpen : undefined}
-			aria-haspopup={wide.current ? undefined : 'dialog'}
-			onclick={toggleFilters}
-		>
-			Filters
-			{#if gallery.activeCount > 0}<span class="badge badge-accent">{gallery.activeCount}</span
-				>{/if}
-		</button>
+		<div class="row tools">
+			<button
+				type="button"
+				class="btn btn-icon"
+				aria-pressed={selecting}
+				aria-label={selecting ? 'Cancel select' : 'Select (or Ctrl/Shift+click a tile)'}
+				title={selecting ? 'Cancel select' : 'Select (or Ctrl/Shift+click a tile)'}
+				onclick={toggleSelect}
+			>
+				<Icon name="select" />
+			</button>
+			<button
+				type="button"
+				class="btn btn-icon"
+				aria-pressed={comparing}
+				aria-label={comparing ? `Cancel compare (${picked.length}/2)` : 'Compare two items'}
+				title={comparing ? `Cancel compare (${picked.length}/2)` : 'Compare two items'}
+				onclick={toggleCompare}
+			>
+				<Icon name="compare" />
+				{#if comparing}<span class="badge badge-accent count">{picked.length}/2</span>{/if}
+			</button>
+			<button
+				type="button"
+				class="btn btn-icon"
+				aria-label="Filters"
+				title="Filters"
+				aria-pressed={wide.current ? panelOpen : undefined}
+				aria-haspopup={wide.current ? undefined : 'dialog'}
+				onclick={toggleFilters}
+			>
+				<Icon name="filter" />
+				{#if gallery.activeCount > 0}<span class="badge badge-accent count"
+						>{gallery.activeCount}</span
+					>{/if}
+			</button>
+			<button
+				type="button"
+				class="btn btn-icon"
+				aria-label="View settings"
+				title="View settings"
+				aria-haspopup="dialog"
+				onclick={() => (prefsOpen = true)}
+			>
+				<Icon name="sliders" />
+			</button>
+		</div>
 	</div>
 
 	{#if wide.current && panelOpen}
@@ -353,13 +398,14 @@
 				</select>
 			</label>
 			<label>
-				<span>Thumbnail size</span>
-				<select bind:value={prefs.size}>
-					<option value="">Profile default</option>
-					<option value="small">Small</option>
-					<option value="medium">Medium</option>
-					<option value="large">Large</option>
-				</select>
+				<span>Thumbnail width: {tile}px{prefs.size ? '' : ' (profile default)'}</span>
+				<input
+					type="range"
+					min={MIN_TILE}
+					max={MAX_TILE}
+					step="8"
+					bind:value={() => tile, (px: number) => (prefs.size = px)}
+				/>
 			</label>
 			<label class="check"
 				><input type="checkbox" bind:checked={prefs.fit} /> Show whole image (no crop)</label
@@ -424,28 +470,31 @@
 	{#if gallery.downloadMessage}<p class="muted" role="status">{gallery.downloadMessage}</p>{/if}
 	{#if gallery.error}<p class="error" role="alert">{gallery.error}</p>{/if}
 
-	<nav class="folders" aria-label="Gallery folders">
-		<div class="row breadcrumbs">
-			{#each gallery.tree?.breadcrumbs ?? [{ path: '', name: 'All media' }] as crumb (crumb.path)}
-				<button
-					type="button"
-					class="btn btn-ghost"
-					aria-current={crumb.path === gallery.folderPath ? 'page' : undefined}
-					onclick={() => gallery.navigate(crumb.path)}>{crumb.name}</button
-				>
-			{/each}
-		</div>
-		{#if gallery.tree}
-			<div class="row folder-list">
+	<nav class="folders" aria-label="Gallery folders" title="Counts ignore filters. Dates are UTC.">
+		{#if gallery.tree && gallery.tree.breadcrumbs.length > 1}
+			<ol class="breadcrumbs">
+				{#each gallery.tree.breadcrumbs as crumb, i (crumb.path)}
+					<li>
+						{#if i > 0}<Icon name="chevron-right" size={14} />{/if}
+						{#if crumb.path === gallery.folderPath}
+							<span aria-current="page">{folderName(crumb.path, crumb.name)}</span>
+						{:else}
+							<button type="button" onclick={() => gallery.navigate(crumb.path)}
+								>{folderName(crumb.path, crumb.name)}</button
+							>
+						{/if}
+					</li>
+				{/each}
+			</ol>
+		{/if}
+		{#if gallery.tree?.children.length}
+			<div class="folder-list">
 				{#each gallery.tree.children as folder (folder.path)}
-					<button type="button" class="btn" onclick={() => gallery.navigate(folder.path)}>
-						{folder.name} <span class="badge">{folder.count}</span>
+					<button type="button" class="chip" onclick={() => gallery.navigate(folder.path)}>
+						{folderName(folder.path, folder.name)} <span class="muted">{folder.count}</span>
 					</button>
 				{/each}
 			</div>
-			<p class="muted folder-note">
-				Folder counts include all visible media before filters. Dates use UTC.
-			</p>
 		{/if}
 	</nav>
 	{#if gallery.folderPath.startsWith('Collections/')}
@@ -481,10 +530,10 @@
 	{:else if gallery.items.length === 0}
 		<p class="muted">No media matches these filters.</p>
 	{:else}
-		<ul class="grid" style:--tile={tile}>
+		<ul class="grid" style:--tile={`${tile}px`}>
 			{#each gallery.items as item, index (item.id)}
 				{@const group = gallery.groupHeader(index)}
-				{#if group}<li class="group-header"><h2>{group}</h2></li>{/if}
+				{#if group}<li class="group-header"><h2>{folderName(group, group)}</h2></li>{/if}
 				{@const unavailable = gallery.isUnavailable(item)}
 				<li
 					class="tile"
@@ -497,7 +546,7 @@
 						type="button"
 						aria-label={`Open ${item.filename}`}
 						title={item.filename}
-						onclick={() => open(item)}
+						onclick={(event) => open(item, event)}
 					>
 						{#if unavailable}
 							<span class="placeholder">File unavailable</span>
@@ -560,18 +609,71 @@
 {/if}
 
 <style>
-	.breadcrumbs,
-	.folder-list {
-		flex-wrap: wrap;
+	.tools {
+		gap: var(--space-1);
 	}
-	.breadcrumbs button,
+	.tools .btn[aria-pressed='true'] {
+		color: var(--color-accent);
+		background: var(--color-accent-soft);
+		border-color: transparent;
+	}
+	.tools .btn {
+		position: relative;
+	}
+	.count {
+		position: absolute;
+		top: -0.4rem;
+		right: -0.4rem;
+		font-size: 0.65rem;
+		padding: 0 0.3rem;
+		pointer-events: none;
+	}
+
+	.folders {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.breadcrumbs {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
+	}
+	.breadcrumbs li {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		margin-right: var(--space-1);
+	}
+	.breadcrumbs button {
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.breadcrumbs button:hover {
+		color: var(--color-text);
+		text-decoration: underline;
+	}
+	.breadcrumbs [aria-current] {
+		color: var(--color-text);
+		font-weight: 600;
+	}
+	.folder-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
 	.folder-list button {
 		max-width: 100%;
 		overflow-wrap: anywhere;
-	}
-	.folder-note {
-		font-size: var(--text-sm);
-		margin: var(--space-1) 0;
 	}
 	h1 {
 		margin: 0;
@@ -602,15 +704,19 @@
 	.fields .prompt {
 		grid-column: 1 / -1;
 	}
+	.fields small {
+		font-size: var(--text-xs);
+	}
 	/* Inside the phone sheet: single column. */
 	:global(dialog) .fields {
 		grid-template-columns: 1fr;
 	}
 	.actions {
-		margin-top: var(--space-3);
+		margin-top: var(--space-2);
 	}
 
 	.grid {
+		user-select: none; /* Shift+click range selection must not highlight text */
 		list-style: none;
 		margin: 0;
 		padding: 0;

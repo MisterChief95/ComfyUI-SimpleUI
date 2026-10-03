@@ -42,7 +42,11 @@
 		upload: 'M12 16V4M7 9l5-5 5 5M4 16v4h16v-4',
 		download: 'M12 4v12M7 11l5 5 5-5M4 16v4h16v-4',
 		expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
-		collapse: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5'
+		collapse: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
+		sliders: 'M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4',
+		select: 'M4 4h16v16H4zM8 12l3 3 5-6',
+		compare: 'M4 4h16v16H4zM12 4v16',
+		filter: 'M3 5h18l-7 8v6l-4 2v-8z'
 	} as const;
 
 	export type IconName = keyof typeof PATHS;
