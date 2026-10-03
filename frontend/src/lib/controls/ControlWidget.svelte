@@ -105,12 +105,16 @@
 
 	// --- float / slider numeric parsing ---
 	function emitNumber(el: HTMLInputElement): void {
+		if (isInt) {
+			// Keep typed integers exact, including invalid text for validation.
+			onchange(el.value);
+			return;
+		}
 		const n = el.valueAsNumber;
 		if (Number.isNaN(n)) {
 			onchange(el.value);
 		} else {
-			// Int sliders emit an ExactInt string; floats emit numbers.
-			onchange(isInt ? String(Math.round(n)) : n);
+			onchange(n);
 		}
 	}
 	const sliderValue = $derived(Number(text));
