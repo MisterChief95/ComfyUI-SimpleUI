@@ -55,7 +55,11 @@ class WorkflowService:
         return workflow_id, graph
 
     def replace_graph(
-        self, owner_id: str, workflow_id: str, payload: bytes | str, snapshot: CatalogSnapshot
+        self,
+        owner_id: str,
+        workflow_id: str,
+        payload: bytes | str,
+        snapshot: CatalogSnapshot,
     ) -> tuple[dict[str, Any], int, list[str], list[str]] | None:
         """Store ``payload`` as the next graph revision; None if not owned.
 
@@ -179,7 +183,9 @@ class WorkflowService:
             request.scope, control, structural_signature(graph), snapshot.nodes
         )
         selector = (
-            workflow_selector(control) if request.scope == "workflow" else node_selector(control)
+            workflow_selector(control)
+            if request.scope == "workflow"
+            else node_selector(control)
         )
         try:
             revision = self._repository.save_mapping_override(
@@ -217,7 +223,10 @@ class WorkflowService:
                 scope, control, signature, snapshot.nodes
             )
             for control in schema.controls
-            for scope, selector in (("workflow", workflow_selector), ("node_class", node_selector))
+            for scope, selector in (
+                ("workflow", workflow_selector),
+                ("node_class", node_selector),
+            )
         }
         exported = []
         for row in self._repository.list_mapping_overrides(owner_id, workflow_id):
@@ -237,7 +246,11 @@ class WorkflowService:
         return exported
 
     def reset_corrections(
-        self, owner_id: str, workflow_id: str, scope: str | None = None, selector: str | None = None
+        self,
+        owner_id: str,
+        workflow_id: str,
+        scope: str | None = None,
+        selector: str | None = None,
     ) -> int:
         """Drop saved corrections so the derived base schema returns unchanged.
 
@@ -265,13 +278,17 @@ class WorkflowService:
             return None
         graph, schema = base
         row = self._repository.get_layout(owner_id, workflow_id)
-        layout = None if row is None else LayoutDoc.model_validate_json(row["layout_json"])
+        layout = (
+            None if row is None else LayoutDoc.model_validate_json(row["layout_json"])
+        )
         return WorkflowLayout(
             workflow_id=workflow_id,
             revision=0 if row is None else int(row["revision"]),
             schema_signature=structural_signature(graph),
             layout=layout,
-            stale_bindings=stale_bindings(layout, {c.binding_id for c in schema.controls}),
+            stale_bindings=stale_bindings(
+                layout, {c.binding_id for c in schema.controls}
+            ),
         )
 
     def save_layout(
@@ -292,19 +309,40 @@ class WorkflowService:
         graph, schema = base
         controls = {c.binding_id: c for c in schema.controls}
         saved = self._repository.get_layout(owner_id, workflow_id)
+<<<<<<< Updated upstream
         previous = LayoutDoc.model_validate_json(saved["layout_json"]) if saved else None
         previous_pairs = {
             (item.width, item.height)
             for section in previous.sections
             for item in section_items(section) if item.kind == "aspect_ratio"
         } if previous else set()
+=======
+        previous = (
+            LayoutDoc.model_validate_json(saved["layout_json"]) if saved else None
+        )
+        previous_pairs = (
+            {
+                (item.width, item.height)
+                for section in previous.sections
+                for item in section.items
+                if item.kind == "aspect_ratio"
+            }
+            if previous
+            else set()
+        )
+>>>>>>> Stashed changes
         for section in request.layout.sections:
             for item in section_items(section):
                 if item.kind == "aspect_ratio":
                     for binding in (item.width, item.height):
                         control = controls.get(binding)
-                        if (control is None and (item.width, item.height) not in previous_pairs) or (control is not None and control.logical_type != "int"):
-                            raise CorrectionError(422, "Aspect-ratio bindings must be integer controls.")
+                        if (
+                            control is None
+                            and (item.width, item.height) not in previous_pairs
+                        ) or (control is not None and control.logical_type != "int"):
+                            raise CorrectionError(
+                                422, "Aspect-ratio bindings must be integer controls."
+                            )
         self._repository.save_layout(
             owner_id,
             workflow_id,

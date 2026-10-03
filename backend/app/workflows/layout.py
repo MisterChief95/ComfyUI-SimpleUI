@@ -43,7 +43,9 @@ class AspectRatioItem(Model):
     kind: Literal["aspect_ratio"]
     width: BindingId
     height: BindingId
-    presets: list[tuple[Dimension, Dimension]] | None = Field(default=None, max_length=24)
+    presets: list[tuple[Dimension, Dimension]] | None = Field(
+        default=None, max_length=24
+    )
     span: Literal["auto", "full"] = "auto"
     when: OptionalBinding = None
 
@@ -52,12 +54,25 @@ LayoutItem = Annotated[ControlItem | AspectRatioItem, Field(discriminator="kind"
 
 
 def item_bindings(item: ControlItem | AspectRatioItem) -> list[str]:
-    return [item.binding_id] if isinstance(item, ControlItem) else [item.width, item.height]
+    return (
+        [item.binding_id]
+        if isinstance(item, ControlItem)
+        else [item.width, item.height]
+    )
 
 
+<<<<<<< Updated upstream
 class SectionBase(Model):
     id: StructuralId
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+=======
+class LayoutSection(Model):
+    id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,40}$")]
+    title: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
+    ]
+    columns: Literal[1, 2, 3]
+>>>>>>> Stashed changes
     #: Default disclosure on the run page; the live open state is per-device.
     collapsed: StrictBool
     #: Boolean binding rendered as the header switch; the body folds away while
@@ -127,14 +142,27 @@ class LayoutDoc(Model):
             raise ValueError("row and column ids must be unique across the document")
         bindings = self.bindings()
         if len(bindings) > MAX_ENTRIES:
-            raise ValueError(f"a layout holds at most {MAX_ENTRIES} items and hidden controls")
+            raise ValueError(
+                f"a layout holds at most {MAX_ENTRIES} items and hidden controls"
+            )
         if len(set(bindings)) != len(bindings):
-            raise ValueError("a control may appear only once across sections and hidden")
+            raise ValueError(
+                "a control may appear only once across sections and hidden"
+            )
         return self
 
     def bindings(self) -> list[str]:
+<<<<<<< Updated upstream
         toggles = [s.toggle for s in self.sections if s.toggle is not None]
         return [binding for s in self.sections for item in section_items(s) for binding in item_bindings(item)] + toggles + self.hidden
+=======
+        return [
+            binding
+            for s in self.sections
+            for item in s.items
+            for binding in item_bindings(item)
+        ] + self.hidden
+>>>>>>> Stashed changes
 
 
 class SaveLayout(Model):

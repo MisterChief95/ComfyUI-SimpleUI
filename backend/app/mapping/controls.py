@@ -25,6 +25,7 @@ import json
 import re
 from typing import Any
 
+from ..catalog.normalize import is_scalar, same_choice
 from ..contracts import (
     Component,
     ControlDescriptor,
@@ -35,7 +36,6 @@ from ..contracts import (
     LogicalType,
     NumberConstraints,
 )
-from ..catalog.normalize import is_scalar, same_choice
 from .importer import classify_input, looks_like_link
 
 #: Group order follows generation use (docs/WORKFLOW_MAPPING.md "Grouping").
@@ -54,10 +54,23 @@ GROUP_ORDER: tuple[Group, ...] = (
 
 #: Small, typed name rules -- not a registry of model-family workflows.
 _GENERATION_INPUTS = frozenset(
-    {"seed", "noise_seed", "steps", "cfg", "sampler_name", "scheduler", "denoise", "batch_size"}
+    {
+        "seed",
+        "noise_seed",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "denoise",
+        "batch_size",
+    }
 )
-_DIMENSION_INPUTS = frozenset({"width", "height", "length", "tile_width", "tile_height"})
-_VIDEO_INPUTS = frozenset({"fps", "frame_rate", "frame_count", "num_frames", "format", "codec", "crf"})
+_DIMENSION_INPUTS = frozenset(
+    {"width", "height", "length", "tile_width", "tile_height"}
+)
+_VIDEO_INPUTS = frozenset(
+    {"fps", "frame_rate", "frame_count", "num_frames", "format", "codec", "crf"}
+)
 #: Inputs whose *value* names a conditioning role on the consuming node.
 _POSITIVE = "positive"
 _NEGATIVE = "negative"
@@ -178,7 +191,9 @@ def build_control_schema(
 
 def _ordered_ids(graph: dict[str, Any]) -> list[str]:
     """Numeric node ids sort numerically; anything else sorts after, by text."""
-    return sorted(graph, key=lambda n: (0, int(n), "") if n.lstrip("-").isdigit() else (1, 0, n))
+    return sorted(
+        graph, key=lambda n: (0, int(n), "") if n.lstrip("-").isdigit() else (1, 0, n)
+    )
 
 
 def _resolve_links(
@@ -212,7 +227,9 @@ def _resolve_links(
                 )
                 continue
             target_spec = catalog_nodes.get(target["class_type"])
-            outputs = target_spec.get("outputs") if isinstance(target_spec, dict) else None
+            outputs = (
+                target_spec.get("outputs") if isinstance(target_spec, dict) else None
+            )
             if outputs is not None and link.output_index >= len(outputs):
                 blocking.append(
                     ErrorDetail(
@@ -286,7 +303,9 @@ def _node_controls(
         input_spec = declared.get(name)
         if input_spec is None:
             controls.append(
-                _flexible_control(node_id, class_type, name, value, spec, title, reachable, warnings)
+                _flexible_control(
+                    node_id, class_type, name, value, spec, title, reachable, warnings
+                )
             )
             continue
         controls.append(
@@ -367,7 +386,8 @@ def _literal_control(
             # slider (app/contracts.py, fixtures expectations/seed_and_transport).
             component = "seed" if input_spec.get("seed_like") else "number"
             constraints = NumberConstraints(
-                exact_min=_exact(input_spec.get("min")), exact_max=_exact(input_spec.get("max"))
+                exact_min=_exact(input_spec.get("min")),
+                exact_max=_exact(input_spec.get("max")),
             )
             value = str(value)
             reason += ",exact_transport"
@@ -398,10 +418,18 @@ def _literal_control(
         kind, component = "enum", "select"
         choices = [c for c in input_spec.get("choices", []) if is_scalar(c)]
         options = [EnumOption(value=c, label=str(c), available=True) for c in choices]
-        if is_scalar(value) and choices and not any(same_choice(value, c) for c in choices):
+        if (
+            is_scalar(value)
+            and choices
+            and not any(same_choice(value, c) for c in choices)
+        ):
             # The imported value is shown and must be corrected; it is never
             # swapped for the first remaining option.
-            options.append(EnumOption(value=value, label=f"{value} (not installed)", available=False))
+            options.append(
+                EnumOption(
+                    value=value, label=f"{value} (not installed)", available=False
+                )
+            )
             unresolved.append(
                 ErrorDetail(
                     field=f"{node_id}.inputs.{name}",
@@ -455,7 +483,9 @@ def _literal_control(
             )
         )
 
-    if component == "readonly" and not isinstance(value, (str, bool, float, type(None))):
+    if component == "readonly" and not isinstance(
+        value, (str, bool, float, type(None))
+    ):
         value = _encode_opaque(value)
 
     group, label, group_reason = _group_and_label(
@@ -593,7 +623,10 @@ def _branch_controls(
 
 
 def _check_required(
-    node_id: str, node: dict[str, Any], spec: dict[str, Any], blocking: list[ErrorDetail]
+    node_id: str,
+    node: dict[str, Any],
+    spec: dict[str, Any],
+    blocking: list[ErrorDetail],
 ) -> None:
     """Absent *required* inputs block; absent optionals stay absent.
 
@@ -643,17 +676,31 @@ def _group_and_label(
     if node_spec.get("output_node") and name == "filename_prefix":
         return "output", _qualify(title, class_type, node_id, pretty), "output_filename"
 
-    if name in _VIDEO_INPUTS and ("VIDEO" in outputs or node_spec.get("output_role") == "video"):
+    if name in _VIDEO_INPUTS and (
+        "VIDEO" in outputs or node_spec.get("output_role") == "video"
+    ):
         return "video", _qualify(title, class_type, node_id, pretty), "video_input_name"
 
     if name in _DIMENSION_INPUTS:
-        return "dimensions", _qualify(title, class_type, node_id, pretty), "dimension_input_name"
+        return (
+            "dimensions",
+            _qualify(title, class_type, node_id, pretty),
+            "dimension_input_name",
+        )
 
     if name in _GENERATION_INPUTS:
-        return "generation", _qualify(title, class_type, node_id, pretty), "generation_input_name"
+        return (
+            "generation",
+            _qualify(title, class_type, node_id, pretty),
+            "generation_input_name",
+        )
 
     if kind == "enum" and input_spec.get("choices_source") == "server_model_catalog":
-        return "model", _qualify(title, class_type, node_id, pretty), "model_catalog_choices"
+        return (
+            "model",
+            _qualify(title, class_type, node_id, pretty),
+            "model_catalog_choices",
+        )
 
     return "advanced", _qualify(title, class_type, node_id, pretty), "default_group"
 
@@ -695,11 +742,16 @@ def _order(controls: list[ControlDescriptor]) -> list[ControlDescriptor]:
         controls,
         key=lambda c: (
             rank.get(c.group, len(rank)),
-            (0, int(c.node_id), "") if c.node_id.lstrip("-").isdigit() else (1, 0, c.node_id),
+            (0, int(c.node_id), "")
+            if c.node_id.lstrip("-").isdigit()
+            else (1, 0, c.node_id),
             c.input_name,
         ),
     )
-    return [control.model_copy(update={"order": index}) for index, control in enumerate(ordered)]
+    return [
+        control.model_copy(update={"order": index})
+        for index, control in enumerate(ordered)
+    ]
 
 
 # --- encoding helpers -----------------------------------------------------
@@ -774,7 +826,13 @@ def _raw_metadata(input_spec: dict[str, Any]) -> dict[str, Any] | None:
     """Preserved upstream hints, shown as diagnostics and never executed."""
     kept = {
         key: input_spec[key]
-        for key in ("force_input_hint", "dynamic_prompts_hint", "managed", "seed_like", "media_kind")
+        for key in (
+            "force_input_hint",
+            "dynamic_prompts_hint",
+            "managed",
+            "seed_like",
+            "media_kind",
+        )
         if key in input_spec
     }
     return kept or None

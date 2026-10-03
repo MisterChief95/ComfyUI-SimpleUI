@@ -1,8 +1,8 @@
 """Durable application storage: migrated SQLite plus owner-scoped repositories.
 
-    db = Database(config.data_dir / "app.sqlite3")
-    repo = Repository(db)
-    page = await in_thread(repo.list_media, owner_id)   # never block the loop
+db = Database(config.data_dir / "app.sqlite3")
+repo = Repository(db)
+page = await in_thread(repo.list_media, owner_id)   # never block the loop
 """
 
 from __future__ import annotations

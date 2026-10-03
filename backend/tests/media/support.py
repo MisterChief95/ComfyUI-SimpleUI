@@ -11,11 +11,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from PIL import Image
-
 from app.media import MediaService
 from app.settings.service import SettingsStore
 from app.storage import Database
+from PIL import Image
 
 #: Enough of an MP4 container for mimetypes and range requests; never decoded.
 VIDEO_BYTES = b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 4
@@ -39,7 +38,12 @@ class MediaTestCase(unittest.TestCase):
 
     # --- files ------------------------------------------------------------
 
-    def png(self, relative: str, color: tuple[int, int, int] = (200, 30, 30), root: Path | None = None) -> Path:
+    def png(
+        self,
+        relative: str,
+        color: tuple[int, int, int] = (200, 30, 30),
+        root: Path | None = None,
+    ) -> Path:
         path = (root or self.output) / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (64, 48), color).save(path)

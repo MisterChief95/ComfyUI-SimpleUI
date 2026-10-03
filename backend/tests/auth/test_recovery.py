@@ -42,7 +42,9 @@ class RecoveryTest(AuthTestCase):
         token = self.auth.login("Default", "forgotten-password")
         self.assertIsNotNone(self.auth.resolve(token))
 
-        with mock.patch.object(recovery.getpass, "getpass", return_value="recovered-password"):
+        with mock.patch.object(
+            recovery.getpass, "getpass", return_value="recovered-password"
+        ):
             code, out, _ = self._run("set-password", "Default")
         self.assertEqual(code, 0)
         self.assertIn("Password updated", out)
@@ -53,9 +55,10 @@ class RecoveryTest(AuthTestCase):
 
     def test_mismatched_or_short_passwords_change_nothing(self) -> None:
         self.enable_multi_user("default-password")
-        with mock.patch.object(recovery.getpass, "getpass", side_effect=["one-password", "two"]):
-            with self.assertRaises(SystemExit):
-                self._run("set-password", "Default")
+        with mock.patch.object(
+            recovery.getpass, "getpass", side_effect=["one-password", "two"]
+        ), self.assertRaises(SystemExit):
+            self._run("set-password", "Default")
         with mock.patch.object(recovery.getpass, "getpass", return_value="short"):
             with self.assertRaises(SystemExit):
                 self._run("set-password", "Default")

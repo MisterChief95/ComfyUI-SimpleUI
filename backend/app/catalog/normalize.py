@@ -39,14 +39,44 @@ PRIMITIVE_TYPES = frozenset({"STRING", "INT", "FLOAT", "BOOLEAN"})
 #: Internal data sockets: connections, never ordinary form controls. A custom
 #: type outside this set is NOT assumed to be a socket — it gets an
 #: adapter-required diagnostic, because its editing contract is unknown.
-KNOWN_SOCKET_TYPES = frozenset({
-    "MODEL", "CLIP", "VAE", "CLIP_VISION", "CLIP_VISION_OUTPUT", "CONDITIONING",
-    "LATENT", "IMAGE", "MASK", "VIDEO", "AUDIO", "CONTROL_NET", "STYLE_MODEL",
-    "GLIGEN", "UPSCALE_MODEL", "SIGMAS", "SAMPLER", "GUIDER", "NOISE",
-    "PHOTOMAKER", "WEBCAM", "FLOATS", "INT_LIST",
-})
+KNOWN_SOCKET_TYPES = frozenset(
+    {
+        "MODEL",
+        "CLIP",
+        "VAE",
+        "CLIP_VISION",
+        "CLIP_VISION_OUTPUT",
+        "CONDITIONING",
+        "LATENT",
+        "IMAGE",
+        "MASK",
+        "VIDEO",
+        "AUDIO",
+        "CONTROL_NET",
+        "STYLE_MODEL",
+        "GLIGEN",
+        "UPSCALE_MODEL",
+        "SIGMAS",
+        "SAMPLER",
+        "GUIDER",
+        "NOISE",
+        "PHOTOMAKER",
+        "WEBCAM",
+        "FLOATS",
+        "INT_LIST",
+    }
+)
 
-MODEL_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".sft", ".onnx")
+MODEL_EXTENSIONS = (
+    ".safetensors",
+    ".ckpt",
+    ".pt",
+    ".pth",
+    ".bin",
+    ".gguf",
+    ".sft",
+    ".onnx",
+)
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif")
 VIDEO_EXTENSIONS = (".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v")
 AUDIO_EXTENSIONS = (".wav", ".mp3", ".flac", ".ogg", ".m4a")
@@ -119,7 +149,9 @@ def normalize(raw: Any) -> NormalizedCatalog:
 # --- per node -------------------------------------------------------------
 
 
-def _project_node(class_type: str, definition: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list[str]]]:
+def _project_node(
+    class_type: str, definition: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, list[str]]]:
     spec = definition.get("input")
     spec = spec if isinstance(spec, dict) else {}
     required = spec.get("required") if isinstance(spec.get("required"), dict) else {}
@@ -155,7 +187,9 @@ def _project_node(class_type: str, definition: dict[str, Any]) -> tuple[dict[str
     return node, withheld
 
 
-def _output_role(class_type: str, definition: dict[str, Any], inputs: dict[str, Any]) -> str:
+def _output_role(
+    class_type: str, definition: dict[str, Any], inputs: dict[str, Any]
+) -> str:
     """image / image_ephemeral / video, from declared metadata only.
 
     ponytail: a three-rule heuristic over category, module and the presence of a
@@ -164,7 +198,12 @@ def _output_role(class_type: str, definition: dict[str, Any], inputs: dict[str, 
     """
     category = str(definition.get("category", "")).lower()
     module = str(definition.get("python_module", "")).lower()
-    if "video" in category or "video" in module or "video" in class_type.lower() or "webm" in class_type.lower():
+    if (
+        "video" in category
+        or "video" in module
+        or "video" in class_type.lower()
+        or "webm" in class_type.lower()
+    ):
         return "video"
     # A saver names its file; a preview node writes to the temp directory and
     # its results are ephemeral until privately captured.
@@ -233,7 +272,11 @@ def _project_input(
     if type_spec == "FLOAT":
         projected = {"logical_type": "FLOAT"}
         for key in ("min", "max", "step", "default"):
-            if key in opts and isinstance(opts[key], (int, float)) and not isinstance(opts[key], bool):
+            if (
+                key in opts
+                and isinstance(opts[key], (int, float))
+                and not isinstance(opts[key], bool)
+            ):
                 projected[key] = opts[key]
         return _with_hints(projected, opts), []
 
@@ -280,7 +323,11 @@ def _project_int(name: str, opts: dict[str, Any]) -> dict[str, Any]:
         for key in ("min", "max", "default")
         if isinstance(opts.get(key), int) and not isinstance(opts.get(key), bool)
     }
-    seed_like = name == "seed" or name.endswith("_seed") or bool(opts.get("control_after_generate"))
+    seed_like = (
+        name == "seed"
+        or name.endswith("_seed")
+        or bool(opts.get("control_after_generate"))
+    )
     exact = seed_like or any(abs(int(v)) > JS_SAFE_INT for v in bounds.values())
 
     if exact:
@@ -298,7 +345,10 @@ def _project_int(name: str, opts: dict[str, Any]) -> dict[str, Any]:
         projected["step"] = opts["step"]
     # Key order follows the expected projection: min, max, step, default.
     ordered = ("min", "max", "step", "default")
-    return {"logical_type": "INT", **{k: projected[k] for k in ordered if k in projected}}
+    return {
+        "logical_type": "INT",
+        **{k: projected[k] for k in ordered if k in projected},
+    }
 
 
 def _combo_choices(type_spec: Any, opts: dict[str, Any]) -> list[Any]:
@@ -322,7 +372,9 @@ def same_choice(a: Any, b: Any) -> bool:
     return is_scalar(a) and is_scalar(b) and a == b
 
 
-def _project_combo(name: str, choices: list[Any], opts: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+def _project_combo(
+    name: str, choices: list[Any], opts: dict[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
     """Classify an enumerated choice list, withholding anything shared or path-like."""
     # Options keep the JSON type ComfyUI sent (numbers and booleans are not stringified).
     options = [c for c in choices if is_scalar(c)]
@@ -419,16 +471,18 @@ def evaluate_selections(
 
         node = nodes.get(class_type)
         if node is None:
-            issues.append({
-                **common,
-                "severity": "uncertain",
-                "code": "class_missing",
-                "message": (
-                    f"Node class {class_type} is not in the current catalog. "
-                    "Saved controls are kept; the workflow cannot be validated "
-                    "until the node is installed again."
-                ),
-            })
+            issues.append(
+                {
+                    **common,
+                    "severity": "uncertain",
+                    "code": "class_missing",
+                    "message": (
+                        f"Node class {class_type} is not in the current catalog. "
+                        "Saved controls are kept; the workflow cannot be validated "
+                        "until the node is installed again."
+                    ),
+                }
+            )
             continue
 
         if input_name is None:
@@ -439,40 +493,46 @@ def evaluate_selections(
                 # Dynamically named inputs are not enumerated by object_info;
                 # absence is not evidence of an invalid input.
                 continue
-            issues.append({
-                **common,
-                "severity": "uncertain",
-                "code": "input_missing",
-                "message": (
-                    f"{class_type} no longer declares an input named {input_name}. "
-                    "The saved value is preserved."
-                ),
-            })
+            issues.append(
+                {
+                    **common,
+                    "severity": "uncertain",
+                    "code": "input_missing",
+                    "message": (
+                        f"{class_type} no longer declares an input named {input_name}. "
+                        "The saved value is preserved."
+                    ),
+                }
+            )
             continue
 
         logical = spec.get("logical_type")
         if logical in ("COMBO",) and is_scalar(value):
             choices = spec.get("choices") or []
             if choices and not any(same_choice(value, c) for c in choices):
-                issues.append({
-                    **common,
-                    "severity": "blocking",
-                    "code": "choice_missing",
-                    "message": (
-                        f"{value!r} is no longer offered for {class_type}.{input_name}. "
-                        "Choose a replacement; the saved value is shown until you do."
-                    ),
-                })
+                issues.append(
+                    {
+                        **common,
+                        "severity": "blocking",
+                        "code": "choice_missing",
+                        "message": (
+                            f"{value!r} is no longer offered for {class_type}.{input_name}. "
+                            "Choose a replacement; the saved value is shown until you do."
+                        ),
+                    }
+                )
         elif logical in ("LINK", "UNSUPPORTED") and value is not None:
-            issues.append({
-                **common,
-                "severity": "uncertain",
-                "code": "type_changed",
-                "message": (
-                    f"{class_type}.{input_name} is no longer an editable literal "
-                    f"({logical}). The saved value is preserved for diagnostics."
-                ),
-            })
+            issues.append(
+                {
+                    **common,
+                    "severity": "uncertain",
+                    "code": "type_changed",
+                    "message": (
+                        f"{class_type}.{input_name} is no longer an editable literal "
+                        f"({logical}). The saved value is preserved for diagnostics."
+                    ),
+                }
+            )
     return issues
 
 
@@ -482,6 +542,7 @@ def _structure_only(nodes: dict[str, Any]) -> Any:
     Installing or deleting a model changes choices but not the link/type
     contract, and must not read as a structural change.
     """
+
     def strip(value: Any) -> Any:
         if isinstance(value, dict):
             return {k: strip(v) for k, v in value.items() if k != "choices"}

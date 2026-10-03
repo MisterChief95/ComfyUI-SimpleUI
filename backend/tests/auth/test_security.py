@@ -60,7 +60,9 @@ class TokenTest(unittest.TestCase):
         secret = b"x" * 32
         token = new_session_token()
         self.assertTrue(csrf_matches(secret, token, csrf_token(secret, token)))
-        self.assertFalse(csrf_matches(secret, token, csrf_token(secret, new_session_token())))
+        self.assertFalse(
+            csrf_matches(secret, token, csrf_token(secret, new_session_token()))
+        )
         self.assertFalse(csrf_matches(secret, token, None))
         self.assertFalse(csrf_matches(b"y" * 32, token, csrf_token(secret, token)))
 
@@ -79,11 +81,15 @@ class LocalityTest(unittest.TestCase):
             ("127.0.0.1", "127.0.0.1:8000"),
             ("::1", "[::1]:8000"),
         ):
-            self.assertTrue(request_is_local(fake_request(peer=peer, headers={"host": host})))
+            self.assertTrue(
+                request_is_local(fake_request(peer=peer, headers={"host": host}))
+            )
 
     def test_lan_peer_is_never_local(self) -> None:
         self.assertFalse(
-            request_is_local(fake_request(peer="192.168.1.50", headers={"host": "localhost:8000"}))
+            request_is_local(
+                fake_request(peer="192.168.1.50", headers={"host": "localhost:8000"})
+            )
         )
 
     def test_forged_forwarded_headers_do_not_grant_locality(self) -> None:
@@ -94,7 +100,9 @@ class LocalityTest(unittest.TestCase):
         forged["x-forwarded-host"] = "localhost:8000"
         self.assertFalse(
             request_is_local(
-                fake_request(peer="192.168.1.50", headers={"host": "192.168.1.10:8000", **forged})
+                fake_request(
+                    peer="192.168.1.50", headers={"host": "192.168.1.10:8000", **forged}
+                )
             )
         )
         # The peer check must carry this on its own: a LAN device that also
@@ -102,18 +110,25 @@ class LocalityTest(unittest.TestCase):
         # tunnel, a Host header it simply made up) is still not local.
         self.assertFalse(
             request_is_local(
-                fake_request(peer="192.168.1.50", headers={"host": "localhost:8000", **forged})
+                fake_request(
+                    peer="192.168.1.50", headers={"host": "localhost:8000", **forged}
+                )
             )
         )
         # ...and a loopback peer still cannot be talked into a non-loopback Host.
         self.assertFalse(
             request_is_local(
-                fake_request(peer="127.0.0.1", headers={"host": "simpleui.example:8000", **forged})
+                fake_request(
+                    peer="127.0.0.1",
+                    headers={"host": "simpleui.example:8000", **forged},
+                )
             )
         )
 
     def test_missing_client_or_host_is_not_local(self) -> None:
-        self.assertFalse(request_is_local(fake_request(peer=None, headers={"host": "localhost"})))
+        self.assertFalse(
+            request_is_local(fake_request(peer=None, headers={"host": "localhost"}))
+        )
         self.assertFalse(request_is_local(fake_request(peer="127.0.0.1", headers={})))
 
 
@@ -136,10 +151,17 @@ class OriginTest(unittest.TestCase):
         )
 
     def test_cross_site_origin_is_refused(self) -> None:
-        for origin in ("http://evil.example", "https://localhost:8000", "http://localhost:9999"):
+        for origin in (
+            "http://evil.example",
+            "https://localhost:8000",
+            "http://localhost:9999",
+        ):
             self.assertFalse(
                 request_origin_ok(
-                    fake_request(peer="127.0.0.1", headers={"host": "localhost:8000", "origin": origin})
+                    fake_request(
+                        peer="127.0.0.1",
+                        headers={"host": "localhost:8000", "origin": origin},
+                    )
                 )
             )
 
@@ -148,12 +170,17 @@ class OriginTest(unittest.TestCase):
             request_origin_ok(
                 fake_request(
                     peer="127.0.0.1",
-                    headers={"host": "localhost:8000", "referer": "http://localhost:8000/gallery"},
+                    headers={
+                        "host": "localhost:8000",
+                        "referer": "http://localhost:8000/gallery",
+                    },
                 )
             )
         )
         self.assertFalse(
-            request_origin_ok(fake_request(peer="127.0.0.1", headers={"host": "localhost:8000"}))
+            request_origin_ok(
+                fake_request(peer="127.0.0.1", headers={"host": "localhost:8000"})
+            )
         )
 
 

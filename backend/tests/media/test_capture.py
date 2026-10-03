@@ -25,10 +25,10 @@ class PathValidationTest(MediaTestCase):
             "..\\outside\\secret.png",
             "sub/../../outside/secret.png",
             "..",
-            str(outside),                      # absolute, inside the temp tree
+            str(outside),  # absolute, inside the temp tree
             "C:/Windows/win.ini",
-            "/Windows/win.ini",                # drive-relative on Windows
-            "//server/share/secret.png",       # UNC
+            "/Windows/win.ini",  # drive-relative on Windows
+            "//server/share/secret.png",  # UNC
         ):
             with self.subTest(spelling=spelling):
                 self.assertIsNone(self.media._safe_path(self.output, spelling))
@@ -87,7 +87,10 @@ class CaptureTest(MediaTestCase):
             DEFAULT_PROFILE_ID, client_request_key="k1", request_fingerprint="f1"
         )
         self.repo.update_generation_status(
-            DEFAULT_PROFILE_ID, self.generation, status="succeeded", output_state="ready"
+            DEFAULT_PROFILE_ID,
+            self.generation,
+            status="succeeded",
+            output_state="ready",
         )
         self.produced = self.png("SimpleUI_00001_.png")
 

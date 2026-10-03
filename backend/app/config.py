@@ -35,7 +35,7 @@ class Config:
         return self.data_dir / "session_secret"
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "Config":
+    def from_env(cls, env: dict[str, str] | None = None) -> Config:
         env = os.environ if env is None else env
         problems: list[str] = []
 

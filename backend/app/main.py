@@ -28,8 +28,8 @@ from .config import Config
 from .contracts import ApiError, ErrorCode, ErrorDetail, ErrorEnvelope, Health
 from .events import EventBroker
 from .events.routes import router as events_router
-from .generations.routes import router as generations_router
 from .generations.listener import ComfyListener
+from .generations.routes import router as generations_router
 from .generations.service import GenerationService, version_supports_targeted_interrupt
 from .generations.store import GenerationStore
 from .media import MediaService
@@ -83,10 +83,15 @@ def create_app(config: Config | None = None) -> FastAPI:
     auth = AuthService(database, settings)
     # Saved host configuration takes effect on restart; the environment supplies
     # the initial URL when the host has not saved an override.
-    saved_url = database.query_one("SELECT value_json FROM settings WHERE scope = 'host' AND key = 'comfy_url'")
-    comfy = ComfyClient(settings.host_value("comfy_url") if saved_url else config.comfy_url)
+    saved_url = database.query_one(
+        "SELECT value_json FROM settings WHERE scope = 'host' AND key = 'comfy_url'"
+    )
+    comfy = ComfyClient(
+        settings.host_value("comfy_url") if saved_url else config.comfy_url
+    )
     catalog = CatalogService(
-        CatalogStore(database), comfy,
+        CatalogStore(database),
+        comfy,
         cooldown_s=max(30, settings.host_value("catalog_refresh_min_seconds")),
     )
     repository = Repository(database)
@@ -97,12 +102,16 @@ def create_app(config: Config | None = None) -> FastAPI:
     # multi-user mode cannot be enabled over an un-indexed output folder.
     auth.baseline_gate = media.baseline_status
     generation_events = EventBroker()
+
     async def targeted_interrupt_supported() -> bool:
         installation = (await catalog.snapshot()).capabilities.get("installation") or {}
         return version_supports_targeted_interrupt(installation.get("comfyui_version"))
 
     generations = GenerationService(
-        GenerationStore(database), comfy, media=media, events=generation_events,
+        GenerationStore(database),
+        comfy,
+        media=media,
+        events=generation_events,
         global_pending_cap=settings.host_value("pending_cap"),
         profile_pending_cap=settings.host_value("pending_cap"),
         # /interrupt {"prompt_id"} is only targeted on ComfyUI >= 0.38.0 (docs/API.md);
@@ -121,8 +130,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         await generations.reconcile(history_retention=await in_thread(retention))
 
     listener = ComfyListener(
-        generations, comfy,
-        previews_enabled=lambda owner_id: bool(settings.profile(owner_id)["live_previews"]),
+        generations,
+        comfy,
+        previews_enabled=lambda owner_id: bool(
+            settings.profile(owner_id)["live_previews"]
+        ),
         on_connect=resync,
     )
 
@@ -205,7 +217,9 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     @app.get("/api/health", response_model=Health)
     async def health() -> Health:
-        return Health(status="ok", version=VERSION, time_ms=str(time.time_ns() // 1_000_000))
+        return Health(
+            status="ok", version=VERSION, time_ms=str(time.time_ns() // 1_000_000)
+        )
 
     app.include_router(auth_router)
     app.include_router(settings_router)
@@ -218,7 +232,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     # Everything above is registered before the catch-all on purpose: FastAPI
     # matches in registration order, so a router added after it never runs.
 
-    @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"])
+    @app.api_route(
+        "/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"]
+    )
     async def unknown_api(request: Request, path: str) -> JSONResponse:
         # An unmatched API route is always a 404, never the SPA shell.
         return error_response(404, f"No API route /api/{path}", _request_id(request))

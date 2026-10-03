@@ -11,7 +11,7 @@ shape a profile may receive. The raw payload stays in storage.
 from __future__ import annotations
 
 from .contracts import CatalogFreshness, CatalogSnapshot, CatalogState, SelectionIssue
-from .normalize import NormalizeError, NormalizedCatalog, evaluate_selections, normalize
+from .normalize import NormalizedCatalog, NormalizeError, evaluate_selections, normalize
 from .service import CatalogService
 from .store import CatalogStore
 

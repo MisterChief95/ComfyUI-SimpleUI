@@ -12,10 +12,6 @@ import threading
 import unittest
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-from PIL import Image
-from starlette.websockets import WebSocketDisconnect
-
 from app.auth.security import SESSION_COOKIE
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
@@ -23,16 +19,22 @@ from app.config import Config
 from app.generations import GenerationStore
 from app.main import create_app
 from app.storage import DEFAULT_PROFILE_ID
+from fastapi.testclient import TestClient
+from PIL import Image
+from starlette.websockets import WebSocketDisconnect
 from tests.auth.support import LOCAL_ORIGIN, AuthTestCase
 from tests.uploads.support import png_bytes
-
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 PASSWORD = "default-password"
 GRAPH = (FIXTURES / "graphs" / "image_loader_input.api.json").read_bytes()
 IMAGE_GRAPH = (FIXTURES / "graphs" / "image_basic.api.json").read_bytes()
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
 SNAPSHOT = CatalogSnapshot(
     freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={}
@@ -74,7 +76,9 @@ def successful_history(prompt_id: str, relative: str) -> dict:
                     "images": [
                         {
                             "filename": path.name,
-                            "subfolder": path.parent.as_posix() if path.parent != Path(".") else "",
+                            "subfolder": path.parent.as_posix()
+                            if path.parent != Path(".")
+                            else "",
                             "type": "output",
                         }
                     ]
@@ -155,8 +159,12 @@ class CrossFeaturePrivacyTest(AssembledAppTestCase):
         upload_id = uploaded.json()["id"]
 
         workflow_id = self.import_graph(owner)
-        controls = owner.get(f"/api/workflows/{workflow_id}/controls").json()["controls"]
-        picker = next(control for control in controls if control["binding_id"] == "2:image")
+        controls = owner.get(f"/api/workflows/{workflow_id}/controls").json()[
+            "controls"
+        ]
+        picker = next(
+            control for control in controls if control["binding_id"] == "2:image"
+        )
         self.assertEqual(picker["component"], "file")
         catalog = owner.get("/api/catalog").text
         self.assertNotIn("placeholder-input-a.png", catalog)
@@ -192,14 +200,20 @@ class CrossFeaturePrivacyTest(AssembledAppTestCase):
             self.assertEqual(socket.receive_json()["generation_id"], "bee-generation")
 
         self.assertEqual(bee.get("/api/workflows").json()["items"], [])
-        self.assertEqual(bee.get(f"/api/workflows/{workflow_id}/controls").status_code, 404)
+        self.assertEqual(
+            bee.get(f"/api/workflows/{workflow_id}/controls").status_code, 404
+        )
         self.assertEqual(bee.get("/api/generations").json()["items"], [])
         self.assertEqual(bee.get(f"/api/generations/{generation_id}").status_code, 404)
         self.assertEqual(bee.get("/api/media").json()["items"], [])
         for suffix in ("file", "download", "thumbnail"):
-            self.assertEqual(bee.get(f"/api/media/{media_id}/{suffix}").status_code, 404)
+            self.assertEqual(
+                bee.get(f"/api/media/{media_id}/{suffix}").status_code, 404
+            )
         self.assertEqual(
-            bee.get(f"/api/media/{media_id}/file", headers={"range": "bytes=0-3"}).status_code,
+            bee.get(
+                f"/api/media/{media_id}/file", headers={"range": "bytes=0-3"}
+            ).status_code,
             404,
         )
         self.assertEqual(bee.head(f"/api/media/{media_id}/file").status_code, 404)
@@ -211,13 +225,19 @@ class CrossFeaturePrivacyTest(AssembledAppTestCase):
         self.assertEqual(self.delete(switched, "/api/session").status_code, 200)
         self.assertEqual(self.login(switched, "Bee", PASSWORD).status_code, 200)
         self.assertEqual(switched.get("/api/workflows").json()["items"], [])
-        self.assertEqual(switched.get(f"/api/generations/{generation_id}").status_code, 404)
+        self.assertEqual(
+            switched.get(f"/api/generations/{generation_id}").status_code, 404
+        )
         self.assertEqual(switched.get(f"/api/media/{media_id}/file").status_code, 404)
         self.assertEqual(switched.get("/api/uploads").json()["items"], [])
 
         default_again = self.sign_in("Default")
-        self.assertEqual(default_again.get(f"/api/generations/{generation_id}").status_code, 200)
-        self.assertEqual(default_again.get(f"/api/media/{media_id}/file").status_code, 200)
+        self.assertEqual(
+            default_again.get(f"/api/generations/{generation_id}").status_code, 200
+        )
+        self.assertEqual(
+            default_again.get(f"/api/media/{media_id}/file").status_code, 200
+        )
         self.assertEqual(
             [item["id"] for item in default_again.get("/api/uploads").json()["items"]],
             [upload_id],
@@ -291,7 +311,9 @@ class BaselineRaceTest(AssembledAppTestCase):
 
 
 class ReconciliationRouteTest(AssembledAppTestCase):
-    def test_poll_failure_keeps_the_durable_detail_then_disk_full_surfaces_there(self) -> None:
+    def test_poll_failure_keeps_the_durable_detail_then_disk_full_surfaces_there(
+        self,
+    ) -> None:
         self.app.state.media.import_baseline()
         client = self.local_client()
         workflow_id = self.import_graph(client, IMAGE_GRAPH)
@@ -322,7 +344,9 @@ class ReconciliationRouteTest(AssembledAppTestCase):
         self.assertEqual(failed_capture.status_code, 200, failed_capture.text)
         self.assertEqual(failed_capture.json()["status"], "succeeded")
         self.assertEqual(failed_capture.json()["output_state"], "pending")
-        self.assertIn("No space", failed_capture.json()["error"]["output_capture"]["message"])
+        self.assertIn(
+            "No space", failed_capture.json()["error"]["output_capture"]["message"]
+        )
         self.assertEqual(self.upstream.submit_count, 1)
 
         self.app.state.media.capture_output = real_capture
@@ -333,7 +357,9 @@ class ReconciliationRouteTest(AssembledAppTestCase):
 
 
 class RestartRecoveryTest(unittest.TestCase):
-    def test_history_disabled_restart_recovers_output_then_purges_snapshot(self) -> None:
+    def test_history_disabled_restart_recovers_output_then_purges_snapshot(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             build = root / "build"
@@ -359,10 +385,16 @@ class RestartRecoveryTest(unittest.TestCase):
                 DEFAULT_PROFILE_ID,
                 request_key="restart-request",
                 fingerprint="restart-fingerprint",
-                resolve=lambda: ({"1": {"class_type": "Synthetic", "inputs": {}}}, {"prompt": "private"}),
+                resolve=lambda: (
+                    {"1": {"class_type": "Synthetic", "inputs": {}}},
+                    {"prompt": "private"},
+                ),
             )
             store.update(
-                DEFAULT_PROFILE_ID, accepted.row["id"], status="queued", prompt_id="restart-prompt"
+                DEFAULT_PROFILE_ID,
+                accepted.row["id"],
+                status="queued",
+                prompt_id="restart-prompt",
             )
             first.state.db.close()
 

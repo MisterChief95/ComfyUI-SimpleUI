@@ -16,15 +16,24 @@ from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
 from app.storage import Database
 from app.storage.db import MIGRATIONS_DIR
+
 from tests.auth.support import AuthTestCase
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 GRAPH = FIXTURES / "graphs" / "image_basic.api.json"
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
-FRESH = CatalogSnapshot(freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={})
-UNAVAILABLE = CatalogSnapshot(freshness=CatalogFreshness(state="unavailable"), nodes={}, capabilities={})
+FRESH = CatalogSnapshot(
+    freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={}
+)
+UNAVAILABLE = CatalogSnapshot(
+    freshness=CatalogFreshness(state="unavailable"), nodes={}, capabilities={}
+)
 PASSWORD = "default-password"
 
 
@@ -74,15 +83,18 @@ class LayoutTestCase(AuthTestCase):
 
     def import_graph(self, client) -> str:
         response = self.post(
-            client, "/api/workflows?name=Portrait",
-            content=GRAPH.read_bytes(), headers={"content-type": "application/json"},
+            client,
+            "/api/workflows?name=Portrait",
+            content=GRAPH.read_bytes(),
+            headers={"content-type": "application/json"},
         )
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["id"]
 
     def save(self, client, workflow_id: str, layout: dict, expected: int = 0):
         return self.put(
-            client, f"/api/workflows/{workflow_id}/layout",
+            client,
+            f"/api/workflows/{workflow_id}/layout",
             json={"layout": layout, "expected_revision": expected},
         )
 
@@ -91,11 +103,19 @@ class RoundTripTest(LayoutTestCase):
     def test_aspect_ratio_validation_uniqueness_and_stale_bindings(self) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)
-        pair = {"kind": "aspect_ratio", "width": "4:width", "height": "4:height", "presets": [[1024, 1024], [1152, 896]]}
+        pair = {
+            "kind": "aspect_ratio",
+            "width": "4:width",
+            "height": "4:height",
+            "presets": [[1024, 1024], [1152, 896]],
+        }
         layout = doc(sections=[section(items=[pair])], hidden=[])
         saved = self.save(client, workflow_id, layout)
         self.assertEqual(saved.status_code, 200, saved.text)
-        self.assertEqual(saved.json()["layout"]["sections"][0]["items"][0]["presets"], pair["presets"])
+        self.assertEqual(
+            saved.json()["layout"]["sections"][0]["items"][0]["presets"],
+            pair["presets"],
+        )
         for invalid in (
             {**pair, "height": "4:width"},
             {**pair, "height": "2:text"},
@@ -105,15 +125,38 @@ class RoundTripTest(LayoutTestCase):
             {**pair, "presets": [[True, 1024]]},
             {**pair, "presets": [[1024, 1024, 1024]]},
         ):
-            response = self.save(client, workflow_id, doc(sections=[section(items=[invalid])], hidden=[]), 1)
+            response = self.save(
+                client,
+                workflow_id,
+                doc(sections=[section(items=[invalid])], hidden=[]),
+                1,
+            )
             self.assertEqual(response.status_code, 422, response.text)
-        duplicate = doc(sections=[section(items=[pair, {"kind": "control", "binding_id": "4:height"}])], hidden=[])
+        duplicate = doc(
+            sections=[
+                section(items=[pair, {"kind": "control", "binding_id": "4:height"}])
+            ],
+            hidden=[],
+        )
         self.assertEqual(self.save(client, workflow_id, duplicate, 1).status_code, 422)
-        self.assertEqual(self.save(client, workflow_id, doc(sections=[section(items=[pair])], hidden=["4:width"]), 1).status_code, 422)
+        self.assertEqual(
+            self.save(
+                client,
+                workflow_id,
+                doc(sections=[section(items=[pair])], hidden=["4:width"]),
+                1,
+            ).status_code,
+            422,
+        )
         # Missing bindings survive replacement of a workflow, without silently rewriting the layout.
         graph = json.loads(GRAPH.read_text(encoding="utf-8"))
         del graph["4"]["inputs"]["height"]
-        replaced = self.put(client, f"/api/workflows/{workflow_id}/graph", content=json.dumps(graph), headers={"content-type": "application/json"})
+        replaced = self.put(
+            client,
+            f"/api/workflows/{workflow_id}/graph",
+            content=json.dumps(graph),
+            headers={"content-type": "application/json"},
+        )
         self.assertEqual(replaced.status_code, 200, replaced.text)
         stale = self.save(client, workflow_id, layout, 1)
         self.assertEqual(stale.status_code, 200, stale.text)
@@ -229,7 +272,9 @@ class RoundTripTest(LayoutTestCase):
         workflow_id = self.import_graph(client)
         url = f"/api/workflows/{workflow_id}/layout"
         body = {"layout": doc(), "expected_revision": 0}
-        foreign = {"origin": "http://evil.example"}  # CSRF: a mutation must come from our origin
+        foreign = {
+            "origin": "http://evil.example"
+        }  # CSRF: a mutation must come from our origin
         self.assertEqual(client.put(url, json=body, headers=foreign).status_code, 403)
         self.assertEqual(client.delete(url, headers=foreign).status_code, 403)
 
@@ -246,7 +291,9 @@ class ConflictTest(LayoutTestCase):
             self.assertEqual(response.status_code, 409, response.text)
             self.assertEqual(response.json()["error"]["code"], "conflict")
         stored = client.get(f"/api/workflows/{workflow_id}/layout").json()
-        self.assertEqual((stored["revision"], stored["layout"]["hidden"]), (1, ["3:text"]))
+        self.assertEqual(
+            (stored["revision"], stored["layout"]["hidden"]), (1, ["3:text"])
+        )
 
         # The documented recovery: re-GET, then overwrite with the fresh revision.
         again = self.save(client, workflow_id, mine, expected=stored["revision"])
@@ -260,8 +307,12 @@ class ValidationTest(LayoutTestCase):
         self.workflow_id = self.import_graph(self.client)
 
     def reject(self, layout: dict, *, body: dict | None = None) -> None:
-        payload = body if body is not None else {"layout": layout, "expected_revision": 0}
-        response = self.put(self.client, f"/api/workflows/{self.workflow_id}/layout", json=payload)
+        payload = (
+            body if body is not None else {"layout": layout, "expected_revision": 0}
+        )
+        response = self.put(
+            self.client, f"/api/workflows/{self.workflow_id}/layout", json=payload
+        )
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(response.json()["error"]["code"], "unprocessable")
         stored = self.client.get(f"/api/workflows/{self.workflow_id}/layout").json()
@@ -283,7 +334,9 @@ class ValidationTest(LayoutTestCase):
         for bad in ("", "   ", "x" * 81):
             self.reject(doc(sections=[section(title=bad)], hidden=[]))
         saved = self.save(
-            self.client, self.workflow_id, doc(sections=[section(title="  Padded  ")], hidden=[])
+            self.client,
+            self.workflow_id,
+            doc(sections=[section(title="  Padded  ")], hidden=[]),
         )
         self.assertEqual(saved.json()["layout"]["sections"][0]["title"], "Padded")
 
@@ -292,23 +345,35 @@ class ValidationTest(LayoutTestCase):
             self.reject(doc(sections=[section(columns=columns)], hidden=[]))
         self.reject(doc(sections=[section(collapsed="true")], hidden=[]))
         item = {"kind": "control", "binding_id": "5:steps"}
-        self.reject(doc(sections=[section(items=[{**item, "span": "half"}])], hidden=[]))
-        self.reject(doc(sections=[section(items=[{**item, "kind": "aspect_ratio"}])], hidden=[]))
+        self.reject(
+            doc(sections=[section(items=[{**item, "span": "half"}])], hidden=[])
+        )
+        self.reject(
+            doc(sections=[section(items=[{**item, "kind": "aspect_ratio"}])], hidden=[])
+        )
 
     def test_binding_id_length(self) -> None:
         for bad in ("", "b" * 201):
             self.reject(doc(sections=[], hidden=[bad]))
             self.reject(
-                doc(sections=[section(items=[{"kind": "control", "binding_id": bad}])], hidden=[])
+                doc(
+                    sections=[section(items=[{"kind": "control", "binding_id": bad}])],
+                    hidden=[],
+                )
             )
-        longest = self.save(self.client, self.workflow_id, doc(sections=[], hidden=["b" * 200]))
+        longest = self.save(
+            self.client, self.workflow_id, doc(sections=[], hidden=["b" * 200])
+        )
         self.assertEqual(longest.status_code, 200)
 
     def test_a_binding_appears_at_most_once(self) -> None:
         item = {"kind": "control", "binding_id": "5:steps"}
         self.reject(doc(sections=[section(items=[item, item])], hidden=[]))
         self.reject(
-            doc(sections=[section(items=[item]), section(id="s2", items=[item])], hidden=[])
+            doc(
+                sections=[section(items=[item]), section(id="s2", items=[item])],
+                hidden=[],
+            )
         )
         self.reject(doc(sections=[section(items=[item])], hidden=["5:steps"]))
         self.reject(doc(sections=[], hidden=["5:steps", "5:steps"]))
@@ -333,7 +398,9 @@ class ValidationTest(LayoutTestCase):
     def test_section_cap(self) -> None:
         sections = [section(id=f"s{i}") for i in range(41)]
         self.reject(doc(sections=sections, hidden=[]))
-        ok = self.save(self.client, self.workflow_id, doc(sections=sections[:40], hidden=[]))
+        ok = self.save(
+            self.client, self.workflow_id, doc(sections=sections[:40], hidden=[])
+        )
         self.assertEqual(ok.status_code, 200)
 
     def test_total_items_plus_hidden_cap(self) -> None:
@@ -341,7 +408,9 @@ class ValidationTest(LayoutTestCase):
         hidden = [f"h{i}:x" for i in range(501)]
         self.reject(doc(sections=[section(items=items)], hidden=hidden))
         ok = self.save(
-            self.client, self.workflow_id, doc(sections=[section(items=items)], hidden=hidden[:500])
+            self.client,
+            self.workflow_id,
+            doc(sections=[section(items=items)], hidden=hidden[:500]),
         )
         self.assertEqual(ok.status_code, 200)
 
@@ -351,11 +420,15 @@ class ValidationTest(LayoutTestCase):
 
 
 class StaleBindingTest(LayoutTestCase):
-    def test_unknown_bindings_are_kept_and_reported_even_without_a_catalog(self) -> None:
+    def test_unknown_bindings_are_kept_and_reported_even_without_a_catalog(
+        self,
+    ) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)
         layout = doc(hidden=["99:gone"])
-        layout["sections"][0]["items"].append({"kind": "control", "binding_id": "7:vanished"})
+        layout["sections"][0]["items"].append(
+            {"kind": "control", "binding_id": "7:vanished"}
+        )
 
         self.snapshot = UNAVAILABLE  # saving is pure arrangement: no catalog needed
         saved = self.save(client, workflow_id, layout)
@@ -387,7 +460,9 @@ class StaleBindingTest(LayoutTestCase):
 
 
 class OwnershipTest(LayoutTestCase):
-    def test_another_profile_gets_404_on_every_verb_and_cannot_touch_the_layout(self) -> None:
+    def test_another_profile_gets_404_on_every_verb_and_cannot_touch_the_layout(
+        self,
+    ) -> None:
         self.enable_multi_user(PASSWORD)
         owner = self.local_client()
         self.login(owner, "Default", PASSWORD)
@@ -402,11 +477,15 @@ class OwnershipTest(LayoutTestCase):
         self.assertEqual(self.save(bee, workflow_id, doc()).status_code, 404)
         self.assertEqual(self.delete(bee, url).status_code, 404)
         self.assertEqual(owner.get(url).json()["revision"], 1)
-        self.assertEqual(self.delete(owner, "/api/workflows/nope/layout").status_code, 404)
+        self.assertEqual(
+            self.delete(owner, "/api/workflows/nope/layout").status_code, 404
+        )
 
     def test_unauthenticated_requests_are_refused(self) -> None:
         self.enable_multi_user(PASSWORD)
-        self.assertEqual(self.local_client().get("/api/workflows/x/layout").status_code, 401)
+        self.assertEqual(
+            self.local_client().get("/api/workflows/x/layout").status_code, 401
+        )
 
 
 class CascadeAndMigrationTest(LayoutTestCase):
@@ -418,7 +497,9 @@ class CascadeAndMigrationTest(LayoutTestCase):
         workflow_id = self.import_graph(client)
         self.save(client, workflow_id, doc())
         self.assertEqual(self.rows(), 1)
-        self.assertEqual(self.delete(client, f"/api/workflows/{workflow_id}").status_code, 204)
+        self.assertEqual(
+            self.delete(client, f"/api/workflows/{workflow_id}").status_code, 204
+        )
         self.assertEqual(self.rows(), 0)
 
     def test_deleting_the_profile_deletes_its_layout(self) -> None:
@@ -434,7 +515,9 @@ class CascadeAndMigrationTest(LayoutTestCase):
         self.assertEqual(self.rows(), 0)
 
     def test_the_table_is_strict_and_keyed_by_owner_and_workflow(self) -> None:
-        sql = self.db.query_one("SELECT sql FROM sqlite_master WHERE name = 'workflow_layouts'")["sql"]
+        sql = self.db.query_one(
+            "SELECT sql FROM sqlite_master WHERE name = 'workflow_layouts'"
+        )["sql"]
         self.assertIn("STRICT", sql)
         self.assertIn("PRIMARY KEY (owner_id, workflow_id)", sql)
 
@@ -444,7 +527,9 @@ class CascadeAndMigrationTest(LayoutTestCase):
         old = Path(tmp.name) / "old"
         old.mkdir()
         for script in MIGRATIONS_DIR.glob("00[12]_*.sql"):
-            (old / script.name).write_text(script.read_text(encoding="utf-8"), encoding="utf-8")
+            (old / script.name).write_text(
+                script.read_text(encoding="utf-8"), encoding="utf-8"
+            )
         path = Path(tmp.name) / "app.sqlite3"
         first = Database(path, migrations_dir=old)
         self.assertEqual(first.schema_version(), 2)
@@ -454,7 +539,9 @@ class CascadeAndMigrationTest(LayoutTestCase):
         self.addCleanup(upgraded.close)
         self.assertGreaterEqual(upgraded.schema_version(), 3)
         self.assertIsNotNone(
-            upgraded.query_one("SELECT 1 FROM sqlite_master WHERE name = 'workflow_layouts'")
+            upgraded.query_one(
+                "SELECT 1 FROM sqlite_master WHERE name = 'workflow_layouts'"
+            )
         )
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.storage import DEFAULT_PROFILE_ID, Repository
 
-from .test_api import MediaApiTestCase, PASSWORD
+from .test_api import PASSWORD, MediaApiTestCase
 
 
 class MediaFilterTest(MediaApiTestCase):
@@ -19,8 +19,12 @@ class MediaFilterTest(MediaApiTestCase):
         self.generation_b = self._generation(
             DEFAULT_PROFILE_ID, "b", self.workflow_b, "bright city"
         )
-        self.image = self._media(DEFAULT_PROFILE_ID, self.generation_a, "a.png", "image")
-        self.video = self._media(DEFAULT_PROFILE_ID, self.generation_b, "b.mp4", "video")
+        self.image = self._media(
+            DEFAULT_PROFILE_ID, self.generation_a, "a.png", "image"
+        )
+        self.video = self._media(
+            DEFAULT_PROFILE_ID, self.generation_b, "b.mp4", "video"
+        )
         self.plain = self.repo.record_media(
             DEFAULT_PROFILE_ID,
             storage_path="plain.png",
@@ -30,12 +34,22 @@ class MediaFilterTest(MediaApiTestCase):
         )
         self.media.set_flags(DEFAULT_PROFILE_ID, self.image, favorite=True)
         with self.db.write() as conn:
-            conn.execute("UPDATE media SET created_ms = 1000 WHERE id = ?", (self.image,))
-            conn.execute("UPDATE media SET created_ms = 2000 WHERE id = ?", (self.video,))
+            conn.execute(
+                "UPDATE media SET created_ms = 1000 WHERE id = ?", (self.image,)
+            )
+            conn.execute(
+                "UPDATE media SET created_ms = 2000 WHERE id = ?", (self.video,)
+            )
 
     def _generation(
-        self, owner_id: str, key: str, workflow_id: str | None, prompt: str,
-        *, status: str = "succeeded", output_state: str = "ready",
+        self,
+        owner_id: str,
+        key: str,
+        workflow_id: str | None,
+        prompt: str,
+        *,
+        status: str = "succeeded",
+        output_state: str = "ready",
     ) -> str:
         generation_id = self.repo.create_generation(
             owner_id,
@@ -51,7 +65,9 @@ class MediaFilterTest(MediaApiTestCase):
         )
         return generation_id
 
-    def _media(self, owner_id: str, generation_id: str, filename: str, kind: str) -> str:
+    def _media(
+        self, owner_id: str, generation_id: str, filename: str, kind: str
+    ) -> str:
         return self.repo.record_media(
             owner_id,
             storage_path=filename,
@@ -77,10 +93,16 @@ class MediaFilterTest(MediaApiTestCase):
 
     def test_filters_by_generation_and_is_owner_scoped(self) -> None:
         second = self.repo.record_media(
-            DEFAULT_PROFILE_ID, storage_path="a2.png", file_version="a2", media_kind="image",
-            media_type="image/png", generation_id=self.generation_a,
+            DEFAULT_PROFILE_ID,
+            storage_path="a2.png",
+            file_version="a2",
+            media_kind="image",
+            media_type="image/png",
+            generation_id=self.generation_a,
         )
-        self.assertEqual(self._ids(f"generation_id={self.generation_a}"), {self.image, second})
+        self.assertEqual(
+            self._ids(f"generation_id={self.generation_a}"), {self.image, second}
+        )
         self.assertEqual(self._ids(f"generation_id={self.generation_b}"), {self.video})
         self.assertEqual(self._ids("generation_id=missing"), set())
         self.assertEqual(
@@ -101,11 +123,15 @@ class MediaFilterTest(MediaApiTestCase):
     def test_filters_by_created_range_and_keeps_it_across_pages(self) -> None:
         self.assertEqual(self._ids("created_before=1500"), {self.image})
         self.assertEqual(self._ids("created_after=1500"), {self.video, self.plain})
-        self.assertEqual(self._ids("created_after=1500&created_before=2500"), {self.video})
+        self.assertEqual(
+            self._ids("created_after=1500&created_before=2500"), {self.video}
+        )
         first = self.local_client().get("/api/media?media_kind=image&limit=1").json()
-        second = self.local_client().get(
-            f"/api/media?media_kind=image&limit=1&cursor={first['next_cursor']}"
-        ).json()
+        second = (
+            self.local_client()
+            .get(f"/api/media?media_kind=image&limit=1&cursor={first['next_cursor']}")
+            .json()
+        )
         self.assertEqual(len(first["items"]), 1)
         self.assertEqual(len(second["items"]), 1)
 
@@ -143,8 +169,13 @@ class ClearHistoryTest(MediaApiTestCase):
         )
 
     def _generation(
-        self, owner_id: str, key: str, prompt: str, *,
-        status: str = "succeeded", output_state: str = "ready",
+        self,
+        owner_id: str,
+        key: str,
+        prompt: str,
+        *,
+        status: str = "succeeded",
+        output_state: str = "ready",
     ) -> str:
         generation_id = self.repo.create_generation(
             owner_id,
@@ -160,9 +191,15 @@ class ClearHistoryTest(MediaApiTestCase):
         return generation_id
 
     def test_clear_history_purges_only_owned_proven_terminal_snapshots(self) -> None:
-        active = self._generation(DEFAULT_PROFILE_ID, "active", "active", status="running")
+        active = self._generation(
+            DEFAULT_PROFILE_ID, "active", "active", status="running"
+        )
         unknown = self._generation(
-            DEFAULT_PROFILE_ID, "unknown", "unknown", status="unknown", output_state="unavailable"
+            DEFAULT_PROFILE_ID,
+            "unknown",
+            "unknown",
+            status="unknown",
+            output_state="unavailable",
         )
         pending = self._generation(
             DEFAULT_PROFILE_ID, "pending", "pending", output_state="pending"
@@ -177,7 +214,14 @@ class ClearHistoryTest(MediaApiTestCase):
                     (generation_id,),
                 )
             )
-            for generation_id in (self.generation_a, self.generation_b, active, unknown, pending, foreign)
+            for generation_id in (
+                self.generation_a,
+                self.generation_b,
+                active,
+                unknown,
+                pending,
+                foreign,
+            )
         }
 
         response = self.post(self.local_client(), "/api/media/clear-history")
@@ -185,12 +229,16 @@ class ClearHistoryTest(MediaApiTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json(), {"purged": 2, "deferred": 3})
         for generation_id in (self.generation_a, self.generation_b):
-            row = self.db.query_one("SELECT * FROM generations WHERE id = ?", (generation_id,))
+            row = self.db.query_one(
+                "SELECT * FROM generations WHERE id = ?", (generation_id,)
+            )
             self.assertIsNone(row["graph_json"])
             self.assertIsNone(row["effective_values_json"])
             self.assertEqual(row["status"], "succeeded")
         for generation_id in (active, unknown, pending, foreign):
-            row = self.db.query_one("SELECT * FROM generations WHERE id = ?", (generation_id,))
+            row = self.db.query_one(
+                "SELECT * FROM generations WHERE id = ?", (generation_id,)
+            )
             self.assertIsNotNone(row["graph_json"])
             self.assertIsNotNone(row["effective_values_json"])
         for generation_id, expected in preserved.items():
@@ -199,4 +247,7 @@ class ClearHistoryTest(MediaApiTestCase):
                 (generation_id,),
             )
             self.assertEqual(tuple(row), expected)
-        self.assertEqual(self.db.query_one("SELECT COUNT(*) AS count FROM media")["count"], media_count)
+        self.assertEqual(
+            self.db.query_one("SELECT COUNT(*) AS count FROM media")["count"],
+            media_count,
+        )

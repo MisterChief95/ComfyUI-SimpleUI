@@ -115,7 +115,9 @@ def bind_upload(
     try:
         return uploads.ensure_staged(owner_id, upload_id)
     except UploadError as exc:
-        raise InputAdapterError(exc.code, f"{control.label}: {exc}", control.binding_id) from exc
+        raise InputAdapterError(
+            exc.code, f"{control.label}: {exc}", control.binding_id
+        ) from exc
 
 
 def _adapter_name(control: ControlDescriptor) -> str | None:
