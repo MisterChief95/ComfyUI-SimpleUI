@@ -69,11 +69,14 @@ async def list_uploads(
 ) -> UploadPage:
     service: UploadService = request.app.state.uploads
     try:
-        page = await in_thread(service.list_uploads, principal.owner_id, cursor, limit, media_kind)
+        page = await in_thread(
+            service.list_uploads, principal.owner_id, cursor, limit, media_kind
+        )
     except ValueError as exc:  # a cursor the client edited or truncated
         raise HTTPException(400, "Malformed uploads cursor.") from exc
     return UploadPage(
-        items=[_public(service, row) for row in page.items], next_cursor=page.next_cursor
+        items=[_public(service, row) for row in page.items],
+        next_cursor=page.next_cursor,
     )
 
 
@@ -101,7 +104,7 @@ async def create_upload(
 
     size = 0
     try:
-        with open(temp, "wb") as out:
+        async with await anyio.open_file(temp, "wb") as out:
             # Bounded chunked read straight off the ASGI receive channel: a
             # multi-GB video is never held whole in memory, on either the
             # read or the write side.
@@ -110,8 +113,10 @@ async def create_upload(
                     continue
                 size += len(chunk)
                 if size > limit:
-                    raise UploadError("too_large", f"Upload exceeds the {limit} byte limit.")
-                await anyio.to_thread.run_sync(out.write, chunk)
+                    raise UploadError(
+                        "too_large", f"Upload exceeds the {limit} byte limit."
+                    )
+                await out.write(chunk)
     except UploadError as exc:
         await in_thread(lambda: temp.unlink(missing_ok=True))
         raise _http_error(exc) from exc
@@ -120,14 +125,18 @@ async def create_upload(
         raise
 
     try:
-        row = await in_thread(service.finalize, principal.owner_id, upload_id, ext, kind, temp, size)
+        row = await in_thread(
+            service.finalize, principal.owner_id, upload_id, ext, kind, temp, size
+        )
     except UploadError as exc:
         raise _http_error(exc) from exc
     return _public(service, row)
 
 
 @router.delete("/{upload_id}", status_code=204, dependencies=[Mutation])
-async def delete_upload(request: Request, upload_id: str, principal: CurrentPrincipal) -> Response:
+async def delete_upload(
+    request: Request, upload_id: str, principal: CurrentPrincipal
+) -> Response:
     service: UploadService = request.app.state.uploads
     removed = await in_thread(service.delete, principal.owner_id, upload_id)
     if not removed:

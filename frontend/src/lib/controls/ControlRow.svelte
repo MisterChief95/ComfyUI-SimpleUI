@@ -61,7 +61,17 @@
 			{/if}
 		{/if}
 	</div>
-	<ControlWidget {control} {value} {onchange} {disabled} {compact} {preview} {describedby} {id} {workflowId} />
+	<ControlWidget
+		{control}
+		{value}
+		{onchange}
+		{disabled}
+		{compact}
+		{preview}
+		{describedby}
+		{id}
+		{workflowId}
+	/>
 	{#if control.help_text}<p class="help" id={helpId}>{control.help_text}</p>{/if}
 	{#each control.unresolved as detail, index (detail.code + (detail.field ?? ''))}
 		<p class="error" id={errorId(index)} role="alert">{detail.message}</p>

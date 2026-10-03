@@ -16,7 +16,10 @@
 		{#each entries(obj) as [key, value] (key)}
 			{#if isBranch(value)}
 				<details>
-					<summary><span class="key">{key}</span> <span class="muted">{Array.isArray(value) ? `[${value.length}]` : '{…}'}</span></summary>
+					<summary
+						><span class="key">{key}</span>
+						<span class="muted">{Array.isArray(value) ? `[${value.length}]` : '{…}'}</span></summary
+					>
 					{@render rows(value)}
 				</details>
 			{:else}

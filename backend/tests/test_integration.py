@@ -13,11 +13,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.auth.security import CSRF_HEADER
 from app.config import Config
 from app.main import create_app
+from fastapi.testclient import TestClient
 
 from tests.auth.support import LOCAL_ORIGIN, AuthTestCase
 
@@ -30,7 +29,10 @@ GRAPH = {
         "class_type": "KSampler",
         "inputs": {"seed": 12345678901234567890, "steps": 20, "model": ["4", 0]},
     },
-    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd.safetensors"}},
+    "4": {
+        "class_type": "CheckpointLoaderSimple",
+        "inputs": {"ckpt_name": "sd.safetensors"},
+    },
 }
 
 
@@ -55,8 +57,18 @@ class RoutingTest(AuthTestCase):
         self.assertIn("No API route", unknown.json()["error"]["message"])
 
     def test_services_are_shared_on_app_state(self) -> None:
-        for name in ("catalog", "workflows", "media", "repository", "auth", "settings", "db"):
-            self.assertTrue(hasattr(self.app.state, name), f"app.state.{name} is missing")
+        for name in (
+            "catalog",
+            "workflows",
+            "media",
+            "repository",
+            "auth",
+            "settings",
+            "db",
+        ):
+            self.assertTrue(
+                hasattr(self.app.state, name), f"app.state.{name} is missing"
+            )
 
 
 class CatalogRouteTest(AuthTestCase):
@@ -92,7 +104,9 @@ class CatalogRouteTest(AuthTestCase):
         self.assertEqual(bare.status_code, 403)
         self.assertIn("CSRF", bare.json()["error"]["message"])
 
-        wrong = client.post("/api/catalog/refresh", headers={CSRF_HEADER: "not-the-token"})
+        wrong = client.post(
+            "/api/catalog/refresh", headers={CSRF_HEADER: "not-the-token"}
+        )
         self.assertEqual(wrong.status_code, 403)
         # 403 rather than 404 already proves the route exists and it is the
         # guard refusing. The positive side of the same shared dependency is
@@ -125,7 +139,9 @@ class WorkflowRouteTest(AuthTestCase):
         self.assertEqual(schema["revision"], 1)
         # No catalog under test: controls exist but are explicitly unvalidated,
         # which is a blocking condition rather than a guessed default.
-        self.assertTrue(schema["blocking"], "an unavailable catalog must block submission")
+        self.assertTrue(
+            schema["blocking"], "an unavailable catalog must block submission"
+        )
         seeds = [c for c in schema["controls"] if c["input_name"] == "seed"]
         self.assertEqual([c["value"] for c in seeds], ["12345678901234567890"])
 
@@ -152,15 +168,21 @@ class WorkflowRouteTest(AuthTestCase):
         bee = self.local_client()
         self.login(bee, "Bee", PASSWORD)
         self.assertEqual(bee.get("/api/workflows").json()["items"], [])
-        self.assertEqual(bee.get(f"/api/workflows/{workflow_id}/controls").status_code, 404)
+        self.assertEqual(
+            bee.get(f"/api/workflows/{workflow_id}/controls").status_code, 404
+        )
 
     def test_deleting_a_workflow_removes_it_from_the_list(self) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client).json()["id"]
 
-        self.assertEqual(self.delete(client, f"/api/workflows/{workflow_id}").status_code, 204)
+        self.assertEqual(
+            self.delete(client, f"/api/workflows/{workflow_id}").status_code, 204
+        )
         self.assertEqual(client.get("/api/workflows").json()["items"], [])
-        self.assertEqual(client.get(f"/api/workflows/{workflow_id}/controls").status_code, 404)
+        self.assertEqual(
+            client.get(f"/api/workflows/{workflow_id}/controls").status_code, 404
+        )
 
     def test_deleting_an_unowned_or_missing_workflow_is_a_404(self) -> None:
         self.enable_multi_user(PASSWORD)
@@ -173,7 +195,9 @@ class WorkflowRouteTest(AuthTestCase):
         self.auth.create_profile("Bee", PASSWORD)
         bee = self.local_client()
         self.login(bee, "Bee", PASSWORD)
-        self.assertEqual(self.delete(bee, f"/api/workflows/{workflow_id}").status_code, 404)
+        self.assertEqual(
+            self.delete(bee, f"/api/workflows/{workflow_id}").status_code, 404
+        )
         # Untouched for the owner.
         self.assertEqual(len(default.get("/api/workflows").json()["items"]), 1)
 
@@ -195,7 +219,9 @@ class MediaRouteTest(AuthTestCase):
         client = self.local_client()
         self.login(client, "Default", PASSWORD)
 
-        self.assertEqual(client.put("/api/media/nope", json={"hidden": True}).status_code, 403)
+        self.assertEqual(
+            client.put("/api/media/nope", json={"hidden": True}).status_code, 403
+        )
         # Same request with the double-submit header reaches the handler, which
         # then reports the unknown item: the guard passed, it did not swallow.
         allowed = self.put(client, "/api/media/nope", json={"hidden": True})
@@ -226,7 +252,9 @@ class LifespanTest(unittest.TestCase):
     def test_app_starts_and_serves_while_comfyui_is_unavailable(self) -> None:
         app = create_app(self.config)
         self.addCleanup(app.state.db.close)
-        with TestClient(app, base_url=LOCAL_ORIGIN, client=("127.0.0.1", 51000)) as client:
+        with TestClient(
+            app, base_url=LOCAL_ORIGIN, client=("127.0.0.1", 51000)
+        ) as client:
             self.assertEqual(client.get("/api/health").json()["status"], "ok")
             snapshot = client.get("/api/catalog").json()
             self.assertEqual(snapshot["freshness"]["state"], "unavailable")
@@ -237,7 +265,9 @@ class LifespanTest(unittest.TestCase):
     def test_shutdown_closes_the_upstream_http_client(self) -> None:
         app = create_app(self.config)
         self.addCleanup(app.state.db.close)
-        with TestClient(app, base_url=LOCAL_ORIGIN, client=("127.0.0.1", 51000)) as client:
+        with TestClient(
+            app, base_url=LOCAL_ORIGIN, client=("127.0.0.1", 51000)
+        ) as client:
             client.get("/api/catalog")
             comfy = app.state.catalog._client
             self.assertFalse(comfy._client.is_closed)

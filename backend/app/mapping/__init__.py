@@ -15,8 +15,19 @@ from .corrections import (
     content_hash,
     structural_signature,
 )
-from .importer import GraphImportError, Link, classify_input, looks_like_link, parse_graph
-from .submission import SeedPolicy, SubmissionError, build_submission_graph, resolve_seed
+from .importer import (
+    GraphImportError,
+    Link,
+    classify_input,
+    looks_like_link,
+    parse_graph,
+)
+from .submission import (
+    SeedPolicy,
+    SubmissionError,
+    build_submission_graph,
+    resolve_seed,
+)
 
 __all__ = [
     "Correction",

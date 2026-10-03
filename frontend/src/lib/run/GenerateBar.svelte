@@ -36,7 +36,12 @@
 			</select>
 		</label>
 		{#if cancellable && latest && !isTerminal(latest.status)}
-			<button type="button" class="btn btn-danger" disabled={run.cancelling} onclick={() => run.cancel()}>
+			<button
+				type="button"
+				class="btn btn-danger"
+				disabled={run.cancelling}
+				onclick={() => run.cancel()}
+			>
 				{run.cancelling ? 'Cancelling…' : 'Cancel'}
 			</button>
 		{/if}

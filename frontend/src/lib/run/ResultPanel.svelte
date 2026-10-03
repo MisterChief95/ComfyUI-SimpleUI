@@ -14,7 +14,9 @@
 	const tracker = $derived(run.tracker);
 	const latest = $derived(tracker.latest);
 	const shown = $derived(tracker.shown);
-	const outputs = $derived(shown?.generation_id === latest?.id ? tracker.outputs : tracker.pickedOutputs);
+	const outputs = $derived(
+		shown?.generation_id === latest?.id ? tracker.outputs : tracker.pickedOutputs
+	);
 	const outputIndex = $derived(outputs.findIndex((item) => item.id === shown?.id));
 	const info = $derived(statusInfo(latest));
 	const failure = $derived(
@@ -29,7 +31,9 @@
 	// "node X of Y" from progress_state; the bar follows the sampler step when
 	// there is one, else the share of finished nodes.
 	const nodePos = $derived(
-		tracker.nodes ? `node ${Math.min(tracker.nodes.done + 1, tracker.nodes.total)} of ${tracker.nodes.total}` : null
+		tracker.nodes
+			? `node ${Math.min(tracker.nodes.done + 1, tracker.nodes.total)} of ${tracker.nodes.total}`
+			: null
 	);
 	const percent = $derived(
 		tracker.progress
@@ -46,7 +50,9 @@
 	const lightbox = new GalleryState();
 	function openLightbox(): void {
 		if (!shown) return;
-		lightbox.items = tracker.recent.some((item) => item.id === shown.id) ? tracker.recent : [shown, ...tracker.recent];
+		lightbox.items = tracker.recent.some((item) => item.id === shown.id)
+			? tracker.recent
+			: [shown, ...tracker.recent];
 		void lightbox.select(shown);
 	}
 	let copyMessage = $state('');
@@ -58,22 +64,35 @@
 		copyMessage = '';
 		copying = true;
 		try {
-			const generation = id === latest?.id ? latest : await api<GenerationDetail>(`/generations/${id}`);
+			const generation =
+				id === latest?.id ? latest : await api<GenerationDetail>(`/generations/${id}`);
 			const values = generation.effective_values;
-			const seeds = Object.fromEntries((run.schema?.controls ?? [])
-				.filter((control) => control.component === 'seed' && values && control.binding_id in values)
-				.map((control) => [control.binding_id, values?.[control.binding_id]]));
-			await navigator.clipboard.writeText(JSON.stringify({
-				workflow: { id: generation.workflow_id, name: run.name },
-				generation: generation.id,
-				status: generation.status,
-				output_state: generation.output_state,
-				seeds,
-				values
-			}, null, 2));
+			const seeds = Object.fromEntries(
+				(run.schema?.controls ?? [])
+					.filter(
+						(control) => control.component === 'seed' && values && control.binding_id in values
+					)
+					.map((control) => [control.binding_id, values?.[control.binding_id]])
+			);
+			await navigator.clipboard.writeText(
+				JSON.stringify(
+					{
+						workflow: { id: generation.workflow_id, name: run.name },
+						generation: generation.id,
+						status: generation.status,
+						output_state: generation.output_state,
+						seeds,
+						values
+					},
+					null,
+					2
+				)
+			);
 			copyMessage = 'Generation summary copied.';
 		} catch (cause) {
-			copyMessage = !navigator.clipboard ? 'Clipboard needs HTTPS or localhost.' : describeApiError(cause);
+			copyMessage = !navigator.clipboard
+				? 'Clipboard needs HTTPS or localhost.'
+				: describeApiError(cause);
 		} finally {
 			copying = false;
 		}
@@ -86,7 +105,8 @@
 			<div class="row">
 				<span class={`badge badge-${info.kind}`}>{info.label}</span>
 				<span class="muted grow node">
-					{#if nodeLabel}{nodeLabel}{:else if latest.status === 'queued'}Waiting in the ComfyUI queue{/if}{#if nodePos}{nodeLabel ? ' · ' : ''}{nodePos}{/if}
+					{#if nodeLabel}{nodeLabel}{:else if latest.status === 'queued'}Waiting in the ComfyUI
+						queue{/if}{#if nodePos}{nodeLabel ? ' · ' : ''}{nodePos}{/if}
 				</span>
 				{#if tracker.progress}
 					<span class="muted">{tracker.progress.value}/{tracker.progress.max}</span>
@@ -103,7 +123,9 @@
 
 	{#if failure}
 		<div class="failure" role="alert">
-			<strong>{latest?.status === 'failed' ? 'The generation failed' : 'Something went wrong'}</strong>
+			<strong
+				>{latest?.status === 'failed' ? 'The generation failed' : 'Something went wrong'}</strong
+			>
 			{#each failure.summary as line (line)}<p>{line}</p>{/each}
 			<details>
 				<summary>Details</summary>
@@ -116,7 +138,9 @@
 		<div class="viewer">
 			<img src={livePreview} alt="Live preview of the running generation" />
 		</div>
-		<p class="muted notice" role="status">Live preview. The saved result replaces it when the job finishes.</p>
+		<p class="muted notice" role="status">
+			Live preview. The saved result replaces it when the job finishes.
+		</p>
 	{:else if shown}
 		<div class="viewer">
 			{#if shown.state === 'unavailable'}
@@ -134,11 +158,23 @@
 		</div>
 		{#if outputIndex >= 0 && outputs.length > 1}
 			<nav class="row output-nav" aria-label="Generation outputs">
-				<button type="button" class="btn" aria-label="Previous output" disabled={outputIndex === 0}
-					onclick={() => void tracker.pick(outputs[outputIndex - 1])}><Icon name="chevron-left" size={16} /></button>
+				<button
+					type="button"
+					class="btn"
+					aria-label="Previous output"
+					disabled={outputIndex === 0}
+					onclick={() => void tracker.pick(outputs[outputIndex - 1])}
+					><Icon name="chevron-left" size={16} /></button
+				>
 				<span class="muted" role="status">Output {outputIndex + 1} of {outputs.length}</span>
-				<button type="button" class="btn" aria-label="Next output" disabled={outputIndex === outputs.length - 1}
-					onclick={() => void tracker.pick(outputs[outputIndex + 1])}><Icon name="chevron-right" size={16} /></button>
+				<button
+					type="button"
+					class="btn"
+					aria-label="Next output"
+					disabled={outputIndex === outputs.length - 1}
+					onclick={() => void tracker.pick(outputs[outputIndex + 1])}
+					><Icon name="chevron-right" size={16} /></button
+				>
 			</nav>
 		{/if}
 		<div class="row wrap tools">
@@ -150,11 +186,18 @@
 			>
 				<Icon name="reset" size={16} /> Reuse settings
 			</button>
-			<button type="button" class="btn" disabled={!shown.generation_id || copying} onclick={() => void copySummary()}>
+			<button
+				type="button"
+				class="btn"
+				disabled={!shown.generation_id || copying}
+				onclick={() => void copySummary()}
+			>
 				<Icon name="copy" size={16} /> Copy generation summary
 			</button>
 			{#if tracker.picked && tracker.outputs[0] && tracker.picked.id !== tracker.outputs[0].id}
-				<button type="button" class="btn btn-ghost" onclick={() => (tracker.picked = null)}>Show latest</button>
+				<button type="button" class="btn btn-ghost" onclick={() => (tracker.picked = null)}
+					>Show latest</button
+				>
 			{/if}
 			<span class="muted notice" role="status">{run.notice ?? ''}</span>
 		</div>

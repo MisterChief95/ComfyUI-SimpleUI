@@ -9,7 +9,6 @@ import struct
 import unittest
 
 import httpx
-
 from app.comfy_client import ComfyClient, ComfyUnavailable
 from app.generations.listener import ComfyListener
 
@@ -40,10 +39,14 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             seen.append((request.url.path, json.loads(request.content)))
             return httpx.Response(200)  # ComfyUI replies with no body at all
 
-        client = ComfyClient("http://127.0.0.1:8188", transport=httpx.MockTransport(handler))
+        client = ComfyClient(
+            "http://127.0.0.1:8188", transport=httpx.MockTransport(handler)
+        )
         await client.cancel_pending("p1")
         await client.cancel_job("p1")
-        self.assertEqual(seen, [("/queue", {"delete": ["p1"]}), ("/interrupt", {"prompt_id": "p1"})])
+        self.assertEqual(
+            seen, [("/queue", {"delete": ["p1"]}), ("/interrupt", {"prompt_id": "p1"})]
+        )
         with self.assertRaises(ComfyUnavailable):  # post_json still wants JSON
             await client.post_json("/queue", {})
         await client.aclose()
@@ -101,7 +104,9 @@ class ListenerTests(GenerationTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.comfy = ComfyClient("http://user:secret@127.0.0.1:8188", headers={"X-Proxy": "k"})
+        self.comfy = ComfyClient(
+            "http://user:secret@127.0.0.1:8188", headers={"X-Proxy": "k"}
+        )
 
     async def asyncSetUp(self) -> None:
         self.row = await self.submit()
@@ -116,15 +121,21 @@ class ListenerTests(GenerationTestCase):
             out.append(sub.queue.get_nowait())
         return out
 
-    async def test_listener_feeds_process_event_and_reconnects_with_resync(self) -> None:
+    async def test_listener_feeds_process_event_and_reconnects_with_resync(
+        self,
+    ) -> None:
         resyncs = []
 
         async def resync():
             resyncs.append(1)
 
         connect = FakeConnect(
-            OSError("down"), OSError("down"), OSError("down"),
-            FakeSocket([js("execution_start", prompt_id=PID)], error=ConnectionResetError()),
+            OSError("down"),
+            OSError("down"),
+            OSError("down"),
+            FakeSocket(
+                [js("execution_start", prompt_id=PID)], error=ConnectionResetError()
+            ),
             FakeSocket([js("progress", prompt_id=PID, value=1, max=2)]),
         )
         listener = self.listener(connect=connect, on_connect=resync)
@@ -137,7 +148,9 @@ class ListenerTests(GenerationTestCase):
             await listener.stop()
         self.assertEqual(len(resyncs), 2)  # every successful connect reconciles
         warnings = [r for r in logs.records if r.levelname == "WARNING"]
-        self.assertEqual(len(warnings), 2)  # one per outage (3 retries + 1 dropped socket), not per retry
+        self.assertEqual(
+            len(warnings), 2
+        )  # one per outage (3 retries + 1 dropped socket), not per retry
         self.assertNotIn("secret", " ".join(r.getMessage() for r in logs.records))
         url, kwargs = connect.calls[0]
         self.assertTrue(url.endswith("/ws?clientId=simpleui"))
@@ -153,11 +166,20 @@ class ListenerTests(GenerationTestCase):
         listener.start()
         await asyncio.sleep(0.05)
         await listener.stop()
-        self.assertEqual(sock.sent[0], {"type": "feature_flags", "data": {"supports_preview_metadata": True}})
+        self.assertEqual(
+            sock.sent[0],
+            {"type": "feature_flags", "data": {"supports_preview_metadata": True}},
+        )
 
     async def test_malformed_frames_are_dropped_not_raised(self) -> None:
         listener = self.listener()
-        bad_frames = ("not json", "[]", b"", b"\x00\x00\x00\x04\x00\x00\x00\x09{bad", js("progress", prompt_id=7))
+        bad_frames = (
+            "not json",
+            "[]",
+            b"",
+            b"\x00\x00\x00\x04\x00\x00\x00\x09{bad",
+            js("progress", prompt_id=7),
+        )
         with self.assertLogs("simpleui.comfy.events", "ERROR"):
             for bad in bad_frames:
                 listener.handle(bad)
@@ -183,7 +205,9 @@ class ListenerTests(GenerationTestCase):
         self.assertEqual([e["type"] for e in events], ["execution_start", "preview"])
         self.assertEqual(events[1]["data"]["mime"], "image/png")
 
-    async def test_unknown_prompt_oversize_and_disabled_previews_are_dropped(self) -> None:
+    async def test_unknown_prompt_oversize_and_disabled_previews_are_dropped(
+        self,
+    ) -> None:
         listener = self.listener(previews_enabled=lambda owner: False)
         listener.handle(meta_frame(PID))
         self.assertEqual(self.drain(self.sub), [])
@@ -215,7 +239,13 @@ class ListenerTests(GenerationTestCase):
         self.assertEqual(listener._preview_timers, {})
 
     async def test_terminal_events_and_stop_cancel_pending_previews(self) -> None:
-        for kind in ("execution_success", "execution_error", "execution_interrupted", "executing", "stop"):
+        for kind in (
+            "execution_success",
+            "execution_error",
+            "execution_interrupted",
+            "executing",
+            "stop",
+        ):
             with self.subTest(kind=kind):
                 listener = self.listener()
                 listener.handle(meta_frame(PID, b"first"))
@@ -241,14 +271,22 @@ class ListenerTests(GenerationTestCase):
         await asyncio.sleep(0.55)
         self.assertEqual(self.drain(self.sub), [])
 
-    async def test_final_executing_event_does_not_revive_a_finished_generation(self) -> None:
+    async def test_final_executing_event_does_not_revive_a_finished_generation(
+        self,
+    ) -> None:
         self.store.update("default", self.row["id"], status="succeeded")
-        self.service.process_event({"type": "executing", "data": {"node": None, "prompt_id": PID}})
-        self.assertEqual(self.store.get("default", self.row["id"])["status"], "succeeded")
+        self.service.process_event(
+            {"type": "executing", "data": {"node": None, "prompt_id": PID}}
+        )
+        self.assertEqual(
+            self.store.get("default", self.row["id"])["status"], "succeeded"
+        )
 
 
 class IncrementSeedTests(GenerationRouteTestCase):
-    def test_increment_advances_across_submissions_and_follows_explicit_edits(self) -> None:
+    def test_increment_advances_across_submissions_and_follows_explicit_edits(
+        self,
+    ) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)
         seeds = []
@@ -256,11 +294,15 @@ class IncrementSeedTests(GenerationRouteTestCase):
             body = self.submit(client, workflow_id, key, seed_policy="increment").json()
             seeds.append(body["effective_values"]["5:seed"])
         self.assertEqual(seeds, ["123456790", "123456791", "123456792"])
-        edited = self.submit(client, workflow_id, "d", edits={"5:seed": "500"}, seed_policy="increment").json()
+        edited = self.submit(
+            client, workflow_id, "d", edits={"5:seed": "500"}, seed_policy="increment"
+        ).json()
         self.assertEqual(edited["effective_values"]["5:seed"], "500")
         after = self.submit(client, workflow_id, "e", seed_policy="increment").json()
         self.assertEqual(after["effective_values"]["5:seed"], "501")
-        other = self.import_graph(client, name="Other")  # a separate workflow starts from its own import
+        other = self.import_graph(
+            client, name="Other"
+        )  # a separate workflow starts from its own import
         first = self.submit(client, other, "f", seed_policy="increment").json()
         self.assertEqual(first["effective_values"]["5:seed"], "123456790")
 

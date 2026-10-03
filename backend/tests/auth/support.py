@@ -11,12 +11,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.auth.security import CSRF_COOKIE, CSRF_HEADER
 from app.auth.service import BaselineStatus
 from app.config import Config
 from app.main import create_app
+from fastapi.testclient import TestClient
 
 LOCAL_ORIGIN = "http://localhost:8000"
 LAN_ORIGIN = "http://192.168.1.10:8000"
@@ -87,4 +86,6 @@ class AuthTestCase(unittest.TestCase):
         self.auth.activate_multi_user(password)
 
     def login(self, client: TestClient, name: str, password: str):
-        return self.post(client, "/api/session", json={"name": name, "password": password})
+        return self.post(
+            client, "/api/session", json={"name": name, "password": password}
+        )

@@ -15,15 +15,22 @@ from pathlib import Path
 
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
+from starlette.websockets import WebSocketDisconnect
 
 from tests.auth.support import AuthTestCase
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 GRAPH_NAME = "image_basic.api.json"
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
-SNAPSHOT = CatalogSnapshot(freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={})
+SNAPSHOT = CatalogSnapshot(
+    freshness=CatalogFreshness(state="fresh"), nodes=CATALOG.nodes, capabilities={}
+)
 
 PASSWORD = "default-password"
 
@@ -68,23 +75,32 @@ class GenerationRouteTestCase(AuthTestCase):
     def import_graph(self, client, name: str = "Portrait"):
         body = (FIXTURES / "graphs" / GRAPH_NAME).read_bytes()
         response = self.post(
-            client, f"/api/workflows?name={name}",
-            content=body, headers={"content-type": "application/json"},
+            client,
+            f"/api/workflows?name={name}",
+            content=body,
+            headers={"content-type": "application/json"},
         )
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["id"]
 
     def submit(
-        self, client, workflow_id: str, request_key: str,
-        edits: dict | None = None, seed_policy: str = "fixed",
+        self,
+        client,
+        workflow_id: str,
+        request_key: str,
+        edits: dict | None = None,
+        seed_policy: str = "fixed",
     ):
         # "fixed" makes assertions deterministic; the profile default
         # ("random") is exercised by app.mapping.submission's own tests.
         return self.post(
-            client, "/api/generations",
+            client,
+            "/api/generations",
             json={
-                "workflow_id": workflow_id, "request_key": request_key,
-                "edits": edits or {}, "seed_policy": seed_policy,
+                "workflow_id": workflow_id,
+                "request_key": request_key,
+                "edits": edits or {},
+                "seed_policy": seed_policy,
             },
         )
 
@@ -125,7 +141,9 @@ class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
         self.auth.create_profile("Bee", PASSWORD)
         bee = self.local_client()
         self.login(bee, "Bee", PASSWORD)
-        self.assertEqual(bee.get(f"/api/generations/{generation_id}/graph").status_code, 404)
+        self.assertEqual(
+            bee.get(f"/api/generations/{generation_id}/graph").status_code, 404
+        )
 
     def test_repeating_a_request_key_never_resubmits_upstream(self) -> None:
         client = self.local_client()
@@ -134,14 +152,18 @@ class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
         first = self.submit(client, workflow_id, "req-1").json()
         second = self.submit(client, workflow_id, "req-1").json()
         self.assertEqual(first["id"], second["id"])
-        self.assertEqual(self.upstream.submit_count, 1, "a retried request key must not resubmit")
+        self.assertEqual(
+            self.upstream.submit_count, 1, "a retried request key must not resubmit"
+        )
 
     def test_reusing_a_request_key_with_a_changed_payload_conflicts(self) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)
 
         self.submit(client, workflow_id, "req-1")
-        changed = self.submit(client, workflow_id, "req-1", edits={"2:text": "a different prompt"})
+        changed = self.submit(
+            client, workflow_id, "req-1", edits={"2:text": "a different prompt"}
+        )
         self.assertEqual(changed.status_code, 409)
 
     def test_a_lost_submit_response_never_triggers_a_blind_resubmit(self) -> None:
@@ -166,7 +188,9 @@ class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
 
 
 class OwnershipIsolationTest(GenerationRouteTestCase):
-    def test_another_profile_sees_nothing_by_listing_or_by_guessing_the_id(self) -> None:
+    def test_another_profile_sees_nothing_by_listing_or_by_guessing_the_id(
+        self,
+    ) -> None:
         self.enable_multi_user(PASSWORD)
         owner = self.local_client()
         self.login(owner, "Default", PASSWORD)
@@ -180,8 +204,14 @@ class OwnershipIsolationTest(GenerationRouteTestCase):
         self.assertEqual(bee.get("/api/generations").json()["items"], [])
         self.assertEqual(bee.get(f"/api/generations/{generation_id}").status_code, 404)
         self.assertEqual(bee.get("/api/generations?status=active").json()["items"], [])
-        self.assertEqual(self.post(bee, f"/api/generations/{generation_id}/retry",
-                                   json={"request_key": "foreign-retry"}).status_code, 404)
+        self.assertEqual(
+            self.post(
+                bee,
+                f"/api/generations/{generation_id}/retry",
+                json={"request_key": "foreign-retry"},
+            ).status_code,
+            404,
+        )
 
     def test_submission_requires_a_session(self) -> None:
         self.enable_multi_user(PASSWORD)
@@ -194,23 +224,38 @@ class QueueAndRetryTest(GenerationRouteTestCase):
     def test_active_filter_excludes_terminal_rows_and_paginates(self) -> None:
         client = self.local_client()
         workflow = self.import_graph(client)
-        ids = [self.submit(client, workflow, f"queue-{i}").json()["id"] for i in range(3)]
-        self.app.state.generations.store.update("default", ids[0], status="failed", output_state="unavailable")
+        ids = [
+            self.submit(client, workflow, f"queue-{i}").json()["id"] for i in range(3)
+        ]
+        self.app.state.generations.store.update(
+            "default", ids[0], status="failed", output_state="unavailable"
+        )
         self.upstream.queue["queue_pending"] = [[0, "prompt-1"]]
         first = client.get("/api/generations?status=active&limit=1").json()
-        second = client.get("/api/generations?status=active&limit=1&cursor=" + first["next_cursor"]).json()
-        self.assertEqual({first["items"][0]["id"], second["items"][0]["id"]}, set(ids[1:]))
+        second = client.get(
+            "/api/generations?status=active&limit=1&cursor=" + first["next_cursor"]
+        ).json()
+        self.assertEqual(
+            {first["items"][0]["id"], second["items"][0]["id"]}, set(ids[1:])
+        )
         self.assertIsNone(second["next_cursor"])
-        self.assertEqual(client.get("/api/generations?status=anything").status_code, 422)
+        self.assertEqual(
+            client.get("/api/generations?status=anything").status_code, 422
+        )
 
     def test_retry_copies_the_execution_snapshot_and_is_idempotent(self) -> None:
         client = self.local_client()
         workflow = self.import_graph(client)
-        source = self.submit(client, workflow, "source", edits={
-            "2:text": "the original prompt", "5:seed": "9007199254740993"
-        }).json()
+        source = self.submit(
+            client,
+            workflow,
+            "source",
+            edits={"2:text": "the original prompt", "5:seed": "9007199254740993"},
+        ).json()
         store = self.app.state.generations.store
-        store.update("default", source["id"], status="cancelled", output_state="unavailable")
+        store.update(
+            "default", source["id"], status="cancelled", output_state="unavailable"
+        )
         original = store.get("default", source["id"])
         sent = []
 
@@ -239,11 +284,17 @@ class QueueAndRetryTest(GenerationRouteTestCase):
         self.upstream.queue["queue_pending"] = [[0, "prompt-1"]]
         for status in ("queued", "running", "submission_unknown", "unknown"):
             store.update("default", source["id"], status=status)
-            response = self.post(client, path, json={"request_key": "refused-" + status})
+            response = self.post(
+                client, path, json={"request_key": "refused-" + status}
+            )
             self.assertEqual(response.status_code, 409, response.text)
-        store.update("default", source["id"], status="cancelled", output_state="unavailable")
+        store.update(
+            "default", source["id"], status="cancelled", output_state="unavailable"
+        )
         store.purge_snapshot("default", source["id"])
-        self.assertEqual(self.post(client, path, json={"request_key": "purged"}).status_code, 409)
+        self.assertEqual(
+            self.post(client, path, json={"request_key": "purged"}).status_code, 409
+        )
         self.assertEqual(self.upstream.submit_count, 1)
 
 
@@ -272,7 +323,9 @@ class CancellationTest(GenerationRouteTestCase):
         unknown = self.post(bee, "/api/generations/does-not-exist/cancel")
         self.assertEqual(foreign.status_code, 409)
         self.assertEqual(unknown.status_code, 409)
-        self.assertEqual(foreign.json()["error"]["message"], unknown.json()["error"]["message"])
+        self.assertEqual(
+            foreign.json()["error"]["message"], unknown.json()["error"]["message"]
+        )
 
     def test_there_is_no_global_cancel_route(self) -> None:
         client = self.local_client()
@@ -294,15 +347,21 @@ class EventStreamTest(GenerationRouteTestCase):
         headers = {"host": "localhost:8000", "cookie": cookie_header}
         with client.websocket_connect("/api/events", headers=headers) as socket:
             self.app.state.generation_events.publish("someone-else", {"type": "noise"})
-            self.app.state.generation_events.publish("default", {"type": "queued", "generation_id": "g1"})
-            self.assertEqual(socket.receive_json(), {"type": "queued", "generation_id": "g1"})
+            self.app.state.generation_events.publish(
+                "default", {"type": "queued", "generation_id": "g1"}
+            )
+            self.assertEqual(
+                socket.receive_json(), {"type": "queued", "generation_id": "g1"}
+            )
 
     def test_an_unauthenticated_socket_is_refused(self) -> None:
         self.enable_multi_user(PASSWORD)
         client = self.local_client()
-        with self.assertRaises(Exception):
-            with client.websocket_connect("/api/events"):
-                pass
+        with (
+            self.assertRaises(WebSocketDisconnect),
+            client.websocket_connect("/api/events"),
+        ):
+            pass
 
     def test_an_open_socket_alone_drives_a_generation_to_completion(self) -> None:
         """GEN-003: no client GET, just an open socket -- as the real app does.
@@ -317,20 +376,31 @@ class EventStreamTest(GenerationRouteTestCase):
         client = self.local_client()
         workflow_id = self.import_graph(client)
         submitted = self.submit(client, workflow_id, "req-1").json()
-        self.assertEqual((submitted["status"], submitted["output_state"]), ("queued", "pending"))
+        self.assertEqual(
+            (submitted["status"], submitted["output_state"]), ("queued", "pending")
+        )
 
         self.upstream.history = {
-            "prompt-1": {"outputs": {}, "status": {"status_str": "success", "completed": True}}
+            "prompt-1": {
+                "outputs": {},
+                "status": {"status_str": "success", "completed": True},
+            }
         }
         # TestClient's websocket_connect dials ws://testserver by default,
         # which does not match the loopback Host/Origin local_client() set up
         # for its plain HTTP requests (see the other socket test above).
-        with client.websocket_connect("/api/events", headers={"host": "localhost:8000"}) as socket:
+        with client.websocket_connect(
+            "/api/events", headers={"host": "localhost:8000"}
+        ) as socket:
             event = socket.receive_json()
-        self.assertEqual(event, {"generation_id": submitted["id"], "type": "reconciled", "data": {}})
+        self.assertEqual(
+            event, {"generation_id": submitted["id"], "type": "reconciled", "data": {}}
+        )
 
         final = client.get(f"/api/generations/{submitted['id']}").json()
-        self.assertEqual((final["status"], final["output_state"]), ("succeeded", "unavailable"))
+        self.assertEqual(
+            (final["status"], final["output_state"]), ("succeeded", "unavailable")
+        )
 
 
 class TypedEditsTest(GenerationRouteTestCase):
@@ -338,21 +408,29 @@ class TypedEditsTest(GenerationRouteTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        raw = json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+        raw = json.loads(
+            (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+                encoding="utf-8"
+            )
+        )
         raw["TypedNode"] = {
             **raw["SaveImage"],
             "name": "TypedNode",
-            "input": {"required": {
-                "flag": ["BOOLEAN", {"default": False}],
-                "count": ["INT", {"default": 1, "min": 0, "max": 10}],
-                "big": ["INT", {"default": 0, "min": 0, "max": 2**64 - 1}],
-                "scale": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0}],
-                "note": ["STRING", {"default": "x"}],
-            }},
+            "input": {
+                "required": {
+                    "flag": ["BOOLEAN", {"default": False}],
+                    "count": ["INT", {"default": 1, "min": 0, "max": 10}],
+                    "big": ["INT", {"default": 0, "min": 0, "max": 2**64 - 1}],
+                    "scale": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0}],
+                    "note": ["STRING", {"default": "x"}],
+                }
+            },
             "input_order": {"required": ["flag", "count", "big", "scale", "note"]},
         }
         snapshot = CatalogSnapshot(
-            freshness=CatalogFreshness(state="fresh"), nodes=normalize(raw).nodes, capabilities={}
+            freshness=CatalogFreshness(state="fresh"),
+            nodes=normalize(raw).nodes,
+            capabilities={},
         )
 
         async def typed_snapshot():
@@ -368,20 +446,40 @@ class TypedEditsTest(GenerationRouteTestCase):
 
         self.upstream.submit_prompt = recording
         self.client = self.local_client()
-        graph = {"1": {"class_type": "TypedNode", "inputs": {
-            "flag": False, "count": 1, "big": 0, "scale": 1.0, "note": "x"}}}
+        graph = {
+            "1": {
+                "class_type": "TypedNode",
+                "inputs": {
+                    "flag": False,
+                    "count": 1,
+                    "big": 0,
+                    "scale": 1.0,
+                    "note": "x",
+                },
+            }
+        }
         response = self.post(
-            self.client, "/api/workflows?name=Typed",
-            content=json.dumps(graph), headers={"content-type": "application/json"},
+            self.client,
+            "/api/workflows?name=Typed",
+            content=json.dumps(graph),
+            headers={"content-type": "application/json"},
         )
         self.assertEqual(response.status_code, 201, response.text)
         self.workflow_id = response.json()["id"]
 
     def test_json_booleans_numbers_and_exact_ints_submit_with_their_types(self) -> None:
-        response = self.submit(self.client, self.workflow_id, "typed-1", edits={
-            "1:flag": True, "1:count": 7, "1:big": "18446744073709551615",
-            "1:scale": 2.5, "1:note": "hello",
-        })
+        response = self.submit(
+            self.client,
+            self.workflow_id,
+            "typed-1",
+            edits={
+                "1:flag": True,
+                "1:count": 7,
+                "1:big": "18446744073709551615",
+                "1:scale": 2.5,
+                "1:note": "hello",
+            },
+        )
         self.assertEqual(response.status_code, 201, response.text)
         inputs = self.sent[-1]["1"]["inputs"]
         self.assertIs(inputs["flag"], True)
@@ -397,40 +495,76 @@ class TypedEditsTest(GenerationRouteTestCase):
         response = self.client.post(
             "/api/generations",
             content=(
-                '{"workflow_id": "%s", "request_key": "typed-big", "seed_policy": "fixed",'
-                ' "edits": {"1:big": 9007199254740993}}' % self.workflow_id
+                f'{{"workflow_id": "{self.workflow_id}", "request_key": "typed-big", "seed_policy": "fixed",'
+                ' "edits": {"1:big": 9007199254740993}}'
             ),
-            headers={**self.csrf_headers(self.client), "content-type": "application/json"},
+            headers={
+                **self.csrf_headers(self.client),
+                "content-type": "application/json",
+            },
         )
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(self.sent[-1]["1"]["inputs"]["big"], 9007199254740993)
-        self.assertEqual(response.json()["effective_values"]["1:big"], "9007199254740993")
+        self.assertEqual(
+            response.json()["effective_values"]["1:big"], "9007199254740993"
+        )
 
     def test_a_number_is_not_turned_into_text_and_text_is_not_a_bool(self) -> None:
-        refused = self.submit(self.client, self.workflow_id, "typed-2", edits={"1:note": 5})
+        refused = self.submit(
+            self.client, self.workflow_id, "typed-2", edits={"1:note": 5}
+        )
         self.assertEqual(refused.status_code, 422, refused.text)
-        refused = self.submit(self.client, self.workflow_id, "typed-3", edits={"1:flag": "yes"})
+        refused = self.submit(
+            self.client, self.workflow_id, "typed-3", edits={"1:flag": "yes"}
+        )
         self.assertEqual(refused.status_code, 422, refused.text)
-        refused = self.submit(self.client, self.workflow_id, "typed-4", edits={"1:flag": 1})
+        refused = self.submit(
+            self.client, self.workflow_id, "typed-4", edits={"1:flag": 1}
+        )
         self.assertEqual(refused.status_code, 422, refused.text)
         self.assertEqual(self.upstream.submit_count, 0)
 
     def test_legacy_boolean_strings_are_still_accepted_and_normalized(self) -> None:
-        for key, text, expected in (("typed-5", "true", True), ("typed-6", "false", False)):
-            response = self.submit(self.client, self.workflow_id, key, edits={"1:flag": text})
+        for key, text, expected in (
+            ("typed-5", "true", True),
+            ("typed-6", "false", False),
+        ):
+            response = self.submit(
+                self.client, self.workflow_id, key, edits={"1:flag": text}
+            )
             self.assertEqual(response.status_code, 201, response.text)
             self.assertIs(self.sent[-1]["1"]["inputs"]["flag"], expected)
             self.assertIs(response.json()["effective_values"]["1:flag"], expected)
         self.assertEqual(
-            self.submit(self.client, self.workflow_id, "typed-7", edits={"1:flag": "True"}).status_code, 422
+            self.submit(
+                self.client, self.workflow_id, "typed-7", edits={"1:flag": "True"}
+            ).status_code,
+            422,
         )
 
     def test_idempotency_fingerprint_covers_non_string_values(self) -> None:
-        first = self.submit(self.client, self.workflow_id, "typed-8", edits={"1:flag": True, "1:scale": 2.5})
-        again = self.submit(self.client, self.workflow_id, "typed-8", edits={"1:scale": 2.5, "1:flag": True})
-        self.assertEqual((again.status_code, again.json()["id"]), (201, first.json()["id"]))
+        first = self.submit(
+            self.client,
+            self.workflow_id,
+            "typed-8",
+            edits={"1:flag": True, "1:scale": 2.5},
+        )
+        again = self.submit(
+            self.client,
+            self.workflow_id,
+            "typed-8",
+            edits={"1:scale": 2.5, "1:flag": True},
+        )
+        self.assertEqual(
+            (again.status_code, again.json()["id"]), (201, first.json()["id"])
+        )
         self.assertEqual(self.upstream.submit_count, 1)
-        changed = self.submit(self.client, self.workflow_id, "typed-8", edits={"1:flag": False, "1:scale": 2.5})
+        changed = self.submit(
+            self.client,
+            self.workflow_id,
+            "typed-8",
+            edits={"1:flag": False, "1:scale": 2.5},
+        )
         self.assertEqual(changed.status_code, 409, changed.text)
 
 

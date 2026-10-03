@@ -36,7 +36,9 @@ def _origin_ok(websocket: WebSocket) -> bool:
     # sends as http(s) even for a ws(s) connection; translate the scheme
     # rather than touching the shared (and unowned) auth.security helper.
     scheme = "https" if websocket.url.scheme == "wss" else "http"
-    proxy = SimpleNamespace(headers=websocket.headers, url=SimpleNamespace(scheme=scheme))
+    proxy = SimpleNamespace(
+        headers=websocket.headers, url=SimpleNamespace(scheme=scheme)
+    )
     return request_origin_ok(proxy)
 
 
@@ -60,7 +62,9 @@ async def generation_events(websocket: WebSocket) -> None:
     try:
         while True:
             try:
-                event = await asyncio.wait_for(subscription.receive(), timeout=RECONCILE_POLL_S)
+                event = await asyncio.wait_for(
+                    subscription.receive(), timeout=RECONCILE_POLL_S
+                )
             except asyncio.TimeoutError:
                 # GEN-003: this app runs no perpetual background poller (by
                 # design -- see GenerationService.reconcile_if_due), and nothing
@@ -73,7 +77,9 @@ async def generation_events(websocket: WebSocket) -> None:
                 # watching, so nudge that owner's own generations here instead.
                 store_history = await in_thread(settings.profile, principal.owner_id)
                 await generations.reconcile_if_due(
-                    history_retention={principal.owner_id: store_history["store_history"]}
+                    history_retention={
+                        principal.owner_id: store_history["store_history"]
+                    }
                 )
                 continue
             # Logout, password changes, and mode switches invalidate sessions.

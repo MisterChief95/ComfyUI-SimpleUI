@@ -35,7 +35,8 @@ export function sameValue(control: ControlDescriptor, a: EditValue, b: EditValue
 export function coerceValue(control: ControlDescriptor, value: unknown): EditValue {
 	if (control.logical_type === 'boolean') return value === true || value === 'true';
 	if (control.logical_type === 'float') return typeof value === 'number' ? value : Number(value);
-	if (control.logical_type === 'enum' && ['string', 'number', 'boolean'].includes(typeof value)) return value as EditValue;
+	if (control.logical_type === 'enum' && ['string', 'number', 'boolean'].includes(typeof value))
+		return value as EditValue;
 	return value === null || value === undefined ? '' : String(value);
 }
 

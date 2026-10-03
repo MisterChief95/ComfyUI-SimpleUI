@@ -33,13 +33,20 @@
 	try {
 		const saved = Number(localStorage.getItem(WIDTH_KEY));
 		if (saved > 0) resultW = saved;
-	} catch { /* storage blocked: default width */ }
+	} catch {
+		/* storage blocked: default width */
+	}
 
 	function setWidth(px: number, save: boolean): void {
 		const total = body?.clientWidth ?? 0;
 		// ponytail: fixed 260px/360px minimums; make them tokens if designs need other bounds
 		resultW = Math.round(Math.min(Math.max(px, 260), Math.max(260, total - 360)));
-		if (save) try { localStorage.setItem(WIDTH_KEY, String(resultW)); } catch { /* not persisted */ }
+		if (save)
+			try {
+				localStorage.setItem(WIDTH_KEY, String(resultW));
+			} catch {
+				/* not persisted */
+			}
 	}
 	function dragDivider(event: PointerEvent): void {
 		const handle = event.currentTarget as HTMLElement;
@@ -61,7 +68,8 @@
 		const now = resultW ?? Math.round((body?.clientWidth ?? 0) * 0.4);
 		if (event.key === 'ArrowLeft') setWidth(now + step, true);
 		else if (event.key === 'ArrowRight') setWidth(now - step, true);
-		else if (event.key === 'Home' || event.key === 'End') setWidth(event.key === 'Home' ? 9999 : 0, true);
+		else if (event.key === 'Home' || event.key === 'End')
+			setWidth(event.key === 'Home' ? 9999 : 0, true);
 		else return;
 		event.preventDefault();
 	}
@@ -75,7 +83,8 @@
 	function onkeydown(event: KeyboardEvent): void {
 		if (document.querySelector('dialog[open], :popover-open')) return;
 		const target = event.target;
-		const typing = target instanceof Element &&
+		const typing =
+			target instanceof Element &&
 			(target.closest('input, textarea, select, [role="textbox"]') !== null ||
 				(target instanceof HTMLElement && target.isContentEditable));
 		const action = runShortcut(event, typing);
@@ -84,21 +93,30 @@
 		if (action === 'generate') void run.submit();
 		else if (action === 'prompt') void focusPrompt();
 		else {
-			const seed = run.sections.flatMap((section) => section.entries).find(({ control }) => control.component === 'seed')?.control;
+			const seed = run.sections
+				.flatMap((section) => section.entries)
+				.find(({ control }) => control.component === 'seed')?.control;
 			if (!seed) return;
 			const bounds = seed.constraints;
-			run.useSeed(seed, randomExactInt(
-				bounds?.exact_min ?? (bounds?.min != null ? String(Math.trunc(bounds.min)) : '0'),
-				bounds?.exact_max ?? (bounds?.max != null ? String(Math.trunc(bounds.max)) : DEFAULT_SEED_MAX)
-			));
+			run.useSeed(
+				seed,
+				randomExactInt(
+					bounds?.exact_min ?? (bounds?.min != null ? String(Math.trunc(bounds.min)) : '0'),
+					bounds?.exact_max ??
+						(bounds?.max != null ? String(Math.trunc(bounds.max)) : DEFAULT_SEED_MAX)
+				)
+			);
 		}
 	}
 
 	async function focusPrompt(): Promise<void> {
-		const candidates = run.sections.flatMap((section) => section.entries
-			.filter(({ control }) => control.component === 'textarea')
-			.map(({ control }) => ({ section, control })));
-		const first = candidates.find(({ control }) => /prompt|text/i.test(control.label)) ?? candidates[0];
+		const candidates = run.sections.flatMap((section) =>
+			section.entries
+				.filter(({ control }) => control.component === 'textarea')
+				.map(({ control }) => ({ section, control }))
+		);
+		const first =
+			candidates.find(({ control }) => /prompt|text/i.test(control.label)) ?? candidates[0];
 		if (!first) return;
 		run.setOpen(first.section, true);
 		await tick();
@@ -134,7 +152,9 @@
 				{/each}
 			</select>
 		</label>
-		<a class="btn" href={`/workflows/${workflowId}`} aria-label="Open designer" title="Design"><Icon name="design" size={16} /> <span class="lbl">Design</span></a>
+		<a class="btn" href={`/workflows/${workflowId}`} aria-label="Open designer" title="Design"
+			><Icon name="design" size={16} /> <span class="lbl">Design</span></a
+		>
 		<button
 			type="button"
 			class="btn"
@@ -147,15 +167,22 @@
 		>
 			<Icon name="bookmark" size={16} /> <span class="lbl">Presets</span>
 		</button>
-		<button type="button" class="btn" onclick={() => queueOpen = true}>Queue</button>
-		<button type="button" class="btn" popovertarget={shortcutsId} aria-label="Keyboard shortcuts">?</button>
+		<button type="button" class="btn" onclick={() => (queueOpen = true)}>Queue</button>
+		<button type="button" class="btn" popovertarget={shortcutsId} aria-label="Keyboard shortcuts"
+			>?</button
+		>
 		<div id={shortcutsId} popover class="shortcuts">
 			<strong>Keyboard shortcuts</strong>
 			<p><kbd>Ctrl/Cmd + Enter</kbd> Generate</p>
 			<p><kbd>P</kbd> Focus first prompt</p>
 			<p><kbd>R</kbd> Randomize first seed and use fixed policy</p>
-			<label><input type="checkbox" bind:checked={shortcutsEnabled} /> Enable P and R shortcuts</label>
-			<p class="muted">P and R apply outside inputs. Shortcuts pause during composition and while dialogs or popovers are open.</p>
+			<label
+				><input type="checkbox" bind:checked={shortcutsEnabled} /> Enable P and R shortcuts</label
+			>
+			<p class="muted">
+				P and R apply outside inputs. Shortcuts pause during composition and while dialogs or
+				popovers are open.
+			</p>
 		</div>
 		<span class={`badge badge-${info.kind} status`} role="status">{info.label}</span>
 	</header>
@@ -178,13 +205,17 @@
 				{#if blocking.length > 0}
 					<div class="notice err-box" role="alert">
 						<strong>This workflow cannot be submitted yet</strong>
-						{#each blocking as detail (detail.code + (detail.field ?? ''))}<p>{detail.message}</p>{/each}
+						{#each blocking as detail (detail.code + (detail.field ?? ''))}<p>
+								{detail.message}
+							</p>{/each}
 					</div>
 				{/if}
 				{#if warnings.length > 0}
 					<details class="notice">
 						<summary>{warnings.length} mapping warning{warnings.length === 1 ? '' : 's'}</summary>
-						{#each warnings as detail (detail.code + (detail.field ?? ''))}<p>{detail.message}</p>{/each}
+						{#each warnings as detail (detail.code + (detail.field ?? ''))}<p>
+								{detail.message}
+							</p>{/each}
 					</details>
 				{/if}
 
@@ -206,7 +237,9 @@
 					{#if run.presets.message}
 						<p class="draft preset-msg" role="status">
 							{run.presets.message}
-							<button type="button" class="link" onclick={() => (run.presets.message = null)}>Dismiss</button>
+							<button type="button" class="link" onclick={() => (run.presets.message = null)}
+								>Dismiss</button
+							>
 						</p>
 					{/if}
 					{#if run.modifiedCount > 0}
@@ -219,7 +252,9 @@
 					{#if run.sections.length > 3}
 						<nav class="jump" aria-label="Jump to section">
 							{#each run.sections as section (section.id)}
-								<button type="button" class="chip" onclick={() => jump(section.id)}>{section.title}</button>
+								<button type="button" class="chip" onclick={() => jump(section.id)}
+									>{section.title}</button
+								>
 							{/each}
 						</nav>
 					{/if}
@@ -232,7 +267,9 @@
 						{#if run.modifiedOnly}
 							No modified controls.
 						{:else}
-							This workflow has no visible controls. Place some in the <a href={`/workflows/${workflowId}`}>designer</a>.
+							This workflow has no visible controls. Place some in the <a
+								href={`/workflows/${workflowId}`}>designer</a
+							>.
 						{/if}
 					</p>
 				{/each}
@@ -255,7 +292,7 @@
 		</div>
 		<GenerateBar {run} />
 		<PresetsMenu {run} bind:open={presetsOpen} />
-		{#if queueOpen}<QueuePanel {run} onclose={() => queueOpen = false} />{/if}
+		{#if queueOpen}<QueuePanel {run} onclose={() => (queueOpen = false)} />{/if}
 	{/if}
 </div>
 
@@ -408,7 +445,11 @@
 	@media (min-width: 768px) {
 		.body {
 			display: grid;
-			grid-template-columns: minmax(0, 1fr) 0.75rem clamp(260px, var(--result-w), calc(100% - 360px - 0.75rem));
+			grid-template-columns: minmax(0, 1fr) 0.75rem clamp(
+					260px,
+					var(--result-w),
+					calc(100% - 360px - 0.75rem)
+				);
 			gap: 0;
 			padding: 0;
 			overflow: hidden;
@@ -428,7 +469,8 @@
 			cursor: col-resize;
 			touch-action: none;
 			margin: var(--space-3) 0;
-			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100% no-repeat;
+			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100%
+				no-repeat;
 		}
 		.divider:hover,
 		.divider:focus-visible {

@@ -100,9 +100,13 @@ class SettingsStore:
     def host(self) -> dict[str, Any]:
         stored = {
             row["key"]: json.loads(row["value_json"])
-            for row in self.db.query("SELECT key, value_json FROM settings WHERE scope = 'host'")
+            for row in self.db.query(
+                "SELECT key, value_json FROM settings WHERE scope = 'host'"
+            )
         }
-        return {key: stored.get(key, spec.default) for key, spec in HOST_SETTINGS.items()}
+        return {
+            key: stored.get(key, spec.default) for key, spec in HOST_SETTINGS.items()
+        }
 
     def host_value(self, key: str) -> Any:
         row = self.db.query_one(
@@ -128,7 +132,9 @@ class SettingsStore:
                 (owner_id,),
             )
         }
-        return {key: stored.get(key, spec.default) for key, spec in PROFILE_SETTINGS.items()}
+        return {
+            key: stored.get(key, spec.default) for key, spec in PROFILE_SETTINGS.items()
+        }
 
     def set_profile(self, owner_id: str, key: str, value: Any) -> None:
         """``owner_id`` always comes from the session, never from the request body."""

@@ -9,25 +9,26 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.config import Config, ConfigError
 from app.contracts import ControlDescriptor, ErrorEnvelope, ExactInt, Page
 from app.main import create_app
+from fastapi.testclient import TestClient
 from pydantic import BaseModel, ValidationError
 
 
 class ConfigTest(unittest.TestCase):
     def test_rejects_bad_comfy_url_and_missing_build(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(ConfigError) as ctx:
-                Config.from_env(
-                    {
-                        "SIMPLEUI_COMFY_URL": "not-a-url",
-                        "SIMPLEUI_DATA_DIR": tmp,
-                        "SIMPLEUI_STATIC_DIR": str(Path(tmp) / "nope"),
-                    }
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self.assertRaises(ConfigError) as ctx,
+        ):
+            Config.from_env(
+                {
+                    "SIMPLEUI_COMFY_URL": "not-a-url",
+                    "SIMPLEUI_DATA_DIR": tmp,
+                    "SIMPLEUI_STATIC_DIR": str(Path(tmp) / "nope"),
+                }
+            )
         message = str(ctx.exception)
         self.assertIn("SIMPLEUI_COMFY_URL", message)
         self.assertIn("No built UI", message)
@@ -35,7 +36,11 @@ class ConfigTest(unittest.TestCase):
     def test_dev_mode_allows_missing_build(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config = Config.from_env(
-                {"SIMPLEUI_DATA_DIR": tmp, "SIMPLEUI_STATIC_DIR": tmp, "SIMPLEUI_DEV": "1"}
+                {
+                    "SIMPLEUI_DATA_DIR": tmp,
+                    "SIMPLEUI_STATIC_DIR": tmp,
+                    "SIMPLEUI_DEV": "1",
+                }
             )
         self.assertTrue(config.dev_mode)
         self.assertEqual(config.comfy_url, "http://127.0.0.1:8188")

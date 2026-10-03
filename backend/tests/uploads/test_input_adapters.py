@@ -25,33 +25,41 @@ OTHER = "other-profile"
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
-GRAPH = json.loads((FIXTURES / "graphs" / "image_loader_input.api.json").read_text(encoding="utf-8"))
+GRAPH = json.loads(
+    (FIXTURES / "graphs" / "image_loader_input.api.json").read_text(encoding="utf-8")
+)
 
 
 def _image_control() -> ControlDescriptor:
-    schema = build_control_schema(GRAPH, CATALOG.nodes, owner_id=OWNER, workflow_id="wf1", revision=1)
+    schema = build_control_schema(
+        GRAPH, CATALOG.nodes, owner_id=OWNER, workflow_id="wf1", revision=1
+    )
     controls = {c.binding_id: c for c in schema.controls}
     # Node "2" is LoadImage's `image` input (tests/fixtures/graphs/image_loader_input.api.json).
     return controls["2:image"]
 
 
 def _hand_built(**overrides) -> ControlDescriptor:
-    base = dict(
-        binding_id="9:file_input",
-        node_id="9",
-        class_type="SomeLoader",
-        input_name="file_input",
-        logical_type="file",
-        value=None,
-        component="file",
-        group="inputs",
-        order=0,
-        label="Some loader: File input",
-        inference_reason="loader_adapter:comfy_input_dir_filename;owned_input",
-        raw_metadata={"media_kind": "image"},
-    )
+    base = {
+        "binding_id": "9:file_input",
+        "node_id": "9",
+        "class_type": "SomeLoader",
+        "input_name": "file_input",
+        "logical_type": "file",
+        "value": None,
+        "component": "file",
+        "group": "inputs",
+        "order": 0,
+        "label": "Some loader: File input",
+        "inference_reason": "loader_adapter:comfy_input_dir_filename;owned_input",
+        "raw_metadata": {"media_kind": "image"},
+    }
     base.update(overrides)
     return ControlDescriptor(**base)
 
@@ -89,8 +97,12 @@ class DiagnosticsTest(UploadTestCase):
         self.assertEqual(ctx.exception.detail.code, "unsupported_loader_adapter")
         self.assertIn("video", ctx.exception.detail.message)
 
-    def test_unrecognized_adapter_name_is_rejected_even_if_marked_editable(self) -> None:
-        control = _hand_built(inference_reason="loader_adapter:some_future_adapter;owned_input")
+    def test_unrecognized_adapter_name_is_rejected_even_if_marked_editable(
+        self,
+    ) -> None:
+        control = _hand_built(
+            inference_reason="loader_adapter:some_future_adapter;owned_input"
+        )
         with self.assertRaises(InputAdapterError) as ctx:
             bind_upload(control, self.uploads, OWNER, "whatever")
         self.assertEqual(ctx.exception.detail.code, "unsupported_loader_adapter")

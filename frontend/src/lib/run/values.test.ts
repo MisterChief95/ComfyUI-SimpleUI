@@ -10,28 +10,65 @@ const make = (logical_type: ControlDescriptor['logical_type'], value: ControlDes
 	({ logical_type, value }) as ControlDescriptor;
 
 test('aspect dimensions snap both bounds and steps and preserve exact integers', () => {
-	const width = { ...make('int', '1024'), component: 'number', constraints: { min: 64, max: 2048, exact_min: '64', exact_max: '2048', step: 64 } } as ControlDescriptor;
-	const height = { ...width, constraints: { ...width.constraints!, min: 128, exact_min: '128', max: 1024, exact_max: '1024', step: 128 } };
+	const width = {
+		...make('int', '1024'),
+		component: 'number',
+		constraints: { min: 64, max: 2048, exact_min: '64', exact_max: '2048', step: 64 }
+	} as ControlDescriptor;
+	const height = {
+		...width,
+		constraints: {
+			...width.constraints!,
+			min: 128,
+			exact_min: '128',
+			max: 1024,
+			exact_max: '1024',
+			step: 128
+		}
+	};
 	assert.deepEqual(dimensionPair(width, height, 1152, 896), ['1152', '896']);
 	assert.deepEqual(dimensionPair(width, height, 5000, 20), ['2048', '128']);
 	assert.deepEqual(dimensionPair(width, height, 1200, 850), ['1216', '896']);
 	const unlimited = { ...width, constraints: null };
-	assert.deepEqual(dimensionPair(unlimited, unlimited, '9007199254740993', '1024'), ['9007199254740993', '1024']);
+	assert.deepEqual(dimensionPair(unlimited, unlimited, '9007199254740993', '1024'), [
+		'9007199254740993',
+		'1024'
+	]);
 	assert.equal(dimensionPair(width, height, NaN, 1024), null);
 	assert.equal(dimensionPair({ ...width, component: 'readonly' }, height, 1024, 1024), null);
 });
 
 test('run shortcuts ignore editing, modifiers, composition, repeats and handled events', () => {
-	const event = { key: 'p', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, repeat: false, isComposing: false, defaultPrevented: false };
+	const event = {
+		key: 'p',
+		ctrlKey: false,
+		metaKey: false,
+		altKey: false,
+		shiftKey: false,
+		repeat: false,
+		isComposing: false,
+		defaultPrevented: false
+	};
 	assert.equal(runShortcut(event, false), 'prompt');
 	assert.equal(runShortcut({ ...event, key: 'r' }, false), 'seed');
 	assert.equal(runShortcut(event, true), null);
-	for (const flag of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey', 'repeat', 'isComposing', 'defaultPrevented']) {
+	for (const flag of [
+		'ctrlKey',
+		'metaKey',
+		'altKey',
+		'shiftKey',
+		'repeat',
+		'isComposing',
+		'defaultPrevented'
+	]) {
 		assert.equal(runShortcut({ ...event, [flag]: true }, false), null);
 	}
 	assert.equal(runShortcut({ ...event, key: 'Enter', ctrlKey: true }, true), 'generate');
 	assert.equal(runShortcut({ ...event, key: 'Enter', metaKey: true }, true), 'generate');
-	assert.equal(runShortcut({ ...event, key: 'Enter', ctrlKey: true, isComposing: true }, true), null);
+	assert.equal(
+		runShortcut({ ...event, key: 'Enter', ctrlKey: true, isComposing: true }, true),
+		null
+	);
 });
 
 test('ExactInt compares as strings, not numbers', () => {
@@ -59,7 +96,10 @@ test('status vocabulary and error summaries', () => {
 	assert.equal(isTerminal('running'), false);
 	assert.equal(isTerminal('submission_unknown'), false);
 	assert.equal(isTerminal('succeeded'), true);
-	assert.equal(statusInfo({ status: 'succeeded', output_state: 'partial' } as never).label, 'Done (partial)');
+	assert.equal(
+		statusInfo({ status: 'succeeded', output_state: 'partial' } as never).label,
+		'Done (partial)'
+	);
 	const described = describeGenerationError({
 		execution: { exception_message: 'Out of memory', node_type: 'KSampler', node_id: '5' }
 	});
@@ -70,10 +110,19 @@ test('validateValue checks int syntax and exact bounds without rounding', () => 
 	const seed = {
 		logical_type: 'int',
 		component: 'seed',
-		constraints: { min: 0, max: 1.8446744073709552e19, step: null, exact_min: '0', exact_max: '18446744073709551615' }
+		constraints: {
+			min: 0,
+			max: 1.8446744073709552e19,
+			step: null,
+			exact_min: '0',
+			exact_max: '18446744073709551615'
+		}
 	} as ControlDescriptor;
 	assert.equal(validateValue(seed, '18446744073709551615'), null);
-	assert.match(validateValue(seed, '18446744073709551616') ?? '', /between 0 and 18446744073709551615/);
+	assert.match(
+		validateValue(seed, '18446744073709551616') ?? '',
+		/between 0 and 18446744073709551615/
+	);
 	assert.match(validateValue(seed, '-1') ?? '', /between/);
 	assert.equal(validateValue(seed, '1.5'), 'Enter a whole number');
 	assert.equal(validateValue(seed, ''), 'Enter a whole number');
@@ -106,7 +155,11 @@ test('validateValue checks float finiteness and range; other types pass', () => 
 	assert.equal(validateValue(f, '0x10'), 'Enter a number');
 	assert.equal(validateValue(f, Infinity), 'Enter a number');
 	assert.equal(validateValue(f, NaN), 'Enter a number');
-	const open = { logical_type: 'float', component: 'number', constraints: null } as ControlDescriptor;
+	const open = {
+		logical_type: 'float',
+		component: 'number',
+		constraints: null
+	} as ControlDescriptor;
 	assert.equal(validateValue(open, -1e9), null);
 	assert.equal(validateValue(make('string', ''), ''), null);
 	assert.equal(validateValue(make('boolean', false), true), null);

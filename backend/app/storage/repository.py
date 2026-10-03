@@ -79,7 +79,10 @@ class Repository:
         return dict(row) if row else None
 
     def list_profiles(self) -> list[dict[str, Any]]:
-        return [dict(r) for r in self.db.query("SELECT * FROM profiles ORDER BY created_ms, id")]
+        return [
+            dict(r)
+            for r in self.db.query("SELECT * FROM profiles ORDER BY created_ms, id")
+        ]
 
     def create_profile(self, name: str, password_hash: str | None = None) -> str:
         """Create an additional (non-default) profile. Names are unique."""
@@ -111,7 +114,9 @@ class Repository:
             )
         return workflow_id
 
-    def rename_workflow(self, owner_id: str, workflow_id: str, name: str) -> dict[str, Any] | None:
+    def rename_workflow(
+        self, owner_id: str, workflow_id: str, name: str
+    ) -> dict[str, Any] | None:
         with self.db.write() as conn:
             cursor = conn.execute(
                 "UPDATE workflows SET name = ?, updated_ms = ? WHERE id = ? AND owner_id = ?",
@@ -122,7 +127,11 @@ class Repository:
         return self.get_workflow(owner_id, workflow_id)
 
     def replace_workflow_graph(
-        self, owner_id: str, workflow_id: str, graph: dict[str, Any], expected_revision: int
+        self,
+        owner_id: str,
+        workflow_id: str,
+        graph: dict[str, Any],
+        expected_revision: int,
     ) -> int | None:
         """Store ``graph`` as revision N+1 and make it current, atomically.
 
@@ -149,7 +158,12 @@ class Repository:
             conn.execute(
                 "INSERT INTO workflow_revisions (workflow_id, revision, graph_json, created_ms)"
                 " VALUES (?, ?, ?, ?)",
-                (workflow_id, revision, json.dumps(graph, separators=(",", ":")), stamp),
+                (
+                    workflow_id,
+                    revision,
+                    json.dumps(graph, separators=(",", ":")),
+                    stamp,
+                ),
             )
             conn.execute(
                 "UPDATE workflows SET current_revision = ?, updated_ms = ? WHERE id = ?",
@@ -159,7 +173,8 @@ class Repository:
 
     def get_workflow(self, owner_id: str, workflow_id: str) -> dict[str, Any] | None:
         row = self.db.query_one(
-            "SELECT * FROM workflows WHERE id = ? AND owner_id = ?", (workflow_id, owner_id)
+            "SELECT * FROM workflows WHERE id = ? AND owner_id = ?",
+            (workflow_id, owner_id),
         )
         return dict(row) if row else None
 
@@ -184,7 +199,8 @@ class Repository:
         with ``workflow_id`` set to null (migrations/001_initial.sql)."""
         with self.db.write() as conn:
             cursor = conn.execute(
-                "DELETE FROM workflows WHERE id = ? AND owner_id = ?", (workflow_id, owner_id)
+                "DELETE FROM workflows WHERE id = ? AND owner_id = ?",
+                (workflow_id, owner_id),
             )
             return cursor.rowcount > 0
 
@@ -247,7 +263,9 @@ class Repository:
                 )
         return revision
 
-    def list_mapping_overrides(self, owner_id: str, workflow_id: str) -> list[dict[str, Any]]:
+    def list_mapping_overrides(
+        self, owner_id: str, workflow_id: str
+    ) -> list[dict[str, Any]]:
         """This workflow's own corrections plus the profile's node templates."""
         return [
             dict(row)
@@ -281,7 +299,8 @@ class Repository:
             params.append(selector)
         with self.db.write() as conn:
             cursor = conn.execute(
-                f"DELETE FROM mapping_overrides WHERE {' AND '.join(where)}", tuple(params)
+                f"DELETE FROM mapping_overrides WHERE {' AND '.join(where)}",
+                tuple(params),
             )
             return cursor.rowcount
 
@@ -368,29 +387,50 @@ class Repository:
         ]
 
     def create_preset(
-        self, owner_id: str, workflow_id: str, name: str, values: dict[str, Any], limit: int
+        self,
+        owner_id: str,
+        workflow_id: str,
+        name: str,
+        values: dict[str, Any],
+        limit: int,
     ) -> dict[str, Any] | None:
         """None when the workflow is not owned; ``LimitExceeded`` at ``limit`` presets."""
         preset_id, stamp = new_id(), now_ms()
         with self.db.write() as conn:
-            if conn.execute(
-                "SELECT 1 FROM workflows WHERE id = ? AND owner_id = ?", (workflow_id, owner_id)
-            ).fetchone() is None:
+            if (
+                conn.execute(
+                    "SELECT 1 FROM workflows WHERE id = ? AND owner_id = ?",
+                    (workflow_id, owner_id),
+                ).fetchone()
+                is None
+            ):
                 return None
             count = conn.execute(
                 "SELECT COUNT(*) AS n FROM workflow_presets WHERE owner_id = ? AND workflow_id = ?",
                 (owner_id, workflow_id),
             ).fetchone()["n"]
             if count >= limit:
-                raise LimitExceeded(f"A workflow holds at most {limit} presets. Delete one first.")
+                raise LimitExceeded(
+                    f"A workflow holds at most {limit} presets. Delete one first."
+                )
             conn.execute(
                 "INSERT INTO workflow_presets (id, owner_id, workflow_id, name, values_json,"
                 " revision, created_ms, updated_ms) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-                (preset_id, owner_id, workflow_id, name, json.dumps(values, allow_nan=False), stamp, stamp),
+                (
+                    preset_id,
+                    owner_id,
+                    workflow_id,
+                    name,
+                    json.dumps(values, allow_nan=False),
+                    stamp,
+                    stamp,
+                ),
             )
         return self.get_preset(owner_id, workflow_id, preset_id)
 
-    def get_preset(self, owner_id: str, workflow_id: str, preset_id: str) -> dict[str, Any] | None:
+    def get_preset(
+        self, owner_id: str, workflow_id: str, preset_id: str
+    ) -> dict[str, Any] | None:
         row = self.db.query_one(
             "SELECT * FROM workflow_presets WHERE id = ? AND owner_id = ? AND workflow_id = ?",
             (preset_id, owner_id, workflow_id),
@@ -490,8 +530,12 @@ class Repository:
                         workflow_revision,
                         client_request_key,
                         request_fingerprint,
-                        None if graph is None else json.dumps(graph, separators=(",", ":")),
-                        None if effective_values is None else json.dumps(effective_values),
+                        None
+                        if graph is None
+                        else json.dumps(graph, separators=(",", ":")),
+                        None
+                        if effective_values is None
+                        else json.dumps(effective_values),
                         status,
                         stamp,
                         stamp,
@@ -509,9 +553,12 @@ class Repository:
             return row["id"]
         return generation_id
 
-    def get_generation(self, owner_id: str, generation_id: str) -> dict[str, Any] | None:
+    def get_generation(
+        self, owner_id: str, generation_id: str
+    ) -> dict[str, Any] | None:
         row = self.db.query_one(
-            "SELECT * FROM generations WHERE id = ? AND owner_id = ?", (generation_id, owner_id)
+            "SELECT * FROM generations WHERE id = ? AND owner_id = ?",
+            (generation_id, owner_id),
         )
         return dict(row) if row else None
 
@@ -556,10 +603,17 @@ class Repository:
             return cursor.rowcount == 1
 
     def list_generations(
-        self, owner_id: str, cursor: str | None = None, limit: int = PAGE_SIZE,
+        self,
+        owner_id: str,
+        cursor: str | None = None,
+        limit: int = PAGE_SIZE,
         active: bool = False,
     ) -> PageResult:
-        extra = "AND status IN ('submitting','submission_unknown','queued','running')" if active else ""
+        extra = (
+            "AND status IN ('submitting','submission_unknown','queued','running')"
+            if active
+            else ""
+        )
         return self._page("generations", owner_id, cursor, limit, extra)
 
     # --- media ------------------------------------------------------------
@@ -656,15 +710,21 @@ class Repository:
             clauses.append("AND media.created_ms <= ?")
             params.append(created_before)
         if prompt:
-            escaped = prompt.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            escaped = (
+                prompt.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             clauses.append(
                 "AND EXISTS (SELECT 1 FROM generations g WHERE g.id = media.generation_id"
                 " AND g.owner_id = media.owner_id AND g.effective_values_json LIKE ? ESCAPE '\\')"
             )
             params.append(f"%{escaped}%")
         return self._page(
-            "media", owner_id, cursor, limit,
-            extra=" ".join(clauses), extra_params=tuple(params),
+            "media",
+            owner_id,
+            cursor,
+            limit,
+            extra=" ".join(clauses),
+            extra_params=tuple(params),
         )
 
     # --- shared paging ----------------------------------------------------

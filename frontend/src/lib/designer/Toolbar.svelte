@@ -51,13 +51,19 @@
 	>
 		<Icon name="save" size={18} />
 		<span>{editor.saving ? 'Saving…' : 'Save'}</span>
-		{#if editor.dirty && !editor.saving}<span class="dot" role="img" aria-label="Unsaved changes"></span>{/if}
+		{#if editor.dirty && !editor.saving}<span class="dot" role="img" aria-label="Unsaved changes"
+			></span>{/if}
 	</button>
 {/snippet}
 
 <div class="toolbar">
 	<div class="head">
-		<a class="btn btn-ghost btn-icon" href="/workflows" aria-label="Back to workflows" title="Workflows">
+		<a
+			class="btn btn-ghost btn-icon"
+			href="/workflows"
+			aria-label="Back to workflows"
+			title="Workflows"
+		>
 			<Icon name="chevron-left" />
 		</a>
 		<h1 title={editor.name}>{editor.name || 'Designer'}</h1>

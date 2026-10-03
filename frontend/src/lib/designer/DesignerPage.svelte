@@ -78,7 +78,8 @@
 	function openInspector(): void {
 		inspectorOpen = true;
 		const id = editor.selection?.kind === 'control' ? editor.selection.id : null;
-		if (id) document.querySelector(`[data-item="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' });
+		if (id)
+			document.querySelector(`[data-item="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' });
 	}
 
 	async function reload(): Promise<void> {
@@ -103,7 +104,9 @@
 	{#if editor.info}
 		<div class="notice info" role="status">
 			<p class="notice-body">{editor.info}</p>
-			<button type="button" class="btn btn-ghost" onclick={() => (editor.info = null)}>Dismiss</button>
+			<button type="button" class="btn btn-ghost" onclick={() => (editor.info = null)}
+				>Dismiss</button
+			>
 		</div>
 	{/if}
 
@@ -120,18 +123,27 @@
 					<p><b>Saved elsewhere since you opened this page:</b></p>
 					{#if editor.conflictSnapshot}
 						<ul>
-							{#each editor.conflictChanges as change, index (index)}<li>{change}</li>{:else}<li>No section or item changes; the saved revision changed.</li>{/each}
+							{#each editor.conflictChanges as change, index (index)}<li>{change}</li>{:else}<li>
+									No section or item changes; the saved revision changed.
+								</li>{/each}
 						</ul>
 					{:else}
 						<p>Loading changes…</p>
-						<button type="button" class="btn" onclick={() => editor.inspectConflict()}>Refresh changes</button>
+						<button type="button" class="btn" onclick={() => editor.inspectConflict()}
+							>Refresh changes</button
+						>
 					{/if}
 				{/if}
 			</div>
 			<div class="row wrap">
 				{#if editor.conflicts}
 					<button type="button" class="btn" onclick={reload}>Reload (discard mine)</button>
-					<button type="button" class="btn btn-primary" disabled={!editor.conflictSnapshot || editor.saving || editor.busy} onclick={() => editor.overwrite()}>
+					<button
+						type="button"
+						class="btn btn-primary"
+						disabled={!editor.conflictSnapshot || editor.saving || editor.busy}
+						onclick={() => editor.overwrite()}
+					>
 						Keep mine and overwrite
 					</button>
 				{/if}
@@ -150,7 +162,11 @@
 			<button type="button" class="btn" onclick={() => editor.load()}>Try again</button>
 		</div>
 	{:else}
-		<div class="body" class:desktop={desktop.current} class:tablet={tablet.current && !desktop.current}>
+		<div
+			class="body"
+			class:desktop={desktop.current}
+			class:tablet={tablet.current && !desktop.current}
+		>
 			{#if desktop.current}
 				<aside class="panel left" aria-label="Control library">
 					<Library {editor} {dnd} draggable />

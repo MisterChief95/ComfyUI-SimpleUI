@@ -15,7 +15,9 @@ class WorkflowNames {
 			const all: WorkflowInfo[] = [];
 			// ponytail: capped at 10 pages of 200 workflows to avoid a runaway loop.
 			for (let i = 0; i < 10; i += 1) {
-				const page: Page<WorkflowInfo> = await api(`/workflows?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+				const page: Page<WorkflowInfo> = await api(
+					`/workflows?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+				);
 				all.push(...page.items);
 				cursor = page.next_cursor;
 				if (!cursor) break;

@@ -28,6 +28,7 @@ from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
+from typing_extensions import Self
 
 LOGGER = logging.getLogger("simpleui.comfy")
 
@@ -111,7 +112,9 @@ class ComfyClient:
         parts = urlsplit(self.base_url)
         scheme = "wss" if parts.scheme == "https" else "ws"
         path = parts.path.rstrip("/") + "/ws"
-        return urlunsplit((scheme, parts.netloc, path, urlencode({"clientId": client_id}), ""))
+        return urlunsplit(
+            (scheme, parts.netloc, path, urlencode({"clientId": client_id}), "")
+        )
 
     async def _post(self, path: str, payload: dict[str, Any]) -> httpx.Response:
         """POST ``path`` once. Never retried.
@@ -125,7 +128,8 @@ class ComfyClient:
             response = await self._client.post(path, json=payload)
         except httpx.TimeoutException:
             raise ComfyUnavailable(
-                "upstream_timeout", f"ComfyUI did not respond within the timeout ({self.safe_url})"
+                "upstream_timeout",
+                f"ComfyUI did not respond within the timeout ({self.safe_url})",
             ) from None
         except httpx.HTTPError:
             raise ComfyUnavailable(
@@ -133,7 +137,8 @@ class ComfyClient:
             ) from None
         if response.status_code >= 400:
             raise ComfyUnavailable(
-                "upstream_error", f"ComfyUI returned HTTP {response.status_code} for {safe_path}"
+                "upstream_error",
+                f"ComfyUI returned HTTP {response.status_code} for {safe_path}",
             )
         return response
 
@@ -145,11 +150,16 @@ class ComfyClient:
         except ValueError:
             safe_path = redact_url(path) if "//" in path else path
             raise ComfyUnavailable(
-                "upstream_malformed", f"ComfyUI returned a non-JSON response for {safe_path}"
+                "upstream_malformed",
+                f"ComfyUI returned a non-JSON response for {safe_path}",
             ) from None
 
     async def submit_prompt(
-        self, graph: dict[str, Any], *, client_id: str, extra_data: dict[str, Any] | None = None
+        self,
+        graph: dict[str, Any],
+        *,
+        client_id: str,
+        extra_data: dict[str, Any] | None = None,
     ) -> Any:
         payload: dict[str, Any] = {"prompt": graph, "client_id": client_id}
         if extra_data:
@@ -179,7 +189,7 @@ class ComfyClient:
         """
         await self._post("/interrupt", {"prompt_id": prompt_id})
 
-    async def __aenter__(self) -> "ComfyClient":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -198,13 +208,15 @@ class ComfyClient:
                 response = await self._client.get(path)
             except httpx.TimeoutException:
                 last = ComfyUnavailable(
-                    "upstream_timeout", f"ComfyUI did not respond within the timeout ({self.safe_url})"
+                    "upstream_timeout",
+                    f"ComfyUI did not respond within the timeout ({self.safe_url})",
                 )
             except httpx.HTTPError:
                 # Never interpolate the exception: httpx puts the full request
                 # URL, userinfo included, in its message.
                 last = ComfyUnavailable(
-                    "upstream_unreachable", f"ComfyUI is not reachable at {self.safe_url}"
+                    "upstream_unreachable",
+                    f"ComfyUI is not reachable at {self.safe_url}",
                 )
             else:
                 if response.status_code >= 500:

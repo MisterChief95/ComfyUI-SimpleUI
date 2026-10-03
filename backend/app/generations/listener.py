@@ -108,13 +108,20 @@ class ComfyListener:
                     max_size=MAX_FRAME_BYTES,
                 ) as ws:
                     if down:
-                        LOGGER.info("ComfyUI event socket reconnected (%s)", self.comfy.safe_url)
+                        LOGGER.info(
+                            "ComfyUI event socket reconnected (%s)", self.comfy.safe_url
+                        )
                     down, delay = False, self._backoff_initial_s
                     # Ask for previews that name their prompt (feature flags
                     # must be the first message).
-                    await ws.send(json.dumps(
-                        {"type": "feature_flags", "data": {"supports_preview_metadata": True}}
-                    ))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "type": "feature_flags",
+                                "data": {"supports_preview_metadata": True},
+                            }
+                        )
+                    )
                     await self._resync()
                     async for message in ws:
                         self.handle(message)
@@ -126,7 +133,8 @@ class ComfyListener:
                 if not down:
                     LOGGER.warning(
                         "ComfyUI event socket unavailable (%s: %s); retrying with backoff",
-                        self.comfy.safe_url, type(exc).__name__,
+                        self.comfy.safe_url,
+                        type(exc).__name__,
                     )
                 down = True
             except Exception:
@@ -156,8 +164,12 @@ class ComfyListener:
                 return
             data = event.get("data") if isinstance(event.get("data"), dict) else {}
             kind = event.get("type")
-            if kind in ("execution_start", "executing") and isinstance(data.get("prompt_id"), str):
-                self._current_prompt = data["prompt_id"] if data.get("node", "") is not None else None
+            if kind in ("execution_start", "executing") and isinstance(
+                data.get("prompt_id"), str
+            ):
+                self._current_prompt = (
+                    data["prompt_id"] if data.get("node", "") is not None else None
+                )
             if kind in _TERMINAL or (kind == "executing" and data.get("node") is None):
                 prompt_id = str(data.get("prompt_id"))
                 self._cancel_preview(prompt_id)
@@ -172,8 +184,8 @@ class ComfyListener:
             return
         kind, second = struct.unpack(">II", frame[:8])
         if kind == 4:
-            meta = json.loads(frame[8:8 + second])
-            prompt_id, image = meta.get("prompt_id"), frame[8 + second:]
+            meta = json.loads(frame[8 : 8 + second])
+            prompt_id, image = meta.get("prompt_id"), frame[8 + second :]
             mime = meta.get("image_type")
         elif kind == 1 and second in (1, 2):
             prompt_id, image = self._current_prompt, frame[8:]
@@ -187,12 +199,16 @@ class ComfyListener:
         owned = self.service.store.owner_for_prompt(prompt_id)
         if owned is None or not self._previews_enabled(owned[0]):
             return
-        remaining = PREVIEW_MIN_INTERVAL_S - (self._clock() - self._last_preview.get(prompt_id, -1e9))
+        remaining = PREVIEW_MIN_INTERVAL_S - (
+            self._clock() - self._last_preview.get(prompt_id, -1e9)
+        )
         if remaining > 0:
             self._pending_preview[prompt_id] = (mime, image)
             if prompt_id not in self._preview_timers:
                 self._preview_timers[prompt_id] = asyncio.get_running_loop().call_later(
-                    remaining, self._flush_preview, prompt_id,
+                    remaining,
+                    self._flush_preview,
+                    prompt_id,
                 )
             return
         self._cancel_preview(prompt_id)
@@ -213,8 +229,14 @@ class ComfyListener:
             return
         self._last_preview[prompt_id] = self._clock()
         owner_id, generation_id = owned
-        self.service.events.publish(owner_id, {
-            "generation_id": generation_id,
-            "type": "preview",
-            "data": {"mime": mime, "image": base64.b64encode(image).decode("ascii")},
-        })
+        self.service.events.publish(
+            owner_id,
+            {
+                "generation_id": generation_id,
+                "type": "preview",
+                "data": {
+                    "mime": mime,
+                    "image": base64.b64encode(image).decode("ascii"),
+                },
+            },
+        )

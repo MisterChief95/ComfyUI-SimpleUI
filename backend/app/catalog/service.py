@@ -120,7 +120,7 @@ class CatalogService:
         async with self._lock:
             inflight = self._inflight
             if inflight is not None and not inflight.done():
-                task = inflight          # join the fetch already in progress
+                task = inflight  # join the fetch already in progress
             elif not force and self._cooldown_remaining_ms() > 0:
                 return self._build_snapshot(cooldown_active=True)
             else:
@@ -140,7 +140,9 @@ class CatalogService:
             delay = self._cooldown_s
         else:
             # Bounded exponential backoff while ComfyUI is unreachable.
-            delay = min(self._cooldown_s * (2 ** (self._failures - 1)), self._max_backoff_s)
+            delay = min(
+                self._cooldown_s * (2 ** (self._failures - 1)), self._max_backoff_s
+            )
         self._next_allowed_ms = now_ms() + int(delay * 1000)
 
     async def _fetch_and_store(self) -> CatalogSnapshot:
@@ -184,7 +186,11 @@ class CatalogService:
         self._failures = 0
         self._schedule_next_attempt()
         await self._load_cache()
-        LOGGER.info("Catalog refreshed: %d classes, revision %s", len(normalized.nodes), normalized.revision)
+        LOGGER.info(
+            "Catalog refreshed: %d classes, revision %s",
+            len(normalized.nodes),
+            normalized.revision,
+        )
         return self._build_snapshot()
 
     async def _fill_remote_combos(self, raw: Any) -> None:
@@ -197,12 +203,22 @@ class CatalogService:
             inputs = node.get("input") if isinstance(node, dict) else None
             for section in ("required", "optional"):
                 for spec in ((inputs or {}).get(section) or {}).values():
-                    if not (isinstance(spec, list) and len(spec) > 1 and spec[0] == "COMBO" and isinstance(spec[1], dict)):
+                    if not (
+                        isinstance(spec, list)
+                        and len(spec) > 1
+                        and spec[0] == "COMBO"
+                        and isinstance(spec[1], dict)
+                    ):
                         continue
                     opts = spec[1]
                     remote = opts.get("remote")
                     route = remote.get("route") if isinstance(remote, dict) else None
-                    if opts.get("options") or not isinstance(route, str) or not route.startswith("/") or route.startswith("//"):
+                    if (
+                        opts.get("options")
+                        or not isinstance(route, str)
+                        or not route.startswith("/")
+                        or route.startswith("//")
+                    ):
                         continue
                     if route not in fetched:
                         try:
@@ -223,7 +239,9 @@ class CatalogService:
         # Reload so the stored state ('stale' with data, 'error' without) is
         # what we report; the cached catalog itself is untouched.
         await self._load_cache()
-        LOGGER.warning("Catalog refresh failed (%s): %s", error["code"], error["message"])
+        LOGGER.warning(
+            "Catalog refresh failed (%s): %s", error["code"], error["message"]
+        )
         return self._build_snapshot()
 
     # --- capability record ------------------------------------------------
@@ -264,8 +282,12 @@ class CatalogService:
         installation["comfyui_revision"] = _text(system.get("comfyui_revision"))
         # Version strings can carry a build path; keep the version token only.
         python_version = _text(system.get("python_version"))
-        installation["python_version"] = python_version.split()[0] if python_version else None
-        installation["torch_version"] = _text(system.get("pytorch_version") or system.get("torch_version"))
+        installation["python_version"] = (
+            python_version.split()[0] if python_version else None
+        )
+        installation["torch_version"] = _text(
+            system.get("pytorch_version") or system.get("torch_version")
+        )
 
         devices = stats.get("devices")
         if isinstance(devices, list) and devices and isinstance(devices[0], dict):
@@ -316,9 +338,13 @@ class CatalogService:
                 catalog_revision=document.get("catalog_revision"),
                 schema_hash=document.get("schema_hash"),
                 fetched_ms=str(fetched_ms) if fetched_ms else None,
-                checked_ms=str(self._last_attempt_ms) if self._last_attempt_ms else None,
+                checked_ms=str(self._last_attempt_ms)
+                if self._last_attempt_ms
+                else None,
                 next_refresh_allowed_ms=(
-                    str(self._next_allowed_ms) if self._next_allowed_ms is not None else None
+                    str(self._next_allowed_ms)
+                    if self._next_allowed_ms is not None
+                    else None
                 ),
                 cooldown_active=cooldown_active or remaining > 0,
                 consecutive_failures=self._failures,
@@ -338,7 +364,11 @@ def _text(value: Any) -> str | None:
 
 
 def _save(
-    store: CatalogStore, source_url: str, raw: Any, document: dict[str, Any], content_hash: str
+    store: CatalogStore,
+    source_url: str,
+    raw: Any,
+    document: dict[str, Any],
+    content_hash: str,
 ) -> None:
     store.save_success(
         source_url=source_url, raw=raw, normalized=document, content_hash=content_hash

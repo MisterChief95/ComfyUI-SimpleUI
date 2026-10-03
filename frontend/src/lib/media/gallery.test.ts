@@ -6,13 +6,23 @@ import ts from 'typescript';
 
 // Compile the real rune state for node:test; only transport/settings are replaced.
 let source = readFileSync(new URL('./gallery.svelte.ts', import.meta.url), 'utf8')
-	.replace("import { api, describeApiError } from '$lib/api';", 'let request; export function mockApi(fn) { request = fn; } const api = (url, init) => request(url, init); const describeApiError = (error) => error.message;')
-	.replace("import { settingsState } from '$lib/settings.svelte';", 'const settingsState = { data: { profile: { gallery_page_size: 2 } } };');
-source = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText;
-const code = compileModule(source, { filename: 'gallery.svelte.js', generate: 'client' }).js.code
-	.replace('svelte/internal/client', import.meta.resolve('svelte/internal/client'))
+	.replace(
+		"import { api, describeApiError } from '$lib/api';",
+		'let request; export function mockApi(fn) { request = fn; } const api = (url, init) => request(url, init); const describeApiError = (error) => error.message;'
+	)
+	.replace(
+		"import { settingsState } from '$lib/settings.svelte';",
+		'const settingsState = { data: { profile: { gallery_page_size: 2 } } };'
+	);
+source = ts.transpileModule(source, {
+	compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext }
+}).outputText;
+const code = compileModule(source, { filename: 'gallery.svelte.js', generate: 'client' })
+	.js.code.replace('svelte/internal/client', import.meta.resolve('svelte/internal/client'))
 	.replace('./walk', new URL('./walk.ts', import.meta.url).href);
-const { GalleryState, mockApi } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { GalleryState, mockApi } = await import(
+	`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+);
 
 test('suggestions debounce, ignore stale responses, apply a selection, and stop on disposal', async () => {
 	const gallery = new GalleryState();
@@ -20,7 +30,10 @@ test('suggestions debounce, ignore stale responses, apply a selection, and stop 
 	let release!: (value: unknown) => void;
 	mockApi((url: string) => {
 		requests.push(url);
-		if (url.includes('q=old')) return new Promise((resolve) => { release = resolve; });
+		if (url.includes('q=old'))
+			return new Promise((resolve) => {
+				release = resolve;
+			});
 		if (url.startsWith('/media/suggestions')) return Promise.resolve({ items: ['new portrait'] });
 		if (url.startsWith('/media/tree')) return Promise.resolve({ children: [], breadcrumbs: [] });
 		return Promise.resolve({ items: [], next_cursor: null });
@@ -45,7 +58,11 @@ test('suggestions debounce, ignore stale responses, apply a selection, and stop 
 		await wait(0);
 		assert.equal(gallery.prompt, 'new portrait');
 		assert.equal(gallery.activeCount, 1);
-		assert.ok(requests.some((url) => new URL(url, 'http://localhost').searchParams.get('prompt') === 'new portrait'));
+		assert.ok(
+			requests.some(
+				(url) => new URL(url, 'http://localhost').searchParams.get('prompt') === 'new portrait'
+			)
+		);
 		assert.deepEqual(gallery.suggestions, []);
 		const count = requests.length;
 		gallery.setPrompt('unused');
@@ -57,7 +74,11 @@ test('suggestions debounce, ignore stale responses, apply a selection, and stop 
 	}
 });
 
-const days = ['03', '02', '01'].map((day) => ({ path: `Date/2026/10/${day}`, name: day, count: 2 }));
+const days = ['03', '02', '01'].map((day) => ({
+	path: `Date/2026/10/${day}`,
+	name: day,
+	count: 2
+}));
 const item = (id: string) => ({ id, generation_id: null });
 
 test('collection filter applies across pages; mutations refresh and failures keep selection state', async () => {
@@ -82,11 +103,20 @@ test('collection filter applies across pages; mutations refresh and failures kee
 		gallery.collectionId = 'draft';
 		await gallery.load(false);
 		const pages = requests.filter(({ url }) => url.startsWith('/media?'));
-		assert.ok(pages.every(({ url }) => new URL(url, 'http://localhost').searchParams.get('collection_id') === 'a'));
+		assert.ok(
+			pages.every(
+				({ url }) => new URL(url, 'http://localhost').searchParams.get('collection_id') === 'a'
+			)
+		);
 		assert.equal(gallery.collections[0].name, 'Trips');
 		assert.equal((await gallery.changeCollection('POST', '', { name: 'New' }))?.id, 'new');
 		await gallery.changeCollection('POST', 'new/media', { ids: ['first', 'second'] });
-		assert.deepEqual(JSON.parse(requests.find(({ url }) => url === '/media/collections/new/media')!.init!.body as string), { ids: ['first', 'second'] });
+		assert.deepEqual(
+			JSON.parse(
+				requests.find(({ url }) => url === '/media/collections/new/media')!.init!.body as string
+			),
+			{ ids: ['first', 'second'] }
+		);
 		fail = true;
 		assert.equal(await gallery.changeCollection('POST', 'a/remove', { ids: ['first'] }), null);
 		assert.equal(gallery.error, 'Collection was not found.');
@@ -100,14 +130,19 @@ test('collection filter applies across pages; mutations refresh and failures kee
 		assert.equal(gallery.collectionId, '');
 		assert.equal(gallery.activeCount, 0);
 		await gallery.resetFilters();
-	} finally { gallery.dispose(); }
+	} finally {
+		gallery.dispose();
+	}
 });
 
 test('field choice applies with the term, follows paging, and resets without a filter badge', async () => {
-	const { gallery, requests } = setup({
-		':': { items: [item('a')], next_cursor: 'page2' },
-		':page2': { items: [item('b')], next_cursor: null }
-	}, false);
+	const { gallery, requests } = setup(
+		{
+			':': { items: [item('a')], next_cursor: 'page2' },
+			':page2': { items: [item('b')], next_cursor: null }
+		},
+		false
+	);
 	try {
 		gallery.prompt = 'checkpoint';
 		gallery.setSearchField('model');
@@ -128,13 +163,17 @@ test('field choice applies with the term, follows paging, and resets without a f
 	}
 });
 
-function setup(pages: Record<string, { items: ReturnType<typeof item>[]; next_cursor: string | null }>, walk = true) {
+function setup(
+	pages: Record<string, { items: ReturnType<typeof item>[]; next_cursor: string | null }>,
+	walk = true
+) {
 	const requests: URLSearchParams[] = [];
 	mockApi(async (url: string) => {
 		if (url === '/media/collections') return { items: [] };
 		const query = new URL(url, 'http://localhost').searchParams;
 		const path = query.get('path') ?? '';
-		if (url.startsWith('/media/tree')) return { path, children: path === 'Date/2026/10' ? days : [], breadcrumbs: [] };
+		if (url.startsWith('/media/tree'))
+			return { path, children: path === 'Date/2026/10' ? days : [], breadcrumbs: [] };
 		requests.push(query);
 		return pages[`${path}:${query.get('cursor') ?? ''}`] ?? { items: [], next_cursor: null };
 	});
@@ -156,7 +195,10 @@ test('grid and Viewer exhaust a group cursor, skip filtered leaves, and cross in
 	assert.equal(gallery.selected.id, 'b');
 	await gallery.step(1);
 	assert.equal(gallery.selected.id, 'c');
-	assert.deepEqual(gallery.items.map((entry: { id: string }) => entry.id), ['a', 'b', 'c']);
+	assert.deepEqual(
+		gallery.items.map((entry: { id: string }) => entry.id),
+		['a', 'b', 'c']
+	);
 	assert.equal(gallery.groupHeader(0), days[0].path);
 	assert.equal(gallery.groupHeader(1), null);
 	assert.equal(gallery.groupHeader(2), days[2].path);
@@ -164,10 +206,18 @@ test('grid and Viewer exhaust a group cursor, skip filtered leaves, and cross in
 	await gallery.step(-1);
 	assert.equal(gallery.selected.id, 'b');
 	const leafRequests = requests.filter((query) => query.get('path'));
-	assert.deepEqual(leafRequests.map((query) => [query.get('path'), query.get('cursor')]), [
-		[days[0].path, null], [days[0].path, 'page2'], [days[1].path, null], [days[2].path, null]
-	]);
-	assert.ok(leafRequests.every((query) => query.get('prompt') === 'cat' && query.get('sort') === 'random'));
+	assert.deepEqual(
+		leafRequests.map((query) => [query.get('path'), query.get('cursor')]),
+		[
+			[days[0].path, null],
+			[days[0].path, 'page2'],
+			[days[1].path, null],
+			[days[2].path, null]
+		]
+	);
+	assert.ok(
+		leafRequests.every((query) => query.get('prompt') === 'cat' && query.get('sort') === 'random')
+	);
 });
 
 test('previous from the initial leaf finishes the preceding leaf and selects its last item', async () => {
@@ -180,7 +230,10 @@ test('previous from the initial leaf finishes the preceding leaf and selects its
 	await gallery.select(gallery.items[0]);
 	await gallery.step(-1);
 	assert.equal(gallery.selected.id, 'b');
-	assert.deepEqual(gallery.items.map((entry: { id: string }) => entry.id), ['a', 'b', 'c']);
+	assert.deepEqual(
+		gallery.items.map((entry: { id: string }) => entry.id),
+		['a', 'b', 'c']
+	);
 	assert.equal(gallery.canLoadPrevious, false);
 	assert.equal(gallery.canLoadMore, false);
 	await gallery.step(1);
@@ -188,7 +241,10 @@ test('previous from the initial leaf finishes the preceding leaf and selects its
 });
 
 test('Walk off stops at the folder boundary; toggling/resetting discards prior continuation', async () => {
-	const { gallery, requests, prefs } = setup({ [`${days[0].path}:`]: { items: [item('a')], next_cursor: null } }, false);
+	const { gallery, requests, prefs } = setup(
+		{ [`${days[0].path}:`]: { items: [item('a')], next_cursor: null } },
+		false
+	);
 	await gallery.navigate(days[0].path);
 	assert.equal(gallery.canLoadMore, false);
 	assert.equal(gallery.canLoadPrevious, false);
@@ -209,7 +265,9 @@ test('failed sibling loads preserve the group for an explicit retry', async () =
 	const { gallery } = setup({ [`${days[0].path}:`]: { items: [item('a')], next_cursor: null } });
 	await gallery.navigate(days[0].path);
 	await gallery.select(gallery.items[0]);
-	mockApi(async () => { throw new Error('offline'); });
+	mockApi(async () => {
+		throw new Error('offline');
+	});
 	await gallery.step(1);
 	assert.equal(gallery.error, 'offline');
 	assert.equal(gallery.selected.id, 'a');
@@ -224,16 +282,23 @@ test('navigation during a boundary request discards the stale response', async (
 	const { gallery } = setup({ [`${days[0].path}:`]: { items: [item('a')], next_cursor: null } });
 	await gallery.navigate(days[0].path);
 	let release!: (page: unknown) => void;
-	const pending = new Promise((resolve) => { release = resolve; });
+	const pending = new Promise((resolve) => {
+		release = resolve;
+	});
 	mockApi(() => pending);
 	const loading = gallery.load(false);
 	await gallery.navigate(days[2].path);
-	mockApi(async (url: string) => url.startsWith('/media/tree')
-		? { children: [], breadcrumbs: [] }
-		: { items: [item('c')], next_cursor: null });
+	mockApi(async (url: string) =>
+		url.startsWith('/media/tree')
+			? { children: [], breadcrumbs: [] }
+			: { items: [item('c')], next_cursor: null }
+	);
 	release({ items: [item('stale')], next_cursor: null });
 	await loading;
-	assert.deepEqual(gallery.items.map((entry: { id: string }) => entry.id), ['c']);
+	assert.deepEqual(
+		gallery.items.map((entry: { id: string }) => entry.id),
+		['c']
+	);
 	assert.equal(gallery.folderPath, days[2].path);
 });
 
@@ -245,5 +310,8 @@ test('empty starting leaves advance and duplicate media never creates repeated g
 	await gallery.navigate(days[0].path);
 	assert.deepEqual(gallery.continuation, { group: days[2].path, position: null });
 	await gallery.load(false);
-	assert.deepEqual(gallery.items.map((entry: { id: string }) => entry.id), ['b', 'c']);
+	assert.deepEqual(
+		gallery.items.map((entry: { id: string }) => entry.id),
+		['b', 'c']
+	);
 });

@@ -30,8 +30,8 @@
 
 <Sheet bind:open title="Copy layout from…">
 	<p class="muted hint">
-		Replaces the sections below with the other workflow's saved layout, keeping only controls that exist
-		here. Nothing is saved until you press Save, and Undo brings your layout back.
+		Replaces the sections below with the other workflow's saved layout, keeping only controls that
+		exist here. Nothing is saved until you press Save, and Undo brings your layout back.
 	</p>
 	{#if message}<p class="error" role="alert">{message}</p>{/if}
 	{#if others === null}
@@ -42,7 +42,12 @@
 		<ul class="list">
 			{#each others as workflow (workflow.id)}
 				<li>
-					<button type="button" class="btn pick" disabled={busyId !== null} onclick={() => copy(workflow)}>
+					<button
+						type="button"
+						class="btn pick"
+						disabled={busyId !== null}
+						onclick={() => copy(workflow)}
+					>
 						{busyId === workflow.id ? 'Copying…' : workflow.name}
 					</button>
 				</li>

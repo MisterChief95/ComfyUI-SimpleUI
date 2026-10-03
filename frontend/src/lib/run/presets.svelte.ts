@@ -63,7 +63,11 @@ export class PresetsState {
 	}
 
 	overwrite(preset: Preset): Promise<boolean> {
-		return this.update(preset, { values: this.currentValues }, `Preset "${preset.name}" overwritten with the current values.`);
+		return this.update(
+			preset,
+			{ values: this.currentValues },
+			`Preset "${preset.name}" overwritten with the current values.`
+		);
 	}
 
 	rename(preset: Preset, name: string): Promise<boolean> {
@@ -77,7 +81,11 @@ export class PresetsState {
 		});
 	}
 
-	private update(preset: Preset, patch: { name?: string; values?: Preset['values'] }, message: string | null): Promise<boolean> {
+	private update(
+		preset: Preset,
+		patch: { name?: string; values?: Preset['values'] },
+		message: string | null
+	): Promise<boolean> {
 		return this.mutate(preset.id, async () => {
 			await api<Preset>(`${this.base}/${preset.id}`, {
 				method: 'PUT',

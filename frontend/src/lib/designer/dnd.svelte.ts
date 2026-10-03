@@ -170,13 +170,15 @@ export class Dnd {
 
 	/** Nudge the scrolling container under the pointer when it is near an edge. */
 	private scrollNear(x: number, y: number): void {
-		const scroller = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-autoscroll]') ?? null;
+		const scroller =
+			document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-autoscroll]') ?? null;
 		this.scroller = scroller;
 		this.velocity = 0;
 		if (scroller) {
 			const r = scroller.getBoundingClientRect();
 			if (y < r.top + EDGE) this.velocity = -MAX_SCROLL * Math.min(1, (r.top + EDGE - y) / EDGE);
-			else if (y > r.bottom - EDGE) this.velocity = MAX_SCROLL * Math.min(1, (y - (r.bottom - EDGE)) / EDGE);
+			else if (y > r.bottom - EDGE)
+				this.velocity = MAX_SCROLL * Math.min(1, (y - (r.bottom - EDGE)) / EDGE);
 		}
 		if (this.velocity !== 0 && !this.frame) this.frame = requestAnimationFrame(this.tick);
 	}
@@ -221,13 +223,17 @@ export class Dnd {
 		if (!grid) return;
 		const sectionId = grid.dataset.items ?? '';
 		const items = [...grid.querySelectorAll(':scope > [data-item]')].filter(
-			(el) => (el as HTMLElement).dataset.item !== payload.id && (el as HTMLElement).dataset.pairHeight !== payload.id
+			(el) =>
+				(el as HTMLElement).dataset.item !== payload.id &&
+				(el as HTMLElement).dataset.pairHeight !== payload.id
 		);
 		const boxes = items.map(box);
 		const width = grid.getBoundingClientRect().width;
 		const index = insertionIndex(boxes, x, y, width);
-		const panel = grid.dataset.row && grid.dataset.column
-			? { row: grid.dataset.row, column: grid.dataset.column } : undefined;
+		const panel =
+			grid.dataset.row && grid.dataset.column
+				? { row: grid.dataset.row, column: grid.dataset.column }
+				: undefined;
 		this.target = { type: 'items', sectionId, index, panel };
 		this.bar = insertionBar(boxes, index, width);
 		if (boxes.length === 0) this.zone = panel?.column ?? sectionId;

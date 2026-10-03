@@ -1,12 +1,10 @@
 # ComfyUI SimpleUI
 
 Status: functionally complete for image and video generation, live-verified against a real
-ComfyUI installation (see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) and
-[docs/RELEASE_REVIEW.md](docs/RELEASE_REVIEW.md)). PWA/Android installation was cancelled at
-the user's request and is not part of this release; see the release review's "Known
-limitations" for that and a handful of other operator-facing gaps (notably: no backup
-command exists yet). Task completion and ownership live in the local dibs database, not in
-these documents — do not infer completion from prose alone.
+ComfyUI installation. PWA/Android installation was cancelled at the user's request and is
+not part of this release; another known gap is that no backup command exists yet. Task
+completion and ownership live in the local dibs database — do not infer completion from
+prose alone.
 
 A compact, Forge-inspired generation interface over an existing, same-machine ComfyUI
 installation. Import API JSON, derive controls from installed node metadata, correct
@@ -30,7 +28,7 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   literal types, and exact large seeds are preserved, and an ambiguous mapping is reported,
   never silently rewritten. A workflow can be renamed, or its graph replaced by a newer
   export as a new revision that keeps its layout and corrections.
-- **User-designed UI** ([docs/UI_DESIGNER.md](docs/UI_DESIGNER.md)). The designer at
+- **User-designed UI.** The designer at
   `/workflows/[id]` lets each profile arrange any controls from any nodes into named
   sections, hide the rest, and relabel or re-widget them, with phone/tablet/desktop preview,
   drag and drop (mouse and touch), and undo. The run page at `/generation/[id]` renders that
@@ -45,17 +43,9 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
 
 Checks: `cd backend && python -m unittest discover -s tests -v` (the repository has no
 committed virtualenv; create one from `backend/requirements.txt` first), then
-`cd frontend && npm run check && npm run build && npm test` (`npm test` runs the pure-logic
-`node --test` suites and needs Node ≥ 22).
-
-## Read in this order
-
-1. [Product and architecture](docs/ARCHITECTURE.md): scope, Svelte versus SvelteKit, backend, profiles, gallery, settings, and delivery.
-2. [Workflow mapping](docs/WORKFLOW_MAPPING.md): runtime discovery, control rules, saved corrections, and compatibility boundaries.
-3. [ComfyUI compatibility record](docs/COMPATIBILITY.md): what has actually been observed against a live ComfyUI installation, and what has not.
-4. [Release review](docs/RELEASE_REVIEW.md): requirement-by-requirement evidence and known limitations for this release.
-5. [Agent coordination](docs/AGENT_COORDINATION.md): the coordination model (claims, reservations, handoffs). The live tool is the `dibs` CLI plugin, not the `tools/agent_coord.py` this document was originally written against — see its current invocation in `.claude/commands` or ask for `dibs --help`.
-6. [Implementation tasks](docs/TASKS.md): stable task IDs, dependencies, work areas, and acceptance criteria (the original backlog; current status is in the dibs database).
+`cd frontend && npm run lint && npm run format:check && npm run check && npm run build && npm test`
+(`npm test` runs the pure-logic `node --test` suites and needs Node ≥ 22). Python lint and
+format: `ruff check` and `ruff format --check`.
 
 ## Running it
 
@@ -75,10 +65,6 @@ Protect `data/` yourself (stop the server, copy the folder) until that is built.
 
 ## Implementation handoff
 
-Read the documents above, then run the dibs CLI's `next`/`list` commands for current task
-status — do not infer completion from these documents. Claim a ready task with explicit
-file/subtree reservations before editing; see [AGENT_COORDINATION.md](docs/AGENT_COORDINATION.md)
-for the reservation/handoff model this project follows (the document's literal CLI examples
-predate the current `dibs`-based tool).
-
-Technical sources are linked beside relevant decisions. Upstream source links track moving branches; [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) records the actual tested ComfyUI revision and dependency versions.
+Run the dibs CLI's `next`/`list` commands for current task status — do not infer completion
+from prose. Claim a ready task with explicit file/subtree reservations before editing; see
+[AGENTS.md](AGENTS.md) for the workflow.

@@ -69,7 +69,9 @@ class UploadRoundTripTest(UploadApiTestCase):
 
     def test_corrupt_image_is_rejected(self) -> None:
         client = self._signed_in("Alex", ALEX_PASSWORD)
-        response = self.upload(client, "image", "ref.png", b"not a real png", "image/png")
+        response = self.upload(
+            client, "image", "ref.png", b"not a real png", "image/png"
+        )
         self.assertEqual(response.status_code, 415, response.text)
 
     def test_unauthenticated_upload_is_refused(self) -> None:
@@ -89,7 +91,9 @@ class OwnershipIsolationTest(UploadApiTestCase):
 
     def test_profile_cannot_delete_another_profiles_upload_by_id(self) -> None:
         alex = self._signed_in("Alex", ALEX_PASSWORD)
-        upload_id = self.upload(alex, "image", "ref.png", png_bytes(), "image/png").json()["id"]
+        upload_id = self.upload(
+            alex, "image", "ref.png", png_bytes(), "image/png"
+        ).json()["id"]
 
         sam = self._signed_in("Sam", SAM_PASSWORD)
         response = self.delete(sam, f"/api/uploads/{upload_id}")

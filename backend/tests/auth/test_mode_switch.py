@@ -5,7 +5,12 @@ from __future__ import annotations
 import threading
 import unittest
 
-from app.auth.service import AdmissionClosed, AdmissionGate, Conflict, media_baseline_status
+from app.auth.service import (
+    AdmissionClosed,
+    AdmissionGate,
+    Conflict,
+    media_baseline_status,
+)
 from app.storage.repository import DEFAULT_PROFILE_ID, now_ms
 
 from .support import AuthTestCase, ready_baseline
@@ -40,7 +45,9 @@ class BaselineGateTest(AuthTestCase):
             )["password_hash"]
         )
 
-    def test_activation_requires_a_default_password_before_the_baseline_check(self) -> None:
+    def test_activation_requires_a_default_password_before_the_baseline_check(
+        self,
+    ) -> None:
         self.auth.baseline_gate = ready_baseline
         response = self.post(
             self.local_client(),
@@ -62,7 +69,9 @@ class ActivationTest(AuthTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(self.auth.multi_user_enabled())
 
-    def test_activation_invalidates_anonymous_sessions_and_sets_the_default_password(self) -> None:
+    def test_activation_invalidates_anonymous_sessions_and_sets_the_default_password(
+        self,
+    ) -> None:
         phone = self.lan_client()
         self.assertTrue(phone.get("/api/session").json()["anonymous"])
 
@@ -77,7 +86,9 @@ class ActivationTest(AuthTestCase):
         # The phone that needed no sign-in a moment ago is now unauthenticated.
         self.assertFalse(phone.get("/api/session").json()["authenticated"])
         self.assertEqual(phone.get("/api/settings").status_code, 401)
-        self.assertEqual(self.login(phone, "Default", "default-password").status_code, 200)
+        self.assertEqual(
+            self.login(phone, "Default", "default-password").status_code, 200
+        )
 
     def test_activation_drops_existing_session_rows(self) -> None:
         # A cookie issued before activation must not survive it.
@@ -117,7 +128,10 @@ class DeactivationTest(AuthTestCase):
     def test_disabling_is_local_only(self) -> None:
         self.enable_multi_user("default-password")
         self.assertEqual(
-            self.post(self.lan_client(), "/api/settings/multi-user/deactivate").status_code, 403
+            self.post(
+                self.lan_client(), "/api/settings/multi-user/deactivate"
+            ).status_code,
+            403,
         )
 
 
@@ -126,10 +140,12 @@ class AdmissionGateTest(unittest.TestCase):
 
     def test_closing_refuses_new_admissions_and_reopens_afterwards(self) -> None:
         gate = AdmissionGate()
-        with gate.closed(lambda: True):
-            with self.assertRaises(AdmissionClosed):
-                with gate.admit():
-                    pass
+        with (
+            gate.closed(lambda: True),
+            self.assertRaises(AdmissionClosed),
+            gate.admit(),
+        ):
+            pass
         self.assertTrue(gate.is_open)
         with gate.admit():
             pass
@@ -165,9 +181,8 @@ class AdmissionGateTest(unittest.TestCase):
 
     def test_close_times_out_and_reopens_rather_than_wedging_the_server(self) -> None:
         gate = AdmissionGate()
-        with self.assertRaises(Conflict):
-            with gate.closed(lambda: False, timeout=0.2):
-                self.fail("body must not run while submissions are unresolved")
+        with self.assertRaises(Conflict), gate.closed(lambda: False, timeout=0.2):
+            self.fail("body must not run while submissions are unresolved")
         self.assertTrue(gate.is_open)
         with gate.admit():
             pass
@@ -183,7 +198,15 @@ class ModeSwitchDuringSubmissionTest(AuthTestCase):
             conn.execute(
                 "INSERT INTO generations (id, owner_id, client_request_key, request_fingerprint,"
                 " status, created_ms, updated_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (generation_id, DEFAULT_PROFILE_ID, key, "fingerprint", status, stamp, stamp),
+                (
+                    generation_id,
+                    DEFAULT_PROFILE_ID,
+                    key,
+                    "fingerprint",
+                    status,
+                    stamp,
+                    stamp,
+                ),
             )
         return generation_id
 
@@ -218,7 +241,7 @@ class ModeSwitchDuringSubmissionTest(AuthTestCase):
         def activate() -> None:
             try:
                 self.auth.activate_multi_user("default-password", timeout=10)
-            except Exception as exc:  # pragma: no cover - reported below
+            except Exception as exc:  # noqa: BLE001  # pragma: no cover - reported below
                 failures.append(exc)
             done.set()
 
@@ -231,7 +254,9 @@ class ModeSwitchDuringSubmissionTest(AuthTestCase):
             if not self.auth.admission.is_open:
                 break
             threading.Event().wait(0.01)
-        self.assertFalse(self.auth.admission.is_open, "admission did not close atomically")
+        self.assertFalse(
+            self.auth.admission.is_open, "admission did not close atomically"
+        )
         try:
             with self.auth.admission.admit():
                 self.fail("a second submission was admitted during the mode switch")
@@ -251,7 +276,9 @@ class ModeSwitchDuringSubmissionTest(AuthTestCase):
         self.assertEqual(len(refused), 1)
         self.assertTrue(self.auth.multi_user_enabled())
         self.assertEqual(self.auth.unresolved_submissions(), 0)
-        self.assertTrue(self.auth.admission.is_open, "admission did not reopen after the switch")
+        self.assertTrue(
+            self.auth.admission.is_open, "admission did not reopen after the switch"
+        )
 
     def test_activation_refuses_while_a_submission_stays_unresolved(self) -> None:
         self.auth.baseline_gate = ready_baseline

@@ -7,7 +7,10 @@ import { advance, isLeaf, sibling, type WalkCursor, type WalkFolder } from './wa
 type Folder = { path: string; name: string; count: number };
 type Collection = { id: string; name: string; count: number };
 type MediaTree = {
-	path: string; timezone: string; count: number; children: Folder[];
+	path: string;
+	timezone: string;
+	count: number;
+	children: Folder[];
 	breadcrumbs: { path: string; name: string }[];
 };
 
@@ -21,9 +24,14 @@ export class GalleryState {
 		this.error = null;
 		try {
 			const selection = JSON.stringify({ ids });
-			const plan = await api<{ entries: object[]; skipped: object[] }>('/media/download-zip/preview', {
-				method: 'POST', headers: { 'content-type': 'application/json' }, body: selection
-			});
+			const plan = await api<{ entries: object[]; skipped: object[] }>(
+				'/media/download-zip/preview',
+				{
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: selection
+				}
+			);
 			if (!plan.entries.length) {
 				this.downloadMessage = 'No selected files are available. Nothing was downloaded.';
 				return;
@@ -35,11 +43,17 @@ export class GalleryState {
 			form.action = '/api/media/download-zip';
 			for (const [name, value] of Object.entries({ selection, csrf_token: csrfToken ?? '' })) {
 				const input = document.createElement('input');
-				input.type = 'hidden'; input.name = name; input.value = value;
+				input.type = 'hidden';
+				input.name = name;
+				input.value = value;
 				form.append(input);
 			}
 			document.body.append(form);
-			try { form.submit(); } finally { form.remove(); }
+			try {
+				form.submit();
+			} finally {
+				form.remove();
+			}
 		} catch (cause) {
 			this.error = describeApiError(cause);
 		} finally {
@@ -55,16 +69,24 @@ export class GalleryState {
 	collectionId = $state('');
 	collectionBusy = $state(false);
 	get currentCollection(): string {
-		return this.folderPath.startsWith('Collections/') ? this.folderPath.slice(12) : this.applied.collectionId;
+		return this.folderPath.startsWith('Collections/')
+			? this.folderPath.slice(12)
+			: this.applied.collectionId;
 	}
 
-	async changeCollection(method: string, id: string, body?: object): Promise<{ id: string } | null> {
+	async changeCollection(
+		method: string,
+		id: string,
+		body?: object
+	): Promise<{ id: string } | null> {
 		if (this.collectionBusy) return null;
 		this.collectionBusy = true;
 		this.error = null;
 		try {
 			const result = await api<{ id: string }>(`/media/collections${id ? `/${id}` : ''}`, {
-				method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined
+				method,
+				headers: { 'content-type': 'application/json' },
+				body: body ? JSON.stringify(body) : undefined
 			});
 			if (method === 'DELETE') {
 				if (this.collectionId === id) this.collectionId = '';
@@ -95,14 +117,20 @@ export class GalleryState {
 	private siblings = $state.raw<WalkFolder[]>([]);
 	private firstGroup = $state('');
 	private itemGroups = $state<Record<string, string>>({});
-	get canLoadMore(): boolean { return this.continuation !== null; }
-	get canLoadPrevious(): boolean { return sibling(this.siblings, this.firstGroup, -1) !== null; }
+	get canLoadMore(): boolean {
+		return this.continuation !== null;
+	}
+	get canLoadPrevious(): boolean {
+		return sibling(this.siblings, this.firstGroup, -1) !== null;
+	}
 
 	groupHeader(index: number): string | null {
 		if (!this.viewPrefs?.walk || !this.siblings.length) return null;
 		const group = this.itemGroups[this.items[index]?.id];
 		if (!group || (index > 0 && this.itemGroups[this.items[index - 1].id] === group)) return null;
-		return group.startsWith('Date/') ? group : this.siblings.find((folder) => folder.path === group)?.name ?? group;
+		return group.startsWith('Date/')
+			? group
+			: (this.siblings.find((folder) => folder.path === group)?.name ?? group);
 	}
 	loading = $state(false);
 	error = $state<string | null>(null);
@@ -138,7 +166,10 @@ export class GalleryState {
 			const request = new AbortController();
 			this.suggestionRequest = request;
 			try {
-				const result = await api<{ items: string[] }>(`/media/suggestions?${new URLSearchParams({ q, search_field: this.searchField })}`, { signal: request.signal });
+				const result = await api<{ items: string[] }>(
+					`/media/suggestions?${new URLSearchParams({ q, search_field: this.searchField })}`,
+					{ signal: request.signal }
+				);
 				if (!request.signal.aborted && this.prompt.trim() === q) this.suggestions = result.items;
 			} catch {
 				// Suggestions are optional; manual filtering still works while offline.
@@ -162,12 +193,21 @@ export class GalleryState {
 
 	private socket: WebSocket | null = null;
 	private applied = $state({
-		mediaKind: '', favorite: '', workflowId: '', collectionId: '', createdAfter: '', createdBefore: '', prompt: '', searchField: 'any'
+		mediaKind: '',
+		favorite: '',
+		workflowId: '',
+		collectionId: '',
+		createdAfter: '',
+		createdBefore: '',
+		prompt: '',
+		searchField: 'any'
 	});
 
 	/** Number of filters currently in effect (for the Filters button badge). */
 	get activeCount(): number {
-		return Object.entries(this.applied).filter(([key, value]) => key !== 'searchField' && value.trim() !== '').length;
+		return Object.entries(this.applied).filter(
+			([key, value]) => key !== 'searchField' && value.trim() !== ''
+		).length;
 	}
 
 	/** Position of the open item in the loaded list, or -1 (e.g. after a refresh dropped it). */
@@ -241,7 +281,9 @@ export class GalleryState {
 				const path = this.folderPath;
 				const [tree, parent, collections] = await Promise.all([
 					this.fetchTree(path),
-					this.viewPrefs?.walk && isLeaf(path) ? this.fetchTree(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '') : Promise.resolve(null),
+					this.viewPrefs?.walk && isLeaf(path)
+						? this.fetchTree(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')
+						: Promise.resolve(null),
 					api<{ items: Collection[] }>('/media/collections')
 				]);
 				if (this.pendingReset) return;
@@ -414,8 +456,10 @@ export class GalleryState {
 			query.set('prompt', this.applied.prompt.trim());
 			query.set('search_field', this.applied.searchField);
 		}
-		if (this.applied.createdAfter) query.set('created_after', String(this._start(this.applied.createdAfter)));
-		if (this.applied.createdBefore) query.set('created_before', String(this._end(this.applied.createdBefore)));
+		if (this.applied.createdAfter)
+			query.set('created_after', String(this._start(this.applied.createdAfter)));
+		if (this.applied.createdBefore)
+			query.set('created_before', String(this._end(this.applied.createdBefore)));
 		return query;
 	}
 

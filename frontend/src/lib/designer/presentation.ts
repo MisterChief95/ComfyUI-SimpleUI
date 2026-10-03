@@ -19,7 +19,12 @@ export interface Draft {
 
 export type DraftPatch = Partial<Draft>;
 
-export const DISPLAY_KEYS = ['display_min', 'display_max', 'display_step', 'display_default'] as const;
+export const DISPLAY_KEYS = [
+	'display_min',
+	'display_max',
+	'display_step',
+	'display_default'
+] as const;
 
 /** An adjustable numeric range exists (exact ints/seeds never have one). */
 export function isRangedNumber(control: ControlDescriptor): boolean {
@@ -61,7 +66,9 @@ export function normalizePatch(control: ControlDescriptor, patch: DraftPatch): D
 	for (const [key, value] of Object.entries(patch) as [keyof Draft, string][]) {
 		const baseValue = base[key];
 		const same =
-			key === 'label' || key === 'help_text' ? value.trim() === baseValue.trim() : value === baseValue;
+			key === 'label' || key === 'help_text'
+				? value.trim() === baseValue.trim()
+				: value === baseValue;
 		if (!same) out[key] = value;
 	}
 	return out as DraftPatch;
@@ -75,7 +82,10 @@ export function parseNumber(value: string | undefined): number | null {
 }
 
 /** The descriptor as the draft would show it, for the live preview. */
-export function applyDraft(control: ControlDescriptor, patch: DraftPatch | undefined): ControlDescriptor {
+export function applyDraft(
+	control: ControlDescriptor,
+	patch: DraftPatch | undefined
+): ControlDescriptor {
 	if (!patch || Object.keys(patch).length === 0) return control;
 	const next: ControlDescriptor = { ...control };
 	if (patch.label !== undefined && patch.label.trim()) next.label = patch.label.trim();

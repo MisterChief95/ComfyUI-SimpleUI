@@ -297,11 +297,14 @@ class AuthService:
         if multi_user:
             return None
         profile = self.db.query_one(
-            "SELECT id, name, is_default FROM profiles WHERE id = ?", (DEFAULT_PROFILE_ID,)
+            "SELECT id, name, is_default FROM profiles WHERE id = ?",
+            (DEFAULT_PROFILE_ID,),
         )
         if profile is None:  # pragma: no cover - migration 001 guarantees it
             return None
-        return Principal(profile["id"], profile["name"], bool(profile["is_default"]), None)
+        return Principal(
+            profile["id"], profile["name"], bool(profile["is_default"]), None
+        )
 
     def login(self, name: str, password: str) -> str:
         if not self.multi_user_enabled():
@@ -349,7 +352,11 @@ class AuthService:
     def list_profiles(self) -> list[dict[str, Any]]:
         """Names only: a login picker needs them, and nothing else is exposed."""
         return [
-            {"id": row["id"], "name": row["name"], "is_default": bool(row["is_default"])}
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "is_default": bool(row["is_default"]),
+            }
             for row in self.db.query(
                 "SELECT id, name, is_default FROM profiles ORDER BY is_default DESC, name"
             )
@@ -391,7 +398,9 @@ class AuthService:
             )
             # Other devices keep working only if the owner wanted that; a
             # password change is the cheap way to evict a forgotten session.
-            conn.execute("DELETE FROM sessions WHERE profile_id = ?", (principal.profile_id,))
+            conn.execute(
+                "DELETE FROM sessions WHERE profile_id = ?", (principal.profile_id,)
+            )
 
     # --- mode switch ------------------------------------------------------
 
@@ -403,7 +412,9 @@ class AuthService:
         )
         return int(row["n"]) if row else 0
 
-    def activate_multi_user(self, default_password: str, timeout: float = DRAIN_TIMEOUT_S) -> None:
+    def activate_multi_user(
+        self, default_password: str, timeout: float = DRAIN_TIMEOUT_S
+    ) -> None:
         """Turn on multi-user mode, giving Default the supplied password.
 
         Order matters: cheap preconditions first, then close admission, then a
@@ -417,15 +428,17 @@ class AuthService:
         if not status.ready:
             raise Conflict(status.reason)
 
-        with self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout):
-            with self.db.write() as conn:
-                conn.execute(
-                    "UPDATE profiles SET password_hash = ? WHERE id = ?",
-                    (hash_password(default_password), DEFAULT_PROFILE_ID),
-                )
-                # Every existing session, anonymous or not, stops here.
-                conn.execute("DELETE FROM sessions")
-                write_host(conn, MULTI_USER_ENABLED, True)
+        with (
+            self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout),
+            self.db.write() as conn,
+        ):
+            conn.execute(
+                "UPDATE profiles SET password_hash = ? WHERE id = ?",
+                (hash_password(default_password), DEFAULT_PROFILE_ID),
+            )
+            # Every existing session, anonymous or not, stops here.
+            conn.execute("DELETE FROM sessions")
+            write_host(conn, MULTI_USER_ENABLED, True)
 
     def deactivate_multi_user(self, timeout: float = DRAIN_TIMEOUT_S) -> None:
         """Blocked while other profiles exist: their data must not fall into Default."""
@@ -439,14 +452,16 @@ class AuthService:
                 "Remove the other profiles before disabling multi-user mode; otherwise their "
                 "workflows, history and media would be reachable from the Default session."
             )
-        with self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout):
-            with self.db.write() as conn:
-                conn.execute(
-                    "UPDATE profiles SET password_hash = NULL WHERE id = ?",
-                    (DEFAULT_PROFILE_ID,),
-                )
-                conn.execute("DELETE FROM sessions")
-                write_host(conn, MULTI_USER_ENABLED, False)
+        with (
+            self.admission.closed(lambda: self.unresolved_submissions() == 0, timeout),
+            self.db.write() as conn,
+        ):
+            conn.execute(
+                "UPDATE profiles SET password_hash = NULL WHERE id = ?",
+                (DEFAULT_PROFILE_ID,),
+            )
+            conn.execute("DELETE FROM sessions")
+            write_host(conn, MULTI_USER_ENABLED, False)
 
 
 def _check_password(password: str) -> None:

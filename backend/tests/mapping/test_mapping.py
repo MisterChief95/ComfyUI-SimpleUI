@@ -20,6 +20,7 @@ from typing import Any
 
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
+from app.contracts import EnumOption
 from app.mapping import (
     GraphImportError,
     build_control_schema,
@@ -27,7 +28,6 @@ from app.mapping import (
     parse_graph,
     resolve_seed,
 )
-from app.contracts import EnumOption
 from app.mapping.submission import SubmissionError
 from app.storage import Database
 from app.storage.repository import Repository
@@ -36,7 +36,11 @@ from app.workflows import WorkflowService
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 GRAPHS = FIXTURES / "graphs"
 CATALOG = normalize(
-    json.loads((FIXTURES / "catalog" / "object_info.synthetic.json").read_text(encoding="utf-8"))
+    json.loads(
+        (FIXTURES / "catalog" / "object_info.synthetic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 )
 NODES = CATALOG.nodes
 REJECTIONS = {
@@ -50,7 +54,9 @@ TRANSPORT = json.loads(
 )
 #: Shared ComfyUI input-directory filenames the client must never receive.
 WITHHELD = json.loads(
-    (FIXTURES / "catalog" / "sanitized_projection.expected.json").read_text(encoding="utf-8")
+    (FIXTURES / "catalog" / "sanitized_projection.expected.json").read_text(
+        encoding="utf-8"
+    )
 )["must_not_appear_in_projection"]
 
 
@@ -83,7 +89,9 @@ class ImportValidation(unittest.TestCase):
 
     def test_non_finite_numbers_are_refused_not_clamped(self) -> None:
         with self.assertRaises(GraphImportError) as caught:
-            parse_graph((GRAPHS / "rejected" / "non_finite_values.api.json").read_bytes())
+            parse_graph(
+                (GRAPHS / "rejected" / "non_finite_values.api.json").read_bytes()
+            )
         self.assertEqual(caught.exception.detail.code, "non_finite_number")
 
     def test_duplicate_object_keys_are_refused(self) -> None:
@@ -135,12 +143,20 @@ class RoundTrip(unittest.TestCase):
         )
 
     def test_stored_graph_is_byte_identical_to_the_import(self) -> None:
-        for name in ("image_basic.api.json", "video_basic.api.json", "force_input_and_flexible.api.json"):
+        for name in (
+            "image_basic.api.json",
+            "video_basic.api.json",
+            "force_input_and_flexible.api.json",
+        ):
             with self.subTest(graph=name):
                 original = json.loads(raw_bytes(name))
-                workflow_id, graph = self.service.import_workflow("default", name, raw_bytes(name))
+                workflow_id, graph = self.service.import_workflow(
+                    "default", name, raw_bytes(name)
+                )
                 self.assertEqual(graph, original)
-                stored = self.service._repository.get_workflow_graph("default", workflow_id, 1)
+                stored = self.service._repository.get_workflow_graph(
+                    "default", workflow_id, 1
+                )
                 self.assertEqual(stored, original)
 
     def test_submission_copy_matches_the_graph_when_nothing_is_edited(self) -> None:
@@ -156,9 +172,13 @@ class RoundTrip(unittest.TestCase):
 
     def test_editing_one_value_leaves_every_other_node_untouched(self) -> None:
         graph, schema = schema_for("image_basic.api.json")
-        submission = build_submission_graph(graph, schema, {"2:text": "edited placeholder"})
+        submission = build_submission_graph(
+            graph, schema, {"2:text": "edited placeholder"}
+        )
         self.assertEqual(submission["2"]["inputs"]["text"], "edited placeholder")
-        self.assertEqual(graph["2"]["inputs"]["text"], "placeholder positive prompt, sample subject")
+        self.assertEqual(
+            graph["2"]["inputs"]["text"], "placeholder positive prompt, sample subject"
+        )
         for node_id in graph:
             if node_id != "2":
                 self.assertEqual(submission[node_id], graph[node_id])
@@ -167,15 +187,20 @@ class RoundTrip(unittest.TestCase):
         workflow_id, _ = self.service.import_workflow(
             "default", "basic", raw_bytes("image_basic.api.json")
         )
-        self.assertIsNotNone(self.service.control_schema("default", workflow_id, self.snapshot))
-        self.assertIsNone(self.service.control_schema("someone-else", workflow_id, self.snapshot))
+        self.assertIsNotNone(
+            self.service.control_schema("default", workflow_id, self.snapshot)
+        )
+        self.assertIsNone(
+            self.service.control_schema("someone-else", workflow_id, self.snapshot)
+        )
 
     def test_catalog_unavailable_stores_but_refuses_submission(self) -> None:
         workflow_id, _ = self.service.import_workflow(
             "default", "basic", raw_bytes("image_basic.api.json")
         )
         offline = CatalogSnapshot(
-            freshness=CatalogFreshness(state="unavailable", submission_allowed=False), nodes={}
+            freshness=CatalogFreshness(state="unavailable", submission_allowed=False),
+            nodes={},
         )
         schema = self.service.control_schema("default", workflow_id, offline)
         self.assertIn("catalog_unavailable", codes(schema.blocking))
@@ -187,7 +212,13 @@ class LinksAndLiterals(unittest.TestCase):
     def test_links_do_not_become_form_controls(self) -> None:
         _, schema = schema_for("image_basic.api.json")
         bindings = by_binding(schema)
-        for binding in ("5:model", "5:positive", "5:negative", "5:latent_image", "6:samples"):
+        for binding in (
+            "5:model",
+            "5:positive",
+            "5:negative",
+            "5:latent_image",
+            "6:samples",
+        ):
             self.assertNotIn(binding, bindings)
         self.assertIn("5:seed", bindings)
 
@@ -198,8 +229,10 @@ class LinksAndLiterals(unittest.TestCase):
         # element is not a node id: both stay literals.
         self.assertEqual(bindings["11:text"].value, '["not","a","link"]')
         self.assertEqual(bindings["12:literal_pair"].value, '["alpha",0]')
-        self.assertEqual(build_submission_graph(graph, schema)["11"]["inputs"]["text"],
-                         ["not", "a", "link"])
+        self.assertEqual(
+            build_submission_graph(graph, schema)["11"]["inputs"]["text"],
+            ["not", "a", "link"],
+        )
         self.assertIn("literal_shape_unexpected", codes(schema.warnings))
 
     def test_missing_class_is_blocking_but_the_rest_still_renders(self) -> None:
@@ -220,7 +253,9 @@ class LinksAndLiterals(unittest.TestCase):
         _, schema = schema_for("image_repeated_stages.api.json")
         bindings = by_binding(schema)
         self.assertEqual(bindings["3:text"].value, bindings["5:text"].value)
-        self.assertNotEqual(bindings["3:text"].binding_id, bindings["5:text"].binding_id)
+        self.assertNotEqual(
+            bindings["3:text"].binding_id, bindings["5:text"].binding_id
+        )
         self.assertEqual(bindings["3:text"].label, "Base Positive")
         self.assertEqual(bindings["5:text"].label, "Refiner Positive")
         self.assertEqual(bindings["8:seed"].value, "111")
@@ -230,15 +265,23 @@ class LinksAndLiterals(unittest.TestCase):
         _, schema = schema_for("image_repeated_stages.api.json")
         bindings = by_binding(schema)
         for node_id in ("3", "5"):
-            self.assertIn("conditioning_traced:positive", bindings[f"{node_id}:text"].inference_reason)
+            self.assertIn(
+                "conditioning_traced:positive",
+                bindings[f"{node_id}:text"].inference_reason,
+            )
         for node_id in ("4", "6"):
-            self.assertIn("conditioning_traced:negative", bindings[f"{node_id}:text"].inference_reason)
+            self.assertIn(
+                "conditioning_traced:negative",
+                bindings[f"{node_id}:text"].inference_reason,
+            )
 
     def test_ambiguous_conditioning_is_labelled_neutrally(self) -> None:
         _, schema = schema_for("force_input_and_flexible.api.json")
         bindings = by_binding(schema)
         # Node 3 feeds a wildcard switch, not a sampler input directly.
-        self.assertIn("conditioning_traced:ambiguous", bindings["3:text"].inference_reason)
+        self.assertIn(
+            "conditioning_traced:ambiguous", bindings["3:text"].inference_reason
+        )
         self.assertEqual(bindings["3:text"].label, "Prompt")
 
     def test_every_control_carries_binding_provenance(self) -> None:
@@ -263,7 +306,8 @@ class BranchesAndDiagnostics(unittest.TestCase):
             if c.inference_reason.startswith("output_branch")
         }
         self.assertEqual(
-            branches, {"7": "image", "8": "image_ephemeral", "10": "video", "11": "video"}
+            branches,
+            {"7": "image", "8": "image_ephemeral", "10": "video", "11": "video"},
         )
 
     def test_inactive_controls_are_grouped_not_pruned(self) -> None:
@@ -295,7 +339,9 @@ class BranchesAndDiagnostics(unittest.TestCase):
         # The imported value is shown, marked unavailable, and not replaced.
         self.assertEqual(control.value, "placeholder-uninstalled.safetensors")
         missing = [o for o in control.options if not o.available]
-        self.assertEqual([o.value for o in missing], ["placeholder-uninstalled.safetensors"])
+        self.assertEqual(
+            [o.value for o in missing], ["placeholder-uninstalled.safetensors"]
+        )
         self.assertEqual(schema.blocking, [])
         with self.assertRaises(SubmissionError) as caught:
             build_submission_graph(graph, schema)
@@ -343,7 +389,9 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
         bindings = by_binding(schema)
         self.assertNotIn("5:input_2", bindings)
         self.assertNotIn("5:input_3", bindings)
-        self.assertEqual(build_submission_graph(graph, schema)["5"]["inputs"]["input_2"], ["4", 0])
+        self.assertEqual(
+            build_submission_graph(graph, schema)["5"]["inputs"]["input_2"], ["4", 0]
+        )
 
     def test_opaque_custom_object_is_preserved_and_not_editable(self) -> None:
         graph, schema = schema_for("force_input_and_flexible.api.json")
@@ -368,7 +416,9 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
 
     def test_enum_without_options_rejects_edits(self) -> None:
         graph, schema = schema_for("image_basic.api.json")
-        enum = next(c for c in schema.controls if c.logical_type == "enum" and c.options)
+        enum = next(
+            c for c in schema.controls if c.logical_type == "enum" and c.options
+        )
         with self.assertRaises(SubmissionError):
             build_submission_graph(graph, schema, {enum.binding_id: "not-a-choice"})
         enum.options = []
@@ -378,11 +428,18 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
 
     def test_typed_combo_options_are_submitted_as_listed(self) -> None:
         graph, schema = schema_for("image_basic.api.json")
-        enum = next(c for c in schema.controls if c.logical_type == "enum" and c.options)
-        enum.options = [EnumOption(value=v, label=str(v), available=True) for v in (4, 8.5, "x", True)]
+        enum = next(
+            c for c in schema.controls if c.logical_type == "enum" and c.options
+        )
+        enum.options = [
+            EnumOption(value=v, label=str(v), available=True)
+            for v in (4, 8.5, "x", True)
+        ]
         node, name = enum.binding_id.split(":", 1)
         for sent, expected in ((8.5, 8.5), (4.0, 4), ("x", "x"), (True, True)):
-            got = build_submission_graph(graph, schema, {enum.binding_id: sent})[node]["inputs"][name]
+            got = build_submission_graph(graph, schema, {enum.binding_id: sent})[node][
+                "inputs"
+            ][name]
             self.assertEqual((got, type(got)), (expected, type(expected)))
         for bad in ("4", 1, False, "8.5"):  # text is not the number; True is not 1
             with self.assertRaises(SubmissionError):
@@ -402,7 +459,9 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
         """
         _, schema = schema_for("image_basic.api.json")
         self.assertNotIn("macro_not_evaluated", codes(schema.warnings))
-        self.assertTrue(by_binding(schema)["2:text"].raw_metadata["dynamic_prompts_hint"])
+        self.assertTrue(
+            by_binding(schema)["2:text"].raw_metadata["dynamic_prompts_hint"]
+        )
 
     def test_dynamic_prompt_wildcards_are_flagged_and_kept(self) -> None:
         graph = parse_graph(raw_bytes("image_basic.api.json"))
@@ -413,7 +472,8 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
         self.assertIn("macro_not_evaluated", codes(schema.warnings))
         self.assertEqual(schema.blocking, [])
         self.assertEqual(
-            build_submission_graph(graph, schema)["2"]["inputs"]["text"], "a {red|blue} placeholder"
+            build_submission_graph(graph, schema)["2"]["inputs"]["text"],
+            "a {red|blue} placeholder",
         )
 
     def test_prompt_macros_are_preserved_literally(self) -> None:
@@ -439,7 +499,9 @@ class SeedsAndTransport(unittest.TestCase):
             with self.subTest(node=case["node"]):
                 control = bindings[f"{case['node']}:seed"]
                 self.assertEqual(control.value, case["descriptor_value"])
-                self.assertEqual(graph[case["node"]]["inputs"]["seed"], case["graph_value"])
+                self.assertEqual(
+                    graph[case["node"]]["inputs"]["seed"], case["graph_value"]
+                )
                 submission = build_submission_graph(
                     graph, schema, {control.binding_id: case["descriptor_value"]}
                 )
@@ -478,7 +540,9 @@ class SeedsAndTransport(unittest.TestCase):
     def test_a_retry_reuses_the_resolved_seed(self) -> None:
         """A retry re-reads the persisted seed; it never calls resolve again."""
         graph, schema = schema_for("image_basic.api.json")
-        resolved = resolve_seed(123456789, "random", maximum=2**64 - 1, rng=random.Random(1))
+        resolved = resolve_seed(
+            123456789, "random", maximum=2**64 - 1, rng=random.Random(1)
+        )
         first = build_submission_graph(graph, schema, {"5:seed": str(resolved)})
         retry = build_submission_graph(graph, schema, {"5:seed": str(resolved)})
         self.assertEqual(first["5"]["inputs"]["seed"], retry["5"]["inputs"]["seed"])
@@ -491,7 +555,9 @@ class SeedsAndTransport(unittest.TestCase):
         self.assertEqual(control.value, str(expected["value"]))
         self.assertEqual(control.group, "generation")
         submission = build_submission_graph(graph, schema)
-        self.assertEqual(submission[expected["node"]]["inputs"][expected["input"]], expected["value"])
+        self.assertEqual(
+            submission[expected["node"]]["inputs"][expected["input"]], expected["value"]
+        )
         self.assertEqual(submission, graph)  # one graph, submitted once
 
 

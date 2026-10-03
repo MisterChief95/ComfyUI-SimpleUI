@@ -51,11 +51,7 @@
 <script lang="ts">
 	// <Icon name="plus" size={20} />. Decorative by default (aria-hidden); pass
 	// `label` when the icon is the only content of its control.
-	let {
-		name,
-		size = 20,
-		label
-	}: { name: IconName; size?: number; label?: string } = $props();
+	let { name, size = 20, label }: { name: IconName; size?: number; label?: string } = $props();
 </script>
 
 <svg

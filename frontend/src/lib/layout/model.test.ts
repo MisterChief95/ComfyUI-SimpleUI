@@ -97,7 +97,9 @@ const ids = (d: LayoutDoc, section: string): string[] =>
 
 test('aspect ratio: placement, paired uniqueness, movement, hiding and splitting', () => {
 	const paired = pairDimensions(doc(), 'a', 'b');
-	assert.deepEqual(paired.sections[0].items, [{ kind: 'aspect_ratio', width: 'a', height: 'b', span: 'full' }]);
+	assert.deepEqual(paired.sections[0].items, [
+		{ kind: 'aspect_ratio', width: 'a', height: 'b', span: 'full' }
+	]);
 	assert.equal(itemCount(paired), 3);
 	assert.deepEqual(locate(paired, 'b'), { section: 'one', index: 0 });
 	assert.deepEqual(validate(paired), []);
@@ -107,14 +109,30 @@ test('aspect ratio: placement, paired uniqueness, movement, hiding and splitting
 	assert.deepEqual(ids(moved, 'two'), ['a']);
 	assert.deepEqual(hide(moved, 'b').hidden, ['h', 'a', 'b']);
 	assert.deepEqual(ids(splitDimensions(moved, 'b'), 'two'), ['a', 'b']);
-	const dimensions = { controls: ['a', 'b'].map((id) => ({ ...control(id, 'dimensions', 0, 'number'), logical_type: 'int' as const })) };
+	const dimensions = {
+		controls: ['a', 'b'].map((id) => ({
+			...control(id, 'dimensions', 0, 'number'),
+			logical_type: 'int' as const
+		}))
+	};
 	const resolved = resolveLayout(dimensions, paired);
 	assert.equal(resolved.sections[0].controls[0].height?.binding_id, 'b');
 	assert.equal(resolved.unplaced.length, 0);
-	assert.deepEqual(resolveLayout({ controls: dimensions.controls.slice(0, 1) }, paired).stale, ['b', 'h']);
-	assert.equal(resolveLayout({ controls: dimensions.controls.slice(0, 1) }, paired).sections[0].controls[0].control.binding_id, 'a');
+	assert.deepEqual(resolveLayout({ controls: dimensions.controls.slice(0, 1) }, paired).stale, [
+		'b',
+		'h'
+	]);
+	assert.equal(
+		resolveLayout({ controls: dimensions.controls.slice(0, 1) }, paired).sections[0].controls[0]
+			.control.binding_id,
+		'a'
+	);
 	const before = doc();
-	before.sections[0].items = [{ kind: 'control', binding_id: 'b' }, { kind: 'control', binding_id: 'a' }, { kind: 'control', binding_id: 'c' }];
+	before.sections[0].items = [
+		{ kind: 'control', binding_id: 'b' },
+		{ kind: 'control', binding_id: 'a' },
+		{ kind: 'control', binding_id: 'c' }
+	];
 	assert.deepEqual(ids(pairDimensions(before, 'a', 'b'), 'one'), ['a', 'c']);
 });
 
@@ -160,10 +178,19 @@ test('resolveLayout: unplaced, stale, hidden', () => {
 		hidden: ['3:b', 'gone:y']
 	};
 	const r = resolveLayout(schema, layout);
-	assert.deepEqual(r.sections[0].controls.map((c) => c.control.binding_id), ['1:a']);
+	assert.deepEqual(
+		r.sections[0].controls.map((c) => c.control.binding_id),
+		['1:a']
+	);
 	assert.deepEqual(r.stale, ['gone:x', 'gone:y']);
-	assert.deepEqual(r.hidden.map((c) => c.binding_id), ['3:b']);
-	assert.deepEqual(r.unplaced.map((c) => c.binding_id), ['2:d', '2:c', '9:z']);
+	assert.deepEqual(
+		r.hidden.map((c) => c.binding_id),
+		['3:b']
+	);
+	assert.deepEqual(
+		r.unplaced.map((c) => c.binding_id),
+		['2:d', '2:c', '9:z']
+	);
 	// the input doc keeps stale entries
 	assert.equal(layout.sections[0].items.length, 2);
 });
@@ -172,16 +199,25 @@ test('addSection / removeSection / rename / update / move are immutable', () => 
 	const d = doc();
 	const frozen = JSON.stringify(d);
 	const added = addSection(d, '  New  ', 1, 'n1');
-	assert.deepEqual(added.sections.map((s) => s.id), ['one', 'n1', 'two']);
+	assert.deepEqual(
+		added.sections.map((s) => s.id),
+		['one', 'n1', 'two']
+	);
 	assert.equal(added.sections[1].title, 'New');
 	assert.equal(addSection(d, '   ').sections[2].title, 'Section');
 	assert.equal(addSection(d, 'x'.repeat(200)).sections[2].title.length, 80);
 	assert.deepEqual(validate(added), []);
 
 	const removed = removeSection(d, 'one');
-	assert.deepEqual(removed.sections.map((s) => s.id), ['two']);
+	assert.deepEqual(
+		removed.sections.map((s) => s.id),
+		['two']
+	);
 	assert.deepEqual(removed.hidden, ['h']);
-	assert.equal(resolveLayout({ controls: [control('a', 'prompts', 0)] }, removed).unplaced.length, 1);
+	assert.equal(
+		resolveLayout({ controls: [control('a', 'prompts', 0)] }, removed).unplaced.length,
+		1
+	);
 	assert.equal(removeSection(d, 'nope'), d);
 
 	assert.equal(renameSection(d, 'two', ' Deux ').sections[1].title, 'Deux');
@@ -189,9 +225,15 @@ test('addSection / removeSection / rename / update / move are immutable', () => 
 	const upd = updateSection(d, 'two', { columns: 3, collapsed: true });
 	assert.deepEqual([upd.sections[1].columns, upd.sections[1].collapsed], [3, true]);
 
-	assert.deepEqual(moveSection(d, 0, 1).sections.map((s) => s.id), ['two', 'one']);
+	assert.deepEqual(
+		moveSection(d, 0, 1).sections.map((s) => s.id),
+		['two', 'one']
+	);
 	assert.equal(moveSection(d, 0, 0), d);
-	assert.deepEqual(moveSection(d, 0, 99).sections.map((s) => s.id), ['two', 'one']);
+	assert.deepEqual(
+		moveSection(d, 0, 99).sections.map((s) => s.id),
+		['two', 'one']
+	);
 	assert.equal(JSON.stringify(d), frozen);
 });
 
@@ -260,6 +302,7 @@ test('newSectionId is valid and unique', () => {
 test('validate enforces every invariant', () => {
 	const ok = doc();
 	assert.deepEqual(validate(ok), []);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tests deliberately corrupt the doc
 	const bad = (mutate: (d: any) => void): string[] => {
 		const d = structuredClone(ok);
 		mutate(d);
@@ -277,7 +320,9 @@ test('validate enforces every invariant', () => {
 	assert.ok(bad((d) => (d.sections[0].items[0].span = 'wide')).some((e) => /span/.test(e)));
 	assert.ok(bad((d) => (d.sections[0].items[0].binding_id = '')).some((e) => /binding_id/.test(e)));
 	assert.ok(
-		bad((d) => (d.sections[0].items[0].binding_id = 'x'.repeat(201))).some((e) => /binding_id/.test(e))
+		bad((d) => (d.sections[0].items[0].binding_id = 'x'.repeat(201))).some((e) =>
+			/binding_id/.test(e)
+		)
 	);
 	assert.ok(bad((d) => d.hidden.push('a')).some((e) => /more than once/.test(e)));
 	assert.ok(bad((d) => d.sections[1].items.push({ kind: 'control', binding_id: 'b' })).length);
@@ -345,17 +390,29 @@ test('conditions and header switches resolve, move and validate', () => {
 	const schema = { controls: [control('1:a', 'prompts', 0), control('1:b', 'prompts', 1), on] };
 	let doc: LayoutDoc = {
 		version: 1,
-		sections: [{ id: 's1', title: 'S', columns: 1, collapsed: false, items: [
-			{ kind: 'control', binding_id: '1:a' },
-			{ kind: 'control', binding_id: '1:b' },
-			{ kind: 'control', binding_id: '9:on' }
-		] }],
+		sections: [
+			{
+				id: 's1',
+				title: 'S',
+				columns: 1,
+				collapsed: false,
+				items: [
+					{ kind: 'control', binding_id: '1:a' },
+					{ kind: 'control', binding_id: '1:b' },
+					{ kind: 'control', binding_id: '9:on' }
+				]
+			}
+		],
 		hidden: []
 	};
 	doc = setWhen(doc, '1:a', '9:on');
 	assert.equal(setWhen(doc, '1:a', '1:a'), doc, 'an item cannot gate itself');
 	assert.equal(resolveLayout(schema, doc).sections[0].controls[0].when?.binding_id, '9:on');
-	assert.equal(resolveLayout(schema, setWhen(doc, '1:b', '1:a')).sections[0].controls[1].when, undefined, 'non-boolean condition is ignored');
+	assert.equal(
+		resolveLayout(schema, setWhen(doc, '1:b', '1:a')).sections[0].controls[1].when,
+		undefined,
+		'non-boolean condition is ignored'
+	);
 
 	// The switch moves out of the items into the header and counts once.
 	const switched = setToggle(doc, 's1', '9:on');
@@ -380,13 +437,25 @@ test('conditions and header switches resolve, move and validate', () => {
 function panels(): LayoutDoc {
 	return {
 		version: 2,
-		sections: [{ id: 'p', title: 'Panels', mode: 'panels', collapsed: false, rows: [
-			{ id: 'r1', columns: [
-				{ id: 'c1', items: [{ kind: 'control', binding_id: 'a', span: 'full' }] },
-				{ id: 'c2', items: [{ kind: 'control', binding_id: 'b' }] }
-			] },
-			{ id: 'r2', columns: [{ id: 'c3', items: [{ kind: 'control', binding_id: 'c' }] }] }
-		] }, { id: 'auto', title: 'Auto', mode: 'auto', collapsed: true, columns: 2, items: [] }],
+		sections: [
+			{
+				id: 'p',
+				title: 'Panels',
+				mode: 'panels',
+				collapsed: false,
+				rows: [
+					{
+						id: 'r1',
+						columns: [
+							{ id: 'c1', items: [{ kind: 'control', binding_id: 'a', span: 'full' }] },
+							{ id: 'c2', items: [{ kind: 'control', binding_id: 'b' }] }
+						]
+					},
+					{ id: 'r2', columns: [{ id: 'c3', items: [{ kind: 'control', binding_id: 'c' }] }] }
+				]
+			},
+			{ id: 'auto', title: 'Auto', mode: 'auto', collapsed: true, columns: 2, items: [] }
+		],
 		hidden: ['h']
 	};
 }
@@ -396,7 +465,10 @@ test('v1 normalization preserves all bindings, order and presentation without mu
 	const snapshot = JSON.stringify(legacy);
 	const normalized = normalizeLayout(legacy);
 	assert.equal(normalized.version, 2);
-	assert.deepEqual(normalized.sections.map((s) => s.mode), ['auto', 'auto']);
+	assert.deepEqual(
+		normalized.sections.map((s) => s.mode),
+		['auto', 'auto']
+	);
 	assert.deepEqual(normalized.sections.map(sectionItems), legacy.sections.map(sectionItems));
 	assert.deepEqual(normalized.hidden, legacy.hidden);
 	assert.deepEqual(validate(normalized), []);
@@ -407,7 +479,16 @@ test('addSection rejects duplicate/invalid explicit ids and honors the final ava
 	const d = doc();
 	assert.equal(addSection(d, 'Duplicate', undefined, 'one'), d);
 	assert.equal(addSection(d, 'Invalid', undefined, 'bad id'), d);
-	const almostFull = { ...d, sections: Array.from({ length: MAX_SECTIONS - 1 }, (_, i) => ({ id: `s${i}`, title: 'S', columns: 1 as const, collapsed: false, items: [] })) };
+	const almostFull = {
+		...d,
+		sections: Array.from({ length: MAX_SECTIONS - 1 }, (_, i) => ({
+			id: `s${i}`,
+			title: 'S',
+			columns: 1 as const,
+			collapsed: false,
+			items: []
+		}))
+	};
 	const full = addSection(almostFull, 'Last', undefined, 'last');
 	assert.equal(full.sections.length, MAX_SECTIONS);
 	assert.deepEqual(validate(full), []);
@@ -423,7 +504,11 @@ test('panel leaves: location, pairing across columns, moving, editing and remova
 	const pair = pairDimensions(d, 'b', 'a');
 	assert.deepEqual(locate(pair, 'a'), { section: 'p', row: 'r1', column: 'c2', index: 0 });
 	assert.equal(itemCount(pair), 4);
-	assert.deepEqual(sectionItems(splitDimensions(pair, 'a').sections[0]).map(itemId), ['b', 'a', 'c']);
+	assert.deepEqual(sectionItems(splitDimensions(pair, 'a').sections[0]).map(itemId), [
+		'b',
+		'a',
+		'c'
+	]);
 	const moved = moveItem(pair, 'a', 'p', 0, target);
 	assert.deepEqual(locate(moved, 'b'), { section: 'p', ...target, index: 0 });
 	assert.deepEqual(hide(moved, 'a').hidden, ['h', 'b', 'a']);
@@ -433,39 +518,83 @@ test('panel leaves: location, pairing across columns, moving, editing and remova
 	assert.equal(locate(setToggle(d, 'auto', 'b'), 'b') !== null, true);
 	assert.equal(placeControl(d, 'a', 'p', 0, { row: 'bad', column: 'c3' }), d);
 	assert.equal(placeControl(d, 'a', 'auto', 0, target), d);
-	assert.deepEqual(locate(placeControl(d, 'h', 'p'), 'h'), { section: 'p', row: 'r1', column: 'c1', index: 1 });
-	const empty: LayoutDoc = { ...d, sections: [{ id: 'p', title: 'P', mode: 'panels', collapsed: false, rows: [] }] };
-	assert.equal(placeControl(empty, 'h', 'p'), empty, 'empty panel has no destination; UI must create a row first');
-	for (const result of [pair, moved, hide(moved, 'a'), splitDimensions(pair, 'a'), setSpan(d, 'b', 'full'), setWhen(d, 'b', 'on'), setToggle(d, 'auto', 'b'), placeControl(d, 'a', 'auto'), removeStale(d, 'a'), removeSection(d, 'p'), updateSection(d, 'p', { title: 'New', columns: 3, collapsed: true })]) {
+	assert.deepEqual(locate(placeControl(d, 'h', 'p'), 'h'), {
+		section: 'p',
+		row: 'r1',
+		column: 'c1',
+		index: 1
+	});
+	const empty: LayoutDoc = {
+		...d,
+		sections: [{ id: 'p', title: 'P', mode: 'panels', collapsed: false, rows: [] }]
+	};
+	assert.equal(
+		placeControl(empty, 'h', 'p'),
+		empty,
+		'empty panel has no destination; UI must create a row first'
+	);
+	for (const result of [
+		pair,
+		moved,
+		hide(moved, 'a'),
+		splitDimensions(pair, 'a'),
+		setSpan(d, 'b', 'full'),
+		setWhen(d, 'b', 'on'),
+		setToggle(d, 'auto', 'b'),
+		placeControl(d, 'a', 'auto'),
+		removeStale(d, 'a'),
+		removeSection(d, 'p'),
+		updateSection(d, 'p', { title: 'New', columns: 3, collapsed: true })
+	]) {
 		assert.deepEqual(validate(result), []);
 	}
 	const all = { controls: ['a', 'b', 'c', 'h'].map((id) => control(id, 'advanced', 0)) };
 	assert.deepEqual(resolveLayout(all, pair).unplaced, []);
 	assert.deepEqual(resolveLayout({ controls: all.controls.slice(1) }, pair).stale, ['a']);
-	assert.equal(resolveLayout({ controls: all.controls.slice(1) }, pair).sections[0].controls[0].control.binding_id, 'b');
+	assert.equal(
+		resolveLayout({ controls: all.controls.slice(1) }, pair).sections[0].controls[0].control
+			.binding_id,
+		'b'
+	);
 	assert.equal(JSON.stringify(d), snapshot);
 });
 
 test('panel validation caps structure and bindings, including pairs and header toggles', () => {
 	const d = panels();
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tests deliberately corrupt the doc
 	const bad = (mutate: (d: any) => void): void => {
 		const copy = structuredClone(d);
 		mutate(copy);
 		assert.ok(validate(copy).length);
 	};
-	bad((d) => d.sections[0].rows[0].columns[1].id = 'c1');
-	bad((d) => d.sections[0].rows[1].id = 'r1');
-	bad((d) => d.sections[0].rows[1].columns[0].id = 'r1');
+	bad((d) => (d.sections[0].rows[0].columns[1].id = 'c1'));
+	bad((d) => (d.sections[0].rows[1].id = 'r1'));
+	bad((d) => (d.sections[0].rows[1].columns[0].id = 'r1'));
 	bad((d) => d.sections.push({ ...d.sections[0], id: 'p2' }));
-	bad((d) => d.sections[0].rows[0].columns = []);
-	bad((d) => d.sections[0].rows[0].columns = Array.from({ length: MAX_COLUMNS + 1 }, (_, i) => ({ id: `c${i}`, items: [] })));
-	bad((d) => d.sections[0].rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => ({ id: `r${i}`, columns: [{ id: `c${i}`, items: [] }] })));
-	bad((d) => d.sections[0].items = []);
-	bad((d) => d.sections[0].rows[0].columns[0].rows = []);
-	bad((d) => d.sections[0].rows[0].columns[0].items = [{ kind: 'row', columns: [] }]);
-	bad((d) => d.sections[0].toggle = 'c');
+	bad((d) => (d.sections[0].rows[0].columns = []));
+	bad(
+		(d) =>
+			(d.sections[0].rows[0].columns = Array.from({ length: MAX_COLUMNS + 1 }, (_, i) => ({
+				id: `c${i}`,
+				items: []
+			})))
+	);
+	bad(
+		(d) =>
+			(d.sections[0].rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => ({
+				id: `r${i}`,
+				columns: [{ id: `c${i}`, items: [] }]
+			})))
+	);
+	bad((d) => (d.sections[0].items = []));
+	bad((d) => (d.sections[0].rows[0].columns[0].rows = []));
+	bad((d) => (d.sections[0].rows[0].columns[0].items = [{ kind: 'row', columns: [] }]));
+	bad((d) => (d.sections[0].toggle = 'c'));
 	bad((d) => d.hidden.push('b'));
-	const crowded = { ...pairDimensions(d, 'a', 'b'), hidden: Array.from({ length: MAX_ITEMS - 3 }, (_, i) => `h${i}`) };
+	const crowded = {
+		...pairDimensions(d, 'a', 'b'),
+		hidden: Array.from({ length: MAX_ITEMS - 3 }, (_, i) => `h${i}`)
+	};
 	assert.equal(itemCount(crowded), MAX_ITEMS);
 	assert.deepEqual(validate(crowded), []);
 	assert.equal(placeControl(crowded, 'new', 'p'), crowded);
@@ -473,18 +602,44 @@ test('panel validation caps structure and bindings, including pairs and header t
 	assert.deepEqual(validate(hide(crowded, 'a')), []);
 	assert.deepEqual(validate(moveItem(crowded, 'a', 'p', 0, { row: 'r2', column: 'c3' })), []);
 	assert.ok(validate({ ...crowded, hidden: [...crowded.hidden, 'new'] }).length);
-	assert.ok(validate({ ...crowded, sections: crowded.sections.map((s) => s.id === 'auto' ? { ...s, toggle: 'new' } : s) }).length);
-	assert.deepEqual(sectionItems(mapSectionItems(d.sections[0], (items) => items.filter((i) => itemId(i) !== 'b'))).map(itemId), ['a', 'c']);
+	assert.ok(
+		validate({
+			...crowded,
+			sections: crowded.sections.map((s) => (s.id === 'auto' ? { ...s, toggle: 'new' } : s))
+		}).length
+	);
+	assert.deepEqual(
+		sectionItems(
+			mapSectionItems(d.sections[0], (items) => items.filter((i) => itemId(i) !== 'b'))
+		).map(itemId),
+		['a', 'c']
+	);
 });
 
 test('panel structure: mode round trip, rows, columns and removal keep bindings valid', () => {
-	const auto: LayoutDoc = { version: 2, sections: [{ id: 's', title: 'S', mode: 'auto', columns: 2, collapsed: false, items: ['a', 'b', 'c'].map((binding_id) => ({ kind: 'control' as const, binding_id })) }], hidden: [] };
+	const auto: LayoutDoc = {
+		version: 2,
+		sections: [
+			{
+				id: 's',
+				title: 'S',
+				mode: 'auto',
+				columns: 2,
+				collapsed: false,
+				items: ['a', 'b', 'c'].map((binding_id) => ({ kind: 'control' as const, binding_id }))
+			}
+		],
+		hidden: []
+	};
 	const snapshot = JSON.stringify(auto);
 	const p = setSectionMode(auto, 's', 'panels');
 	const sec = p.sections[0];
 	assert.equal(sec.mode, 'panels');
 	assert.ok(sec.mode === 'panels');
-	assert.deepEqual(sec.rows[0].columns.map((c) => c.items.map(itemId)), [['a', 'c'], ['b']]);
+	assert.deepEqual(
+		sec.rows[0].columns.map((c) => c.items.map(itemId)),
+		[['a', 'c'], ['b']]
+	);
 	assert.deepEqual(validate(p), []);
 	const back = setSectionMode(p, 's', 'auto');
 	assert.ok(back.sections[0].mode !== 'panels');
@@ -495,7 +650,10 @@ test('panel structure: mode round trip, rows, columns and removal keep bindings 
 	const rows = addRow(addRow(p, 's', 3), 's', 1, 0);
 	const r = rows.sections[0];
 	assert.ok(r.mode === 'panels');
-	assert.deepEqual(r.rows.map((row) => row.columns.length), [1, 2, 3]);
+	assert.deepEqual(
+		r.rows.map((row) => row.columns.length),
+		[1, 2, 3]
+	);
 	const ids = r.rows.flatMap((row) => [row.id, ...row.columns.map((c) => c.id)]);
 	assert.equal(new Set(ids).size, ids.length, 'structural ids unique');
 	assert.deepEqual(validate(rows), []);
@@ -505,7 +663,11 @@ test('panel structure: mode round trip, rows, columns and removal keep bindings 
 	assert.equal(shiftRow(rows, 's', r.rows[0].id, -1), rows);
 
 	const shrunk = setRowColumns(rows, 's', first, 1);
-	assert.deepEqual(sectionItems(shrunk.sections[0]).map(itemId), ['a', 'c', 'b'], 'shrinking merges, never drops');
+	assert.deepEqual(
+		sectionItems(shrunk.sections[0]).map(itemId),
+		['a', 'c', 'b'],
+		'shrinking merges, never drops'
+	);
 	const grown = setRowColumns(rows, 's', r.rows[0].id, 3);
 	assert.deepEqual(validate(grown), []);
 	assert.equal(itemCount(grown), 3);

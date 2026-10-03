@@ -35,8 +35,12 @@ async def gallery(
     favorite: bool | None = None,
     workflow_id: str | None = None,
     generation_id: str | None = None,
-    created_after: Annotated[int | None, Query(ge=0, le=9_223_372_036_854_775_807)] = None,
-    created_before: Annotated[int | None, Query(ge=0, le=9_223_372_036_854_775_807)] = None,
+    created_after: Annotated[
+        int | None, Query(ge=0, le=9_223_372_036_854_775_807)
+    ] = None,
+    created_before: Annotated[
+        int | None, Query(ge=0, le=9_223_372_036_854_775_807)
+    ] = None,
     prompt: Annotated[str | None, Query(min_length=1, max_length=500)] = None,
 ):
     try:
@@ -64,9 +68,13 @@ async def clear_history(request: Request, principal: CurrentPrincipal):
 
 
 @router.post("/import", dependencies=[Mutation, LocalRequest])
-async def import_media(request: Request, principal: CurrentPrincipal, explicit: bool = False):
+async def import_media(
+    request: Request, principal: CurrentPrincipal, explicit: bool = False
+):
     try:
-        return await in_thread(lambda: request.app.state.media.import_baseline(explicit=explicit))
+        return await in_thread(
+            lambda: request.app.state.media.import_baseline(explicit=explicit)
+        )
     except MediaError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -75,7 +83,9 @@ async def import_media(request: Request, principal: CurrentPrincipal, explicit: 
 # not add it to a GET route, and a video player HEADs before it seeks.
 @router.api_route("/{media_id}/file", methods=["GET", "HEAD"])
 async def stream(request: Request, media_id: str, principal: CurrentPrincipal):
-    located = await in_thread(request.app.state.media.locate, principal.owner_id, media_id)
+    located = await in_thread(
+        request.app.state.media.locate, principal.owner_id, media_id
+    )
     if located is None:
         raise _missing()
     # Starlette's FileResponse does Content-Length, HEAD, Range and 416 itself.
@@ -84,7 +94,9 @@ async def stream(request: Request, media_id: str, principal: CurrentPrincipal):
 
 @router.api_route("/{media_id}/download", methods=["GET", "HEAD"])
 async def download(request: Request, media_id: str, principal: CurrentPrincipal):
-    located = await in_thread(request.app.state.media.locate, principal.owner_id, media_id)
+    located = await in_thread(
+        request.app.state.media.locate, principal.owner_id, media_id
+    )
     if located is None:
         raise _missing()
     # The original file, under its original name: no transcoding, ever.
@@ -97,14 +109,18 @@ async def download(request: Request, media_id: str, principal: CurrentPrincipal)
 
 @router.get("/{media_id}/thumbnail")
 async def thumbnail(request: Request, media_id: str, principal: CurrentPrincipal):
-    path = await in_thread(request.app.state.media.thumbnail, principal.owner_id, media_id)
+    path = await in_thread(
+        request.app.state.media.thumbnail, principal.owner_id, media_id
+    )
     if path is None:
         raise _missing()
     return FileResponse(path, media_type="image/jpeg")
 
 
 @router.put("/{media_id}", dependencies=[Mutation])
-async def update_flags(request: Request, media_id: str, flags: Flags, principal: CurrentPrincipal):
+async def update_flags(
+    request: Request, media_id: str, flags: Flags, principal: CurrentPrincipal
+):
     changed = await in_thread(
         lambda: request.app.state.media.set_flags(
             principal.owner_id, media_id, hidden=flags.hidden, favorite=flags.favorite

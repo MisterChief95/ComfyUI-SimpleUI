@@ -42,7 +42,12 @@
 	let input = $state<HTMLInputElement>();
 	let list = $state<HTMLUListElement>();
 
-	const listed = $derived(matchOptions(options.map((option) => option.label), query));
+	const listed = $derived(
+		matchOptions(
+			options.map((option) => option.label),
+			query
+		)
+	);
 	const listId = $derived(`${id}-list`);
 	const statusId = $derived(`${id}-results`);
 	const optionId = (index: number): string => `${id}-opt-${index}`;
@@ -73,7 +78,10 @@
 
 	function scrollActive(): void {
 		queueMicrotask(() => {
-			if (active >= 0) list?.querySelector(`#${CSS.escape(optionId(listed[active]))}`)?.scrollIntoView({ block: 'nearest' });
+			if (active >= 0)
+				list
+					?.querySelector(`#${CSS.escape(optionId(listed[active]))}`)
+					?.scrollIntoView({ block: 'nearest' });
 		});
 	}
 
@@ -149,7 +157,9 @@
 			{onkeydown}
 		/>
 		<p class="sr-only" id={statusId} role="status">
-			{#if open}{listed.length === 0 ? 'No results.' : `${listed.length} ${listed.length === 1 ? 'result' : 'results'}.`}{/if}
+			{#if open}{listed.length === 0
+					? 'No results.'
+					: `${listed.length} ${listed.length === 1 ? 'result' : 'results'}.`}{/if}
 		</p>
 		{#if open}
 			<ul class="list" class:up id={listId} role="listbox" aria-label={label} bind:this={list}>

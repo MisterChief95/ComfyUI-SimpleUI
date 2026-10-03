@@ -16,19 +16,24 @@ import logging
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
-
 from app.catalog import CatalogService, CatalogStore, evaluate_selections, normalize
 from app.catalog.normalize import NormalizeError
 from app.comfy_client import ComfyClient, ComfyUnavailable, redact_url
 from app.storage import Database
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "catalog"
-OBJECT_INFO = json.loads((FIXTURES / "object_info.synthetic.json").read_text(encoding="utf-8"))
-LEGACY_INFO = json.loads((FIXTURES / "object_info.legacy-shape.json").read_text(encoding="utf-8"))
-EXPECTED = json.loads((FIXTURES / "sanitized_projection.expected.json").read_text(encoding="utf-8"))
+OBJECT_INFO = json.loads(
+    (FIXTURES / "object_info.synthetic.json").read_text(encoding="utf-8")
+)
+LEGACY_INFO = json.loads(
+    (FIXTURES / "object_info.legacy-shape.json").read_text(encoding="utf-8")
+)
+EXPECTED = json.loads(
+    (FIXTURES / "sanitized_projection.expected.json").read_text(encoding="utf-8")
+)
 
 #: The shared ComfyUI input-directory filenames that must never reach a client.
 WITHHELD_NAMES = EXPECTED["must_not_appear_in_projection"]
@@ -82,7 +87,9 @@ class CatalogTestCase(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json=SYSTEM_STATS)
         return httpx.Response(404, json={"error": "no such route"})
 
-    def make_client(self, url: str = "http://127.0.0.1:8188", **kwargs: Any) -> ComfyClient:
+    def make_client(
+        self, url: str = "http://127.0.0.1:8188", **kwargs: Any
+    ) -> ComfyClient:
         kwargs.setdefault("attempts", 1)
         kwargs.setdefault("backoff_s", 0)
         client = ComfyClient(url, transport=httpx.MockTransport(self.handler), **kwargs)
@@ -184,9 +191,12 @@ class SanitizationTest(CatalogTestCase):
         self.assertEqual(
             legacy.nodes["KSampler"]["inputs"]["sampler_name"]["logical_type"], "COMBO"
         )
-        self.assertEqual(legacy.nodes["CLIPTextEncode"]["inputs"]["clip"]["socket_type"], "CLIP")
         self.assertEqual(
-            legacy.nodes["LoadImage"]["inputs"]["image"]["logical_type"], "OWNED_INPUT_REF"
+            legacy.nodes["CLIPTextEncode"]["inputs"]["clip"]["socket_type"], "CLIP"
+        )
+        self.assertEqual(
+            legacy.nodes["LoadImage"]["inputs"]["image"]["logical_type"],
+            "OWNED_INPUT_REF",
         )
         # A legacy payload withholds its shared filenames just the same.
         self.assertEqual(legacy.nodes["LoadImage"]["inputs"]["image"]["choices"], [])
@@ -223,7 +233,9 @@ class CoalescingTest(CatalogTestCase):
             return httpx.Response(200, json=SYSTEM_STATS)
 
         client = ComfyClient(
-            "http://127.0.0.1:8188", transport=httpx.MockTransport(slow_handler), attempts=1
+            "http://127.0.0.1:8188",
+            transport=httpx.MockTransport(slow_handler),
+            attempts=1,
         )
         self._clients.append(client)
         service = CatalogService(self.store, client)
@@ -236,7 +248,9 @@ class CoalescingTest(CatalogTestCase):
             release(), *[service.refresh(force=True) for _ in range(6)]
         )
 
-        self.assertEqual(self.count("/object_info"), 1, "concurrent refreshes fetched more than once")
+        self.assertEqual(
+            self.count("/object_info"), 1, "concurrent refreshes fetched more than once"
+        )
         for snapshot in results[1:]:
             self.assertEqual(snapshot.freshness.state, "fresh")
             self.assertTrue(snapshot.nodes)
@@ -262,7 +276,8 @@ class CoalescingTest(CatalogTestCase):
         for _ in range(4):
             snapshot = await service.refresh(force=True)
             delays.append(
-                int(snapshot.freshness.next_refresh_allowed_ms) - int(snapshot.freshness.checked_ms)
+                int(snapshot.freshness.next_refresh_allowed_ms)
+                - int(snapshot.freshness.checked_ms)
             )
 
         # checked_ms and next_refresh_allowed_ms are sampled a moment apart, so
@@ -271,8 +286,12 @@ class CoalescingTest(CatalogTestCase):
         self.assertEqual(snapshot.freshness.consecutive_failures, 4)
         self.assertLess(delays[0], delays[1])
         self.assertLess(delays[1], delays[2])
-        self.assertLessEqual(delays[-1], 4000 + tolerance_ms, "backoff exceeded its ceiling")
-        self.assertGreater(delays[-1], 4000 - tolerance_ms, "backoff did not reach the ceiling")
+        self.assertLessEqual(
+            delays[-1], 4000 + tolerance_ms, "backoff exceeded its ceiling"
+        )
+        self.assertGreater(
+            delays[-1], 4000 - tolerance_ms, "backoff did not reach the ceiling"
+        )
 
     async def test_a_caller_giving_up_does_not_cancel_the_shared_fetch(self) -> None:
         gate = asyncio.Event()
@@ -285,7 +304,9 @@ class CoalescingTest(CatalogTestCase):
             return httpx.Response(200, json=SYSTEM_STATS)
 
         client = ComfyClient(
-            "http://127.0.0.1:8188", transport=httpx.MockTransport(slow_handler), attempts=1
+            "http://127.0.0.1:8188",
+            transport=httpx.MockTransport(slow_handler),
+            attempts=1,
         )
         self._clients.append(client)
         service = CatalogService(self.store, client)
@@ -316,7 +337,9 @@ class CacheRetentionTest(CatalogTestCase):
         stale = await service.refresh(force=True)
 
         self.assertEqual(stale.freshness.state, "stale")
-        self.assertEqual(stale.nodes, good.nodes, "a transient failure blanked the catalog")
+        self.assertEqual(
+            stale.nodes, good.nodes, "a transient failure blanked the catalog"
+        )
         self.assertEqual(stale.freshness.catalog_revision, revision)
         self.assertTrue(stale.freshness.submission_allowed)
         self.assertIsNotNone(stale.freshness.error)
@@ -345,7 +368,9 @@ class CacheRetentionTest(CatalogTestCase):
         # Before any refresh, the cached catalog is already available.
         cached = await restarted.snapshot()
         self.assertTrue(cached.nodes)
-        self.assertEqual(self.count("/object_info"), 1, "startup cache read hit the network")
+        self.assertEqual(
+            self.count("/object_info"), 1, "startup cache read hit the network"
+        )
 
         after = await restarted.startup()
         self.assertEqual(after.freshness.state, "stale")
@@ -375,7 +400,9 @@ class FirstRunOfflineTest(CatalogTestCase):
             snapshot.freshness.submission_allowed,
             "submission must be refused while no catalog exists",
         )
-        self.assertIsNotNone(snapshot.freshness.error, "an empty catalog was reported silently")
+        self.assertIsNotNone(
+            snapshot.freshness.error, "an empty catalog was reported silently"
+        )
         self.assertIn("ComfyUI", snapshot.freshness.error.message)
         self.assertIsNone(snapshot.freshness.fetched_ms)
         self.assertIsNotNone(snapshot.freshness.checked_ms)
@@ -406,28 +433,34 @@ class SchemaHashTest(CatalogTestCase):
 
         self.assertNotEqual(before.content_hash, after.content_hash)
         self.assertEqual(
-            before.schema_hash, after.schema_hash, "a new model read as a structural change"
+            before.schema_hash,
+            after.schema_hash,
+            "a new model read as a structural change",
         )
 
     async def test_a_type_change_changes_the_schema_hash(self) -> None:
         changed = copy.deepcopy(OBJECT_INFO)
         changed["KSampler"]["input"]["required"]["steps"][0] = "FLOAT"
-        self.assertNotEqual(normalize(OBJECT_INFO).schema_hash, normalize(changed).schema_hash)
+        self.assertNotEqual(
+            normalize(OBJECT_INFO).schema_hash, normalize(changed).schema_hash
+        )
 
     async def test_the_revision_is_reported_and_changes_with_content(self) -> None:
         service = self.make_service()
         first = await service.startup()
-        self.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0].append(
-            "placeholder-checkpoint-c.safetensors"
-        )
+        self.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][
+            0
+        ].append("placeholder-checkpoint-c.safetensors")
         second = await service.refresh(force=True)
 
-        self.assertNotEqual(first.freshness.catalog_revision, second.freshness.catalog_revision)
+        self.assertNotEqual(
+            first.freshness.catalog_revision, second.freshness.catalog_revision
+        )
         self.assertEqual(first.freshness.schema_hash, second.freshness.schema_hash)
 
 
 class SelectionInvalidationTest(CatalogTestCase):
-    SAVED = [
+    SAVED: ClassVar[list[dict[str, object]]] = [
         {
             "node_id": "4",
             "class_type": "CheckpointLoaderSimple",
@@ -452,7 +485,9 @@ class SelectionInvalidationTest(CatalogTestCase):
         self.assertEqual(issue["value"], "placeholder-checkpoint-b.safetensors")
         self.assertEqual(issue["node_id"], "4")
 
-    async def test_an_omitted_class_marks_controls_uncertain_without_erasing_them(self) -> None:
+    async def test_an_omitted_class_marks_controls_uncertain_without_erasing_them(
+        self,
+    ) -> None:
         changed = copy.deepcopy(OBJECT_INFO)
         del changed["KSampler"]  # a custom node pack failed to load this time
         issues = evaluate_selections(normalize(changed).nodes, self.SAVED)
@@ -463,7 +498,9 @@ class SelectionInvalidationTest(CatalogTestCase):
         self.assertEqual(issues[0]["class_type"], "KSampler")
 
     async def test_an_unchanged_catalog_produces_no_issues(self) -> None:
-        self.assertEqual(evaluate_selections(normalize(OBJECT_INFO).nodes, self.SAVED), [])
+        self.assertEqual(
+            evaluate_selections(normalize(OBJECT_INFO).nodes, self.SAVED), []
+        )
 
     async def test_a_literal_that_became_a_socket_is_flagged_not_dropped(self) -> None:
         changed = copy.deepcopy(OBJECT_INFO)
@@ -488,9 +525,9 @@ class SelectionInvalidationTest(CatalogTestCase):
     async def test_selections_survive_a_real_refresh_cycle(self) -> None:
         service = self.make_service()
         await service.startup()
-        self.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0] = [
-            "placeholder-checkpoint-a.safetensors"
-        ]
+        self.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][
+            0
+        ] = ["placeholder-checkpoint-a.safetensors"]
         snapshot = await service.refresh(force=True)
 
         issues = evaluate_selections(snapshot.nodes, self.SAVED)
@@ -514,7 +551,9 @@ class CapabilityRecordTest(CatalogTestCase):
 
     async def test_version_strings_do_not_carry_build_paths(self) -> None:
         snapshot = await self.make_service().startup()
-        self.assertEqual(snapshot.capabilities["installation"]["python_version"], "3.13.1")
+        self.assertEqual(
+            snapshot.capabilities["installation"]["python_version"], "3.13.1"
+        )
         self.assertNotIn("C:\\build", json.dumps(snapshot.model_dump()))
 
     async def test_a_failing_system_stats_does_not_fail_the_refresh(self) -> None:
@@ -558,7 +597,9 @@ class CredentialLeakTest(CatalogTestCase):
 
     def assert_clean(self, text: str, where: str) -> None:
         self.assertNotIn(self.SECRET_PASSWORD, text, f"password leaked into {where}")
-        self.assertNotIn("TOPSECRETTOKENVALUE", text, f"auth header leaked into {where}")
+        self.assertNotIn(
+            "TOPSECRETTOKENVALUE", text, f"auth header leaked into {where}"
+        )
 
     async def test_redact_url_strips_userinfo(self) -> None:
         self.assertEqual(
@@ -576,7 +617,9 @@ class CredentialLeakTest(CatalogTestCase):
         self.assert_clean(json.dumps(snapshot.model_dump()), "the API snapshot")
 
         stored = self.store.load()
-        self.assert_clean(json.dumps({k: str(v) for k, v in stored.items()}), "the catalogs row")
+        self.assert_clean(
+            json.dumps({k: str(v) for k, v in stored.items()}), "the catalogs row"
+        )
 
     async def test_no_credentials_in_logs(self) -> None:
         self.online = False
@@ -594,7 +637,9 @@ class CredentialLeakTest(CatalogTestCase):
         self.assertEqual(snapshot.freshness.state, "fresh")
         self.assert_clean(json.dumps(snapshot.model_dump()), "the API snapshot")
         stored = self.store.load()
-        self.assert_clean(json.dumps({k: str(v) for k, v in stored.items()}), "the catalogs row")
+        self.assert_clean(
+            json.dumps({k: str(v) for k, v in stored.items()}), "the catalogs row"
+        )
 
     async def test_the_client_exception_message_is_sanitized(self) -> None:
         self.online = False
@@ -637,7 +682,10 @@ class ComfyClientTest(CatalogTestCase):
             return httpx.Response(404, json={"error": "no such route"})
 
         client = ComfyClient(
-            "http://127.0.0.1:8188", transport=httpx.MockTransport(refuse), attempts=3, backoff_s=0
+            "http://127.0.0.1:8188",
+            transport=httpx.MockTransport(refuse),
+            attempts=3,
+            backoff_s=0,
         )
         self._clients.append(client)
         with self.assertRaises(ComfyUnavailable):
@@ -677,7 +725,9 @@ class ComboForms(unittest.TestCase):
         self.assertTrue(same_choice(1, 1.0))
         self.assertFalse(same_choice(True, 1))
         self.assertFalse(same_choice("1", 1))
-        projected, _ = normalize_project("COMBO", {"options": [8, 10.5, "x", True, None, [1]], "default": 8})
+        projected, _ = normalize_project(
+            "COMBO", {"options": [8, 10.5, "x", True, None, [1]], "default": 8}
+        )
         self.assertEqual(projected["choices"], [8, 10.5, "x", True])
         self.assertEqual(projected["default"], 8)
 
@@ -689,12 +739,28 @@ class ComboForms(unittest.TestCase):
                 raise ComfyUnavailable("upstream_unreachable", "down")
 
         def combo(route: str) -> dict[str, Any]:
-            return {"input": {"required": {"m": ["COMBO", {"remote": {"route": route, "response_key": "files"}}]}}}
+            return {
+                "input": {
+                    "required": {
+                        "m": [
+                            "COMBO",
+                            {"remote": {"route": route, "response_key": "files"}},
+                        ]
+                    }
+                }
+            }
 
-        raw = {"A": combo("/internal/list"), "B": combo("/gone"), "C": combo("//evil.example/x")}
+        raw = {
+            "A": combo("/internal/list"),
+            "B": combo("/gone"),
+            "C": combo("//evil.example/x"),
+        }
         service = CatalogService.__new__(CatalogService)
         service._client = Stub()  # type: ignore[attr-defined]
         asyncio.run(service._fill_remote_combos(raw))
-        self.assertEqual(raw["A"]["input"]["required"]["m"][1]["options"], ["a.safetensors", "b.safetensors"])
+        self.assertEqual(
+            raw["A"]["input"]["required"]["m"][1]["options"],
+            ["a.safetensors", "b.safetensors"],
+        )
         self.assertNotIn("options", raw["B"]["input"]["required"]["m"][1])
         self.assertNotIn("options", raw["C"]["input"]["required"]["m"][1])

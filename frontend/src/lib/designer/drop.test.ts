@@ -5,7 +5,13 @@ import type { LayoutDoc, LayoutItem } from '../contracts.ts';
 import { locate, placeControl } from '../layout/model.ts';
 
 const control = (binding_id: string): LayoutItem => ({ kind: 'control', binding_id });
-const pair: LayoutItem = { kind: 'aspect_ratio', width: 'width', height: 'height', span: 'full', presets: [[512, 512]] };
+const pair: LayoutItem = {
+	kind: 'aspect_ratio',
+	width: 'width',
+	height: 'height',
+	span: 'full',
+	presets: [[512, 512]]
+};
 
 test('dropIndex skips stale leaves and removes the dragged item before counting', () => {
 	const items = [control('stale'), control('a'), control('b'), control('stale2'), control('c')];
@@ -27,39 +33,106 @@ test('dropIndex treats composites and a rendered surviving half as one leaf', ()
 });
 
 test('column-local drops reorder and move across rows, preserving stale leaves and composites', () => {
-	const doc: LayoutDoc = { version: 2, hidden: [], sections: [{
-		id: 'panels', title: 'Panels', mode: 'panels', collapsed: false,
-		rows: [
-			{ id: 'r1', columns: [
-				{ id: 'c1', items: [control('a'), pair, control('stale')] },
-				{ id: 'c2', items: [control('stale2'), control('b')] }
-			] },
-			{ id: 'r2', columns: [{ id: 'empty', items: [] }] }
+	const doc: LayoutDoc = {
+		version: 2,
+		hidden: [],
+		sections: [
+			{
+				id: 'panels',
+				title: 'Panels',
+				mode: 'panels',
+				collapsed: false,
+				rows: [
+					{
+						id: 'r1',
+						columns: [
+							{ id: 'c1', items: [control('a'), pair, control('stale')] },
+							{ id: 'c2', items: [control('stale2'), control('b')] }
+						]
+					},
+					{ id: 'r2', columns: [{ id: 'empty', items: [] }] }
+				]
+			}
 		]
-	}] };
+	};
 	const section = doc.sections[0];
 	assert.ok(section.mode === 'panels');
 	const source = section.rows[0].columns[0].items;
-	const reordered = placeControl(doc, 'height', 'panels', dropIndex(source, ['a', 'width'], 'height', 0), { row: 'r1', column: 'c1' });
-	assert.deepEqual(locate(reordered, 'height'), { section: 'panels', row: 'r1', column: 'c1', index: 0 });
+	const reordered = placeControl(
+		doc,
+		'height',
+		'panels',
+		dropIndex(source, ['a', 'width'], 'height', 0),
+		{ row: 'r1', column: 'c1' }
+	);
+	assert.deepEqual(locate(reordered, 'height'), {
+		section: 'panels',
+		row: 'r1',
+		column: 'c1',
+		index: 0
+	});
 	const dest = section.rows[0].columns[1].items;
-	const moved = placeControl(doc, 'width', 'panels', dropIndex(dest, ['b'], 'width', 0), { row: 'r1', column: 'c2' });
+	const moved = placeControl(doc, 'width', 'panels', dropIndex(dest, ['b'], 'width', 0), {
+		row: 'r1',
+		column: 'c2'
+	});
 	assert.ok(moved.sections[0].mode === 'panels');
-	assert.deepEqual(moved.sections[0].rows[0].columns[1].items, [control('stale2'), pair, control('b')]);
+	assert.deepEqual(moved.sections[0].rows[0].columns[1].items, [
+		control('stale2'),
+		pair,
+		control('b')
+	]);
 	assert.deepEqual(moved.sections[0].rows[0].columns[0].items, [control('a'), control('stale')]);
-	const empty = placeControl(moved, 'height', 'panels', dropIndex([], [], 'height', 0), { row: 'r2', column: 'empty' });
-	assert.deepEqual(locate(empty, 'width'), { section: 'panels', row: 'r2', column: 'empty', index: 0 });
+	const empty = placeControl(moved, 'height', 'panels', dropIndex([], [], 'height', 0), {
+		row: 'r2',
+		column: 'empty'
+	});
+	assert.deepEqual(locate(empty, 'width'), {
+		section: 'panels',
+		row: 'r2',
+		column: 'empty',
+		index: 0
+	});
 	assert.deepEqual(source, [control('a'), pair, control('stale')]);
 });
 
 test('library and unplaced bindings drop into the requested column', () => {
-	const doc: LayoutDoc = { version: 2, hidden: ['library'], sections: [{
-		id: 'p', title: 'Panels', mode: 'panels', collapsed: false,
-		rows: [{ id: 'r', columns: [{ id: 'first', items: [] }, { id: 'target', items: [control('stale')] }] }]
-	}] };
+	const doc: LayoutDoc = {
+		version: 2,
+		hidden: ['library'],
+		sections: [
+			{
+				id: 'p',
+				title: 'Panels',
+				mode: 'panels',
+				collapsed: false,
+				rows: [
+					{
+						id: 'r',
+						columns: [
+							{ id: 'first', items: [] },
+							{ id: 'target', items: [control('stale')] }
+						]
+					}
+				]
+			}
+		]
+	};
 	const target = { row: 'r', column: 'target' };
-	const added = placeControl(doc, 'library', 'p', dropIndex([control('stale')], [], 'library', 0), target);
-	const next = placeControl(added, 'unplaced', 'p', dropIndex([control('stale'), control('library')], ['library'], 'unplaced', 0), target);
+	const added = placeControl(
+		doc,
+		'library',
+		'p',
+		dropIndex([control('stale')], [], 'library', 0),
+		target
+	);
+	const next = placeControl(
+		added,
+		'unplaced',
+		'p',
+		dropIndex([control('stale'), control('library')], ['library'], 'unplaced', 0),
+		target
+	);
 	assert.deepEqual(locate(next, 'unplaced'), { section: 'p', ...target, index: 1 });
 	assert.deepEqual(locate(next, 'library'), { section: 'p', ...target, index: 2 });
 	assert.deepEqual(next.hidden, []);

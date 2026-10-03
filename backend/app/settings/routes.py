@@ -48,7 +48,9 @@ class ActivateRequest(Model):
 
 
 @router.get("", response_model=EffectiveSettings)
-async def read_settings(request: Request, principal: CurrentPrincipal) -> EffectiveSettings:
+async def read_settings(
+    request: Request, principal: CurrentPrincipal
+) -> EffectiveSettings:
     store = settings_store(request)
     return EffectiveSettings(
         host=await in_thread(store.host),
@@ -87,13 +89,17 @@ async def readable_keys() -> dict[str, list[str]]:
     }
 
 
-@router.post("/multi-user/activate", status_code=204, dependencies=[Mutation, LocalRequest])
+@router.post(
+    "/multi-user/activate", status_code=204, dependencies=[Mutation, LocalRequest]
+)
 async def activate_multi_user(request: Request, body: ActivateRequest) -> None:
     """Enable multi-user mode. Fails safely while the media baseline is not ready."""
     await in_thread(auth_service(request).activate_multi_user, body.default_password)
 
 
-@router.post("/multi-user/deactivate", status_code=204, dependencies=[Mutation, LocalRequest])
+@router.post(
+    "/multi-user/deactivate", status_code=204, dependencies=[Mutation, LocalRequest]
+)
 async def deactivate_multi_user(request: Request) -> None:
     """Blocked while any profile other than Default exists."""
     await in_thread(auth_service(request).deactivate_multi_user)

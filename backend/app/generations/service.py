@@ -7,11 +7,12 @@ import json
 import logging
 import re
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import PurePosixPath
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from ..events import EventBroker
-from .store import GenerationBusy, GenerationConflict, GenerationStore
+from .store import GenerationStore
 
 LOGGER = logging.getLogger("simpleui.generations")
 
@@ -29,11 +30,16 @@ MIN_TARGETED_INTERRUPT_VERSION = (0, 38, 0)
 def version_supports_targeted_interrupt(version: str | None) -> bool:
     """True when ``version`` ("0.38.0", "v0.38.1", "0.38.0+abc") is >= the verified minimum."""
     match = re.match(r"\s*v?(\d+)\.(\d+)(?:\.(\d+))?", version or "")
-    return bool(match) and tuple(int(p or 0) for p in match.groups()) >= MIN_TARGETED_INTERRUPT_VERSION
+    return (
+        bool(match)
+        and tuple(int(p or 0) for p in match.groups()) >= MIN_TARGETED_INTERRUPT_VERSION
+    )
 
 
 def fingerprint_request(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -95,23 +101,32 @@ class GenerationService:
             response = await self.upstream.submit_prompt(
                 accepted.row["graph"], client_id=self.client_id, extra_data=extra_data
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - any failure leaves the outcome unknown
             # The request may have reached ComfyUI. Retrying here could execute
             # it twice, so only reconciliation may move this record forward.
             self.store.update(owner_id, generation_id, status="submission_unknown")
             return self.store.get(owner_id, generation_id)
 
         prompt_id = response.get("prompt_id") if isinstance(response, dict) else None
-        node_errors = response.get("node_errors") if isinstance(response, dict) else None
+        node_errors = (
+            response.get("node_errors") if isinstance(response, dict) else None
+        )
         if not prompt_id:
             self.store.update(
-                owner_id, generation_id, status="failed", output_state="unavailable",
+                owner_id,
+                generation_id,
+                status="failed",
+                output_state="unavailable",
                 error={"submission": response},
             )
         else:
             error = {"node_errors": node_errors} if node_errors else None
             self.store.update(
-                owner_id, generation_id, status="queued", prompt_id=str(prompt_id), error=error
+                owner_id,
+                generation_id,
+                status="queued",
+                prompt_id=str(prompt_id),
+                error=error,
             )
         # store_history is intentionally acted on only after terminal
         # reconciliation and output association, never at submission time.
@@ -132,25 +147,44 @@ class GenerationService:
         # {"node": null} closes a job (history decides how it ended): it is not
         # a sign the job is running, and every progress tick after the first
         # would otherwise be a redundant write.
-        if kind in ("execution_start", "executing", "progress", "execution_cached") and not (
-            kind == "executing" and data.get("node") is None
-        ):
+        if kind in (
+            "execution_start",
+            "executing",
+            "progress",
+            "execution_cached",
+        ) and not (kind == "executing" and data.get("node") is None):
             row = self.store.get(owner_id, generation_id)
-            if row is not None and row["status"] in ("submitting", "submission_unknown", "queued"):
+            if row is not None and row["status"] in (
+                "submitting",
+                "submission_unknown",
+                "queued",
+            ):
                 self.store.update(owner_id, generation_id, status="running")
         elif kind == "execution_interrupted":
-            self.store.update(owner_id, generation_id, status="cancelled", error={"execution": data})
+            self.store.update(
+                owner_id, generation_id, status="cancelled", error={"execution": data}
+            )
         elif kind == "execution_error":
-            self.store.update(owner_id, generation_id, status="failed", error={"execution": data})
+            self.store.update(
+                owner_id, generation_id, status="failed", error={"execution": data}
+            )
         # execution_success is advisory. History is the terminal authority,
         # including fully cached jobs with no executed-node events.
         # The UI only needs which node finished; node output (e.g. Show Text prompt
         # text) is never displayed, so it is not sent to the browser.
-        relayed = {k: v for k, v in data.items() if k != "output"} if kind == "executed" else data
-        self.events.publish(owner_id, {"generation_id": generation_id, "type": kind, "data": relayed})
+        relayed = (
+            {k: v for k, v in data.items() if k != "output"}
+            if kind == "executed"
+            else data
+        )
+        self.events.publish(
+            owner_id, {"generation_id": generation_id, "type": kind, "data": relayed}
+        )
         return True
 
-    async def reconcile(self, *, history_retention: dict[str, bool] | None = None) -> None:
+    async def reconcile(
+        self, *, history_retention: dict[str, bool] | None = None
+    ) -> None:
         history_retention = history_retention or {}
         active_rows = self.store.active()
         if not active_rows:
@@ -175,7 +209,9 @@ class GenerationService:
                 if not history_retention.get(row["owner_id"], True) and associated:
                     self.store.purge_snapshot(row["owner_id"], row["id"])
             elif prompt_id and prompt_id in queue_entries:
-                self.store.update(row["owner_id"], row["id"], status=queue_entries[prompt_id][0])
+                self.store.update(
+                    row["owner_id"], row["id"], status=queue_entries[prompt_id][0]
+                )
             elif row["status"] not in ("failed", "cancelled", "interrupted", "unknown"):
                 self.store.update(row["owner_id"], row["id"], status="unknown")
 
@@ -191,10 +227,13 @@ class GenerationService:
             after = self.store.get(row["owner_id"], row["id"])
             if after is not None and (after["status"], after["output_state"]) != before:
                 self.events.publish(
-                    row["owner_id"], {"generation_id": row["id"], "type": "reconciled", "data": {}}
+                    row["owner_id"],
+                    {"generation_id": row["id"], "type": "reconciled", "data": {}},
                 )
 
-    async def reconcile_if_due(self, *, history_retention: dict[str, bool] | None = None) -> None:
+    async def reconcile_if_due(
+        self, *, history_retention: dict[str, bool] | None = None
+    ) -> None:
         """Best-effort ``reconcile``, throttled and never raising.
 
         Called from read routes (list/detail) instead of running a perpetual
@@ -219,7 +258,8 @@ class GenerationService:
             raise CancellationUnavailable("generation is not safely cancellable")
         prompt_id = row["upstream_prompt_id"]
         targeted = hasattr(self.upstream, "cancel_job") and bool(
-            self._targeted_interrupt_supported and await self._targeted_interrupt_supported()
+            self._targeted_interrupt_supported
+            and await self._targeted_interrupt_supported()
         )
         if row["status"] == "queued" and hasattr(self.upstream, "cancel_pending"):
             await self.upstream.cancel_pending(prompt_id)
@@ -229,18 +269,24 @@ class GenerationService:
                 # interrupt is a no-op unless this very prompt is running.
                 await self.upstream.cancel_job(prompt_id)
             # Never ran, so no outputs will ever appear.
-            self.store.update(owner_id, generation_id, status="cancelled", output_state="unavailable")
+            self.store.update(
+                owner_id, generation_id, status="cancelled", output_state="unavailable"
+            )
             return
         if row["status"] == "running" and targeted:
             await self.upstream.cancel_job(prompt_id)
             return
-        raise CancellationUnavailable("this ComfyUI installation has no verified per-job cancellation")
+        raise CancellationUnavailable(
+            "this ComfyUI installation has no verified per-job cancellation"
+        )
 
     def _apply_history(self, row: dict[str, Any], entry: Any) -> bool:
         entry = entry if isinstance(entry, dict) else {}
         outputs = entry.get("outputs") if isinstance(entry.get("outputs"), dict) else {}
         status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
-        messages = status.get("messages") if isinstance(status.get("messages"), list) else []
+        messages = (
+            status.get("messages") if isinstance(status.get("messages"), list) else []
+        )
         kinds = {item[0] for item in messages if isinstance(item, list) and item}
         if "execution_interrupted" in kinds:
             execution = "cancelled"
@@ -265,10 +311,14 @@ class GenerationService:
                 # modeled this and so never caught it). A list with no
                 # dict-shaped, filenamed entry at all is not a claimed file
                 # output, so it must not count as an unrecognized one either.
-                if not any(isinstance(d, dict) and "filename" in d for d in descriptors):
+                if not any(
+                    isinstance(d, dict) and "filename" in d for d in descriptors
+                ):
                     continue
                 for ordinal, descriptor in enumerate(descriptors):
-                    if not isinstance(descriptor, dict) or not isinstance(descriptor.get("filename"), str):
+                    if not isinstance(descriptor, dict) or not isinstance(
+                        descriptor.get("filename"), str
+                    ):
                         unknown += 1
                         continue
                     recognized = key in ("images", "gifs", "videos")
@@ -276,7 +326,9 @@ class GenerationService:
                         unknown += 1
                         continue
                     preview = descriptor.get("type") == "temp"
-                    path = PurePosixPath(str(descriptor.get("subfolder") or ""), descriptor["filename"]).as_posix()
+                    path = PurePosixPath(
+                        str(descriptor.get("subfolder") or ""), descriptor["filename"]
+                    ).as_posix()
                     if preview:
                         continue
                     if self.media is None:
@@ -284,14 +336,19 @@ class GenerationService:
                         continue
                     try:
                         self.media.capture_output(
-                            row["owner_id"], row["id"], path,
-                            output_node=str(node_id), ordinal=ordinal, preview=False,
+                            row["owner_id"],
+                            row["id"],
+                            path,
+                            output_node=str(node_id),
+                            ordinal=ordinal,
+                            preview=False,
                         )
                         saved += 1
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 - recorded on the row, not raised
                         failures += 1
                         self.store.update(
-                            row["owner_id"], row["id"],
+                            row["owner_id"],
+                            row["id"],
                             error={"output_capture": {"message": str(exc)}},
                         )
             if output and not recognized:
@@ -307,12 +364,20 @@ class GenerationService:
             output_state = "unavailable"
         else:
             output_state = "unavailable"
-        runtime_errors = [item[1] for item in messages
-                          if isinstance(item, list) and len(item) > 1
-                          and item[0] in ("execution_error", "execution_interrupted")]
+        runtime_errors = [
+            item[1]
+            for item in messages
+            if isinstance(item, list)
+            and len(item) > 1
+            and item[0] in ("execution_error", "execution_interrupted")
+        ]
         error = {"history_errors": runtime_errors} if runtime_errors else None
         self.store.update(
-            row["owner_id"], row["id"], status=execution, output_state=output_state, error=error
+            row["owner_id"],
+            row["id"],
+            status=execution,
+            output_state=output_state,
+            error=error,
         )
         if failures == 0:
             self.store.clear_error(row["owner_id"], row["id"], "output_capture")

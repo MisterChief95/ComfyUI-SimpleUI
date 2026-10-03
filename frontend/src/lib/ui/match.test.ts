@@ -7,7 +7,10 @@ test('matching ignores case and trims the search', () => {
 });
 
 test('substrings rank before subsequences, keeping original order within each rank', () => {
-	assert.deepEqual(matchOptions(['aXbYc', 'second ABC', 'a_b_c', 'abc first', 'acb'], 'abc'), [1, 3, 0, 2]);
+	assert.deepEqual(
+		matchOptions(['aXbYc', 'second ABC', 'a_b_c', 'abc first', 'acb'], 'abc'),
+		[1, 3, 0, 2]
+	);
 });
 
 test('no match returns no indices, including repeated characters in the query', () => {

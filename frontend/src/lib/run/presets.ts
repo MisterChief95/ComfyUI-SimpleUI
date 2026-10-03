@@ -45,7 +45,9 @@ export function presetValues(
 ): Record<string, EditValue> {
 	const ids = new Set(controls.filter((c) => c.component !== 'file').map((c) => c.binding_id));
 	return Object.fromEntries(
-		Object.entries(draft).filter(([id, value]) => ids.has(id) && (typeof value !== 'number' || Number.isFinite(value)))
+		Object.entries(draft).filter(
+			([id, value]) => ids.has(id) && (typeof value !== 'number' || Number.isFinite(value))
+		)
 	);
 }
 

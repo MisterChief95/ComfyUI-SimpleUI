@@ -129,7 +129,11 @@ def structural_signature(graph: dict[str, Any]) -> str:
         shapes = []
         for name in sorted(inputs):
             link = classify_input(inputs[name], graph, declared_socket=False)
-            shape = f"link:{link.node_id}.{link.output_index}" if link else _shape(inputs[name])
+            shape = (
+                f"link:{link.node_id}.{link.output_index}"
+                if link
+                else _shape(inputs[name])
+            )
             shapes.append(f"{name}={shape}")
         parts.append(f"{node_id}:{node.get('class_type')}({','.join(shapes)})")
     return _digest("structure", parts)
@@ -200,7 +204,10 @@ def _digest(kind: str, parts: list[str]) -> str:
 
 
 def expected_signature(
-    scope: str, control: ControlDescriptor, signature: str, catalog_nodes: dict[str, Any]
+    scope: str,
+    control: ControlDescriptor,
+    signature: str,
+    catalog_nodes: dict[str, Any],
 ) -> str:
     return signature if scope == "workflow" else input_signature(control, catalog_nodes)
 
@@ -275,7 +282,9 @@ def _apply(
         update["help_text"] = presentation.help_text
 
     if presentation.component is not None:
-        if presentation.component in ALLOWED_COMPONENTS.get(control.logical_type, frozenset()):
+        if presentation.component in ALLOWED_COMPONENTS.get(
+            control.logical_type, frozenset()
+        ):
             update["component"] = presentation.component
         else:
             # The catalog changed under a saved widget choice. Keep the derived
@@ -318,9 +327,13 @@ def effective_bounds(
     if limits is None or limits.exact_min is not None or limits.exact_max is not None:
         return None
     low, high = limits.min, limits.max
-    if presentation.display_min is not None and (low is None or presentation.display_min > low):
+    if presentation.display_min is not None and (
+        low is None or presentation.display_min > low
+    ):
         low = presentation.display_min
-    if presentation.display_max is not None and (high is None or presentation.display_max < high):
+    if presentation.display_max is not None and (
+        high is None or presentation.display_max < high
+    ):
         high = presentation.display_max
     return low, high
 
@@ -340,7 +353,11 @@ def _display_range(control: ControlDescriptor, presentation: Presentation) -> An
     if low is not None and high is not None and low >= high:
         return None
     limits = control.constraints
-    step = presentation.display_step if presentation.display_step is not None else limits.step
+    step = (
+        presentation.display_step
+        if presentation.display_step is not None
+        else limits.step
+    )
     return limits.model_copy(update={"min": low, "max": high, "step": step})
 
 
@@ -351,7 +368,10 @@ def _resequence(controls: list[ControlDescriptor]) -> list[ControlDescriptor]:
         enumerate(controls),
         key=lambda pair: (rank.get(pair[1].group, len(rank)), pair[1].order, pair[0]),
     )
-    return [control.model_copy(update={"order": index}) for index, (_, control) in enumerate(ordered)]
+    return [
+        control.model_copy(update={"order": index})
+        for index, (_, control) in enumerate(ordered)
+    ]
 
 
 def _stale(selector: str, scope: str, why: str) -> ErrorDetail:
