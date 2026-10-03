@@ -1,11 +1,10 @@
 export type WalkFolder = { path: string; name: string; count: number };
 export type WalkCursor = { group: string; position: string | null };
 
-// Only leaves participate: walking never descends into another branch or month.
+// Only days, workflows, and collections walk: never into another branch or month, and never
+// between the unrelated top-level views (Favorites, Videos, Unsorted).
 export function isLeaf(path: string): boolean {
-	return /^(Favorites|Videos|Unsorted|(?:Workflow|Collections)\/[^/]+|Date\/\d{4}\/\d{2}\/\d{2})$/.test(
-		path
-	);
+	return /^((?:Workflow|Collections)\/[^/]+|Date\/\d{4}\/\d{2}\/\d{2})$/.test(path);
 }
 
 export function sibling(folders: WalkFolder[], path: string, delta: -1 | 1): WalkFolder | null {
