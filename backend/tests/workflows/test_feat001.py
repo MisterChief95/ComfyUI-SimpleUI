@@ -409,11 +409,15 @@ class MigrationTest(unittest.TestCase):
             first = Database(path, migrations_dir=old)
             self.assertEqual(first.schema_version(), 3)
             first.close()
-            second = Database(path)
-            self.assertEqual(second.schema_version(), 4)
-            sql = second.query_one("SELECT sql FROM sqlite_master WHERE name = 'workflow_presets'")["sql"]
-            self.assertIn("STRICT", sql)
-            second.close()
+            migration = MIGRATIONS_DIR / "004_workflow_presets.sql"
+            (old / migration.name).write_text(migration.read_text(encoding="utf-8"), encoding="utf-8")
+            second = Database(path, migrations_dir=old)
+            try:
+                self.assertEqual(second.schema_version(), 4)
+                sql = second.query_one("SELECT sql FROM sqlite_master WHERE name = 'workflow_presets'")["sql"]
+                self.assertIn("STRICT", sql)
+            finally:
+                second.close()
 
 
 if __name__ == "__main__":

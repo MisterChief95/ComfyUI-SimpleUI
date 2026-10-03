@@ -146,6 +146,17 @@ Uploads are stored privately with opaque IDs, then staged to a supported loader 
 
 Application SQLite stores metadata; media remains on disk. Use foreign keys, indexed owner/time queries, migrations, and transaction boundaries around related changes.
 
+Migration `005_collections.sql` adds STRICT `collections` (opaque `id`, `owner_id`,
+`name`, unique exact name per owner) and `collection_media` (`owner_id`,
+`collection_id`, `media_id`, composite primary key). Both tables reference profiles
+with `ON DELETE CASCADE`. Membership uses composite owner/id foreign keys to
+collections and media, also cascading; the `media_owner_id` unique index supports
+that constraint. Cross-profile links fail in SQLite as well as the API. The
+`collection_media_by_media` index supports virtual-folder membership checks.
+Deleting a collection deletes links only; deleting media or a profile removes its
+links automatically. Names are trimmed, 1–100 characters, and case-sensitive for
+uniqueness. Existing media and virtual Date/Workflow folders are preserved.
+
 | Records | Required content |
 | --- | --- |
 | profiles, sessions | Stable identity, password hash, hashed sessions, expiry |

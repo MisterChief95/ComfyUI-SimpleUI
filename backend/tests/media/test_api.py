@@ -5,6 +5,8 @@ These tests also pin the wiring INTEGRATE-001 has to reproduce in main.py.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -33,6 +35,7 @@ class MediaApiTestCase(AuthTestCase):
         self.settings.set_host("comfy_output_dir", str(self.output))
 
         self.media = MediaService(self.db, self.settings, data_dir)
+        self.addCleanup(self.media.close)
         self.app.state.media = self.media
         self.auth.baseline_gate = self.media.baseline_status
         # main.py registers /api/{path:path} as a catch-all 404, and FastAPI
@@ -104,6 +107,23 @@ class GalleryTest(MediaApiTestCase):
         self.assertEqual(
             self.local_client().get(f"/api/media/{media_id}/thumbnail").status_code, 404
         )
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is optional and not installed")
+    def test_a_real_video_gets_a_poster_frame_when_ffmpeg_is_available(self) -> None:
+        clip = self.output / "real.mp4"
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=0.5:r=10",
+             "-pix_fmt", "yuv420p", "-y", str(clip)],
+            check=True,
+        )
+        self.media.import_baseline()
+        media_id = self.own_media()["real.mp4"]["id"]
+
+        response = self.local_client().get(f"/api/media/{media_id}/thumbnail")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/jpeg")
+        self.assertFalse(list(self.media.thumbnails.glob("*.part")))
 
     def test_download_serves_the_original_file_under_its_own_name(self) -> None:
         self.png("photo.png")
@@ -179,6 +199,27 @@ class VideoStreamingTest(MediaApiTestCase):
         self.assertEqual(response.headers["content-range"], f"bytes */{len(VIDEO_BYTES)}")
 
 
+class DeleteTest(MediaApiTestCase):
+    def test_a_captured_copy_is_removed_but_an_indexed_original_is_only_hidden(self) -> None:
+        original = self.png("photo.png")
+        self.media.import_baseline()
+        indexed = self.own_media()["photo.png"]["id"]
+        captured = self.media.capture_output(DEFAULT_PROFILE_ID, None, "photo.png")
+        self.media.thumbnail(DEFAULT_PROFILE_ID, captured)
+        copy = self.media.locate(DEFAULT_PROFILE_ID, captured).path
+        thumb = self.media.thumbnails / f"{captured}.jpg"
+        self.assertTrue(copy.is_file() and thumb.is_file())
+
+        response = self.post(
+            self.local_client(), "/api/media/delete", json={"ids": [captured, indexed, captured]}
+        )
+
+        self.assertEqual(response.json(), {"deleted": 2})
+        self.assertEqual(self.own_media(), {})
+        self.assertFalse(copy.exists() or thumb.exists())
+        self.assertTrue(original.is_file())
+
+
 class PrivacyTest(MediaApiTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -219,7 +260,7 @@ class PrivacyTest(MediaApiTestCase):
         self.assertEqual(
             self.put(client, f"/api/media/{image}", json={"favorite": True}).status_code, 404
         )
-        self.assertFalse((self.media.thumbnails / f"{image}.jpg").exists())
+        self.assertTrue((self.media.thumbnails / f"{image}.jpg").is_file())
 
     def test_the_owner_still_reaches_everything(self) -> None:
         client = self.local_client()
@@ -232,6 +273,12 @@ class PrivacyTest(MediaApiTestCase):
             self.put(client, f"/api/media/{image}", json={"favorite": True}).status_code, 200
         )
         self.assertTrue(self.own_media()["owned-by-default.png"]["favorite"])
+
+    def test_another_profile_cannot_delete_the_media(self) -> None:
+        image = self.owned["owned-by-default.png"]["id"]
+        response = self.post(self.bee(), "/api/media/delete", json={"ids": [image]})
+        self.assertEqual(response.json(), {"deleted": 0})
+        self.assertIn("owned-by-default.png", self.own_media())
 
     def test_an_unauthenticated_request_gets_nothing(self) -> None:
         self.assertEqual(self.local_client().get("/api/media").status_code, 401)

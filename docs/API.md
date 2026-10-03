@@ -116,15 +116,133 @@ owned and revisioned, and separates blocking errors from warnings:
 | PUT | `/api/workflows/{id}/presets/{preset_id}` | `{ name?, values?, expected_revision }` (at least one of `name`/`values`) → `Preset`; `409` on a revision mismatch, `404` if missing or not owned |
 | DELETE | `/api/workflows/{id}/presets/{preset_id}` | `204`; `404` if missing or not owned |
 | GET | `/api/media` | `{ items, next_cursor }` gallery for the session's own media (`?cursor=`, `?limit=`, and filters `?media_kind=`, `?favorite=`, `?workflow_id=`, `?generation_id=`, `?created_after=`, `?created_before=`, `?prompt=`) |
+| GET | `/api/media/tree` | `?path=` → `{ path, timezone: "UTC", count, children: [{ path, name, count }], breadcrumbs: [{ path, name }] }`, computed over the session's visible media |
+| GET | `/api/media/suggestions` | `?q=TEXT&limit=10` → `{ items: string[] }`, owner-scoped known workflow names and saved scalar prompt/control values |
 | POST | `/api/media/import` | One-time baseline index of the configured output folder. **Local gate.** `409` when refused |
 | GET/HEAD | `/api/media/{id}/file` | The original bytes, with range support; `404` when not owned |
 | GET/HEAD | `/api/media/{id}/download` | Same bytes under the original filename; never transcoded |
+| POST | `/api/media/download-zip/preview` | JSON `{ ids: string[] }` → `{ entries: [{ id, filename, size }], skipped: [{ id, reason: "unavailable" }], total_bytes }` |
+| POST | `/api/media/download-zip` | JSON `{ ids: string[] }` or URL-encoded `selection` containing that JSON plus `csrf_token`; streams `selected-media.zip` |
 | GET | `/api/media/{id}/thumbnail` | `image/jpeg` preview |
 | PUT | `/api/media/{id}` | `{ hidden?, favorite? }` → `{ ok: true }` |
 
 Every route above is registered ahead of the `/api/{path:path}` catch-all in
 `backend/app/main.py`; FastAPI matches in registration order, so a router
 included after it could never run.
+
+Batch ZIP downloads accept 1–200 IDs (each 1–100 characters), deduplicate repeated
+IDs, and cap available original bytes at **2 GiB** (`413` above the cap; `422`
+for invalid IDs/count). The download request body is capped at **64 KiB** (`413`).
+Every ID is owner-checked; missing, foreign, changed, or unreadable files all
+report only `unavailable`, without revealing another owner's filenames or paths.
+The archive uses ZIP_STORED, ZIP64, and 64 KiB reads, with no temporary archive
+or whole-media buffer. Original basenames are used (unsafe extraction characters
+are replaced), with case-insensitive collisions disambiguated as `name (2).ext`.
+`manifest.json` is reserved for a final report containing `included` entries and
+`skipped` IDs; an I/O failure after a member starts marks that member `incomplete`
+and gives its archive filename. Such incomplete members should be discarded.
+`X-Media-Skipped` counts pre-stream skips; the manifest is authoritative for
+failures during streaming. Empty selections of available files yield a manifest-only ZIP.
+No real filesystem paths appear in either response.
+
+JSON requests use the usual Origin and X-CSRF-Token checks. Native form downloads
+retain the same origin check and accept the per-session token in `csrf_token`
+instead of a header. The gallery previews with authenticated JSON, reports
+skipped items, then submits a native form in the current browsing context so archive
+bytes are downloaded by the browser without a JavaScript Blob. The preview is
+advisory: download rechecks ownership, availability, and size; later failures
+are recorded in the manifest. A successful attachment keeps the gallery open;
+an HTTP failure from the form displays the error response in the current page.
+
+Gallery suggestions require at least two non-whitespace characters (`q` max 500;
+shorter queries return an empty list). `limit` is 1–10. A bounded scan uses the
+owner/time index to read only the latest 100 generations, at most 65,536 characters of each
+saved values snapshot and its first 200 controls. Larger snapshots are skipped.
+Distinct matching strings/numbers/booleans and owner-matched workflow names are returned;
+empty, nested, over-500-character, and slash/backslash-bearing values are excluded
+to avoid surfacing filesystem paths. These values remain generation history,
+not global tags. Purged snapshots contribute no control values; workflow names
+can still be known from retained generation provenance. Both suggestions and the gallery
+`prompt` filter accept `search_field=any|prompt|model` (default `any`, preserving
+the previous saved-value/workflow search). Matching is a literal, case-folded
+substring, including Unicode; `%` and `_` have no wildcard meaning.
+The Saved metadata input debounces requests by 250 ms,
+uses a native keyboard-accessible datalist, and applies a selected suggestion.
+
+Field scope uses the final input name in the stored `node_id:input_name` key
+(or the whole key for legacy snapshots), case-insensitively, never UI labels or
+inferred graph roles. `prompt` selects `text`, `prompt`, `positive`, `negative`,
+`positive_prompt`, and `negative_prompt`; text inputs may contain non-prompt text.
+`model` selects `model`, `model_name`, `checkpoint`, `checkpoint_name`, `ckpt_name`,
+`unet_name`, `diffusion_model`, `diffusion_model_name`, `lora_name`, `vae_name`,
+`clip_name`, `clip_name1`, `clip_name2`, and `clip_name3`. Custom input names remain
+searchable through `any`. `any` includes all stored scalar values and current
+owner-matched workflow names, including seeds, sampler names, numbers and booleans.
+Neither keys, nested values, raw graphs nor file metadata/locators are searched.
+Imported media without a generation never matches. Cleared snapshots contribute
+no values; only `any` can still match a retained workflow association.
+
+Gallery search terms are 1–500 characters (invalid fields/lengths return `422`).
+Each request uses the owner/time generation index to inspect only the latest
+1,000 generations, at most 65,536 snapshot characters and the first 200 controls
+per generation; larger snapshots are skipped. Workflow names are capped at 501
+characters. JSON is parsed once per generation, independent of output count,
+and at most 1,000 matching generation IDs are passed to the owner-scoped media
+query. Suggestions retain their smaller 100-generation/10-result bounds and
+path exclusion. Search does not promise matches in older history or beyond
+these snapshot limits. Gallery pages remain capped at 200 items; ordinary
+media keyset paging uses the owner/time index, while random ordering still
+scans/sorts the owner's matching media. No filesystem scan or new search index
+is required. Keep `prompt` and `search_field` unchanged with the other filters
+across pages; changing the field applies a fresh cursor when Apply is pressed.
+
+Gallery virtual folders use `path=""` for **All media**, `Date/YYYY/MM/DD`
+(year and month parents are also browsable), `Workflow/<opaque workflow ID>`
+(displayed with the current workflow name), `Favorites`, `Videos`, and `Unsorted`.
+Workflow IDs keep duplicate names, slashes, and renames unambiguous. Unsorted means
+no owner-matched generation/workflow association, including deleted workflows.
+Dates use media `created_ms` grouped in **UTC**, with inclusive midnight and
+exclusive next midnight; the manual date filters retain their existing behavior.
+Invalid virtual paths return `400`; unknown or foreign workflow IDs return an
+empty folder with an “Unknown workflow” breadcrumb. No filesystem locators are returned.
+
+Pass the same `?path=` to `GET /api/media` to browse a folder through the existing
+list query. Folder constraints intersect all other filters. `?sort=newest` (default),
+`oldest`, or `random` and `?cursor=` retain GAL-003's keyset behavior; retain the
+same path, filters, and sort across pages and reset the cursor when any changes.
+Random cursors retain their shuffle seed; a cursor with a different sort returns `400`.
+Tree counts exclude hidden media, include unavailable indexed items, and describe
+the folder **before manual filters**. They count indexed rows in SQLite without
+filesystem scans. SQLite uses an owner index to restrict counts to the owner
+(and the owner/time index for date ranges).
+
+### Collections
+
+All routes below use the session owner; mutations require the existing CSRF and
+same-origin checks. Names are trimmed, 1–100 characters, unique per owner with
+case-sensitive matching (`409` on duplicates, `422` on invalid input).
+
+| Method | Path | Contract |
+| --- | --- | --- |
+| GET | `/api/media/collections` | `{ items: [{ id, name, count }] }`, ordered by name; counts exclude hidden media |
+| POST | `/api/media/collections` | `{ name }` → `201 { id, name }` |
+| PUT | `/api/media/collections/{id}` | `{ name }` → `{ id, name }`; rename |
+| DELETE | `/api/media/collections/{id}` | `{ ok: true }`; remove collection and links, retain all media |
+| POST | `/api/media/collections/{id}/media` | `{ ids: [media_id, ...] }` → `{ changed }`; bulk add |
+| POST | `/api/media/collections/{id}/remove` | Same body/response; bulk remove |
+
+Bulk requests accept 1–500 IDs, deduplicate input, and are idempotent. Missing or
+foreign collection/media IDs return `404` with no partial mutation. Collection
+rename/delete also return `404` for foreign or missing IDs.
+
+`GET /api/media?collection_id=<id>` intersects the collection with all other
+filters and paging. Missing/foreign IDs produce empty results. The virtual tree
+adds `Collections` and `Collections/<opaque id>` leaves. Names (including slashes)
+appear in breadcrumbs; unknown/foreign leaves show “Unknown collection”. The
+parent count counts distinct visible media assigned to any collection; leaf
+counts count visible members. Empty collections remain browsable with count 0.
+Walk mode follows collection siblings in server name order, retaining its existing
+deduplication when media belongs to multiple collections.
 
 `/api/generations`, `/api/events`, and `/api/uploads` are specified in
 [ARCHITECTURE.md](ARCHITECTURE.md).
