@@ -76,7 +76,8 @@ instead of section-level `columns` and `items`:
 This is exactly section → row → column → existing leaf items. There is no recursive
 row item, deeper nesting, column resizing, or per-panel disclosure. Rows have 1–3
 equal-width columns, collapsing responsively like auto sections. Empty panel sections
-and columns are allowed; an empty row is not. Item `span: "full"` fills its column's
+and columns are allowed, so a row whose columns hold no items is valid (the designer
+creates these when adding a row); a row with zero columns is not. Item `span: "full"` fills its column's
 leaf grid in a panel section, not neighboring columns.
 
 The backend accepts v1 and v2. V1 sections have only the original body and are
