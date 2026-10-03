@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import random
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -112,10 +113,10 @@ class ImportValidation(unittest.TestCase):
             self.assertEqual(caught.exception.detail.field, "1.inputs.value")
 
     def test_parser_limits_return_import_errors(self) -> None:
-        for value, code in (
-            ("[" * 2000 + "0" + "]" * 2000, "graph_too_deep"),
-            ("9" * 5000, "malformed_json"),
-        ):
+        cases = [("[" * 2000 + "0" + "]" * 2000, "graph_too_deep")]
+        if sys.version_info >= (3, 11):  # int digit limit appeared in 3.11
+            cases.append(("9" * 5000, "malformed_json"))
+        for value, code in cases:
             with self.subTest(code=code), self.assertRaises(GraphImportError) as caught:
                 parse_graph(
                     '{"1":{"class_type":"Example","inputs":{"value":' + value + "}}}"

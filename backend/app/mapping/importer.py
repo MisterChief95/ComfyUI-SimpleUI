@@ -166,7 +166,7 @@ def _as_node_map(document: Any) -> dict[str, Any]:
                 field=f"{node_id}.inputs",
             )
 
-    _check_depth(document)
+    _check_values(document)
     return document
 
 
@@ -178,7 +178,7 @@ def _is_node_map(value: Any) -> bool:
     )
 
 
-def _check_depth(value: Any, depth: int = 0, field: str = "") -> None:
+def _check_values(value: Any, depth: int = 0, field: str = "") -> None:
     if depth > MAX_DEPTH:
         raise GraphImportError(
             "graph_too_deep",
@@ -193,10 +193,10 @@ def _check_depth(value: Any, depth: int = 0, field: str = "") -> None:
         )
     if isinstance(value, dict):
         for key, item in value.items():
-            _check_depth(item, depth + 1, f"{field}.{key}" if field else key)
+            _check_values(item, depth + 1, f"{field}.{key}" if field else key)
     elif isinstance(value, list):
         for index, item in enumerate(value):
-            _check_depth(item, depth + 1, f"{field}[{index}]")
+            _check_values(item, depth + 1, f"{field}[{index}]")
 
 
 def looks_like_link(value: Any) -> bool:

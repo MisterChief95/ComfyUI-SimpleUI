@@ -273,8 +273,7 @@
 			/>
 			<input
 				class="slider-number"
-				type={isInt ? 'text' : 'number'}
-				inputmode={isInt ? 'numeric' : 'decimal'}
+				type="number"
 				aria-label={`${control.label} value`}
 				aria-describedby={described}
 				aria-invalid={invalid}
