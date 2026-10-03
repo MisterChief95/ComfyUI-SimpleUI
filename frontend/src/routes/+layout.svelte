@@ -4,6 +4,7 @@
 	import { session } from '$lib/session.svelte';
 	import { settingsState } from '$lib/settings.svelte';
 	import Nav from '$lib/ui/Nav.svelte';
+	import { navCollapsed } from '$lib/ui/navCollapsed.svelte';
 	import SignIn from '$lib/ui/SignIn.svelte';
 
 	let { children } = $props();
@@ -27,7 +28,11 @@
 {#if session.loading}
 	<p class="status">Loading…</p>
 {:else if session.info?.authenticated}
-	<div class="shell" class:has-header={session.info.multi_user}>
+	<div
+		class="shell"
+		class:has-header={session.info.multi_user}
+		class:collapsed={navCollapsed.value}
+	>
 		<Nav />
 		<main class="app-main">
 			{@render children()}
@@ -88,6 +93,10 @@
 		.shell,
 		.shell.has-header {
 			--rail-w: 13.5rem;
+		}
+		.shell.collapsed,
+		.shell.collapsed.has-header {
+			--rail-w: 4.5rem;
 		}
 	}
 </style>
