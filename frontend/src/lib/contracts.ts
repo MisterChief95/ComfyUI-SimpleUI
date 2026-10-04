@@ -266,6 +266,7 @@ export interface MediaInfo {
 	favorite: boolean | 0 | 1;
 	created_ms: number;
 	filename: string;
+	collections?: { id: Id; name: string }[];
 }
 
 export type MediaPage = Page<MediaInfo>;

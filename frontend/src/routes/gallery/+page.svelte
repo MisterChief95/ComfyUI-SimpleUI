@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
+	import { flip } from 'svelte/animate';
+	import { fade } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import { layoutGrid, visibleRows } from '$lib/media/grid';
 	import { GalleryState } from '$lib/media/gallery.svelte';
 	import { openViewer } from '$lib/media/openViewer';
@@ -8,6 +12,7 @@
 	import { settingsState } from '$lib/settings.svelte';
 	import { session } from '$lib/session.svelte';
 	import Compare from '$lib/media/Compare.svelte';
+	import CollectionBadge from '$lib/media/CollectionBadge.svelte';
 	import type { MediaInfo } from '$lib/contracts';
 	import Viewer from '$lib/media/Viewer.svelte';
 	import { ViewPrefs } from '$lib/media/viewPrefs.svelte';
@@ -511,6 +516,9 @@
 				class:unavailable={!!entry.item && gallery.isUnavailable(entry.item)}
 				class:picked={!!entry.item &&
 					(picked.some((p) => p.id === entry.item?.id) || chosenIds.has(entry.item.id))}
+				animate:flip={{ duration: prefersReducedMotion.current ? 0 : 220, easing: cubicOut }}
+				in:fade={{ duration: prefersReducedMotion.current ? 0 : 140 }}
+				out:fade={{ duration: prefersReducedMotion.current ? 0 : 100 }}
 			>
 				{#if entry.item}
 					{@const item = entry.item}
@@ -555,6 +563,9 @@
 					</button>
 				{:else if entry.group}
 					<h2>{folderName(entry.group, entry.group)}</h2>
+				{/if}
+				{#if entry.item?.collections?.length}
+					<CollectionBadge collections={entry.item.collections} />
 				{/if}
 			</li>
 		{/each}

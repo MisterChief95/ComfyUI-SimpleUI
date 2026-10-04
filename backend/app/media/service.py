@@ -856,6 +856,7 @@ class MediaService:
             )
         }
         item["filename"] = PurePosixPath(row["storage_path"]).name
+        item["collections"] = row.get("collections", [])
         return item
 
     def set_flags(
