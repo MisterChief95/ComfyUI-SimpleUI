@@ -71,8 +71,8 @@
 		event.preventDefault();
 		dragging = false;
 		const dropped = event.dataTransfer?.files[0] ?? null;
-		if (dropped && !isJson(dropped)) {
-			importError = 'Drop a ComfyUI API-format .json file.';
+		if (dropped && !isJson(dropped) && !/\.(png|webp|avi|mkv|mov|mp4|webm)$/i.test(dropped.name)) {
+			importError = 'Drop API JSON, or a PNG, WebP or video containing a ComfyUI API prompt.';
 			return;
 		}
 		choose(dropped);
@@ -84,15 +84,19 @@
 		importing = true;
 		importError = null;
 		try {
-			const body = await file.text();
-			const created = await api<WorkflowInfo>(
-				`/workflows?name=${encodeURIComponent(name.trim())}`,
-				{
-					method: 'POST',
-					headers: { 'content-type': 'application/json' },
-					body
-				}
-			);
+			const json = isJson(file);
+			const body = json ? await file.text() : file;
+			const query = new URLSearchParams({
+				name: name.trim(),
+				...(json ? {} : { filename: file.name })
+			});
+			const created = await api<WorkflowInfo>(`/workflows${json ? '' : '/import-media'}?${query}`, {
+				method: 'POST',
+				headers: {
+					'content-type': json ? 'application/json' : file.type || 'application/octet-stream'
+				},
+				body
+			});
 			name = '';
 			file = null;
 			if (picker) picker.value = '';
@@ -205,7 +209,8 @@
 				{#if file}
 					<strong>{file.name}</strong> ready to import
 				{:else}
-					Drop a ComfyUI <strong>API-format</strong> .json file anywhere on this page
+					Drop ComfyUI <strong>API JSON</strong>, or a PNG, WebP or video with an embedded API
+					prompt
 				{/if}
 			</p>
 			<input
@@ -213,10 +218,14 @@
 				class="sr-only"
 				id="workflow-file"
 				type="file"
-				accept="application/json,.json"
+				accept="application/json,.json,image/png,.png,image/webp,.webp,video/*,.mkv,.webm,.mp4,.mov,.avi"
 				onchange={(e) => choose(e.currentTarget.files?.[0] ?? null)}
 			/>
 			<label class="btn" for="workflow-file">Choose file</label>
+			<small class="muted"
+				>Media must contain a ComfyUI API prompt. UI-only workflows and images without metadata
+				require an API JSON export.</small
+			>
 		</div>
 		<div class="row wrap fields">
 			<div class="grow field">

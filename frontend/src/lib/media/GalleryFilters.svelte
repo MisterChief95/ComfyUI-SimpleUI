@@ -46,9 +46,12 @@
 			value={gallery.searchField}
 			onchange={(event) => gallery.setSearchField(event.currentTarget.value)}
 		>
-			<option value="any">Any saved value / workflow</option>
+			<option value="any">Any metadata / filename</option>
 			<option value="prompt">Prompt / text inputs</option>
 			<option value="model">Model / checkpoint inputs</option>
+			<option value="seed">Seed</option>
+			<option value="workflow">Workflow name</option>
+			<option value="filename">Filename</option>
 		</select>
 	</label>
 	<label>
@@ -75,7 +78,7 @@
 			{#each gallery.suggestions as value (value)}<option {value}></option>{/each}
 		</datalist>
 		<small id="search-scope"
-			>Searches retained inputs of the latest 1,000 generations. Imported files have no metadata.</small
+			>Searches the whole library by literal substring, including filenames and retained inputs.</small
 		>
 	</label>
 </form>

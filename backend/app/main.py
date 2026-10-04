@@ -38,6 +38,8 @@ from .settings.routes import router as settings_router
 from .settings.service import SettingsStore
 from .storage.db import Database, in_thread
 from .storage.repository import Repository
+from .styles import StyleStore
+from .styles import router as styles_router
 from .uploads import UploadService
 from .uploads import router as uploads_router
 from .workflows.routes import router as workflows_router
@@ -168,6 +170,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.state.auth = auth
     app.state.catalog = catalog
     app.state.repository = repository
+    app.state.styles = StyleStore(database)
     app.state.workflows = workflows
     app.state.media = media
     app.state.uploads = uploads
@@ -225,6 +228,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(settings_router)
     app.include_router(catalog_router)
     app.include_router(workflows_router)
+    app.include_router(styles_router)
     app.include_router(media_router)
     app.include_router(uploads_router)
     app.include_router(generations_router)

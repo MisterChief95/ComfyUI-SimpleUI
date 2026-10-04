@@ -1,10 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
-	import { flip } from 'svelte/animate';
-	import { fade } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
-	import { prefersReducedMotion } from 'svelte/motion';
+	import { layoutGrid, visibleRows } from '$lib/media/grid';
 	import { GalleryState } from '$lib/media/gallery.svelte';
 	import { openViewer } from '$lib/media/openViewer';
 	import { workflowNames } from '$lib/media/workflowNames.svelte';
@@ -24,14 +21,98 @@
 	const prefs = new ViewPrefs();
 	const gallery = new GalleryState(prefs);
 	const wide = new MediaQuery('min-width: 768px');
-	type GridEntry = { key: string; group: string | null; item: MediaInfo | null };
-	const gridEntries = $derived(
-		gallery.items.flatMap<GridEntry>((item, index) => {
-			const group = gallery.groupHeader(index);
-			const tile = { key: item.id, group: null, item };
-			return group ? [{ key: `group:${item.id}`, group, item: null }, tile] : [tile];
-		})
+	// This device's slider wins over the profile setting; either only changes the grid's minimum column width.
+	const profileTile = $derived(
+		{ small: 120, large: 208 }[String(settingsState.data?.profile.thumbnail_size)] ?? 160
 	);
+	const tile = $derived(prefs.size || profileTile);
+
+	type GridEntry = {
+		key: string;
+		group: string | null;
+		item: MediaInfo | null;
+		index: number;
+		top: number;
+		left: number;
+		width: number;
+	};
+	let grid = $state<HTMLUListElement>();
+	let gridWidth = $state(343);
+	let gridGap = $state(8);
+	let viewportTop = $state(0);
+	let viewportHeight = $state(800);
+	const geometry = $derived(
+		layoutGrid(gallery.items.length, gridWidth, tile, gridGap, (index) =>
+			gallery.groupHeader(index)
+		)
+	);
+	const windowRows = $derived(visibleRows(geometry.rows, viewportTop, viewportHeight));
+	const gridEntries = $derived(
+		windowRows.flatMap<GridEntry>((row) =>
+			row.group
+				? [
+						{
+							key: `group:${gallery.items[row.start].id}`,
+							group: row.group,
+							item: null,
+							index: row.start,
+							top: row.top,
+							left: 0,
+							width: gridWidth
+						}
+					]
+				: gallery.items.slice(row.start, row.end).map((item, column) => ({
+						key: item.id,
+						group: null,
+						item,
+						index: row.start + column,
+						top: row.top,
+						left: column * (geometry.cell + gridGap),
+						width: geometry.cell
+					}))
+		)
+	);
+
+	let frame = 0;
+	function measureGrid(): void {
+		if (frame) return;
+		frame = requestAnimationFrame(() => {
+			frame = 0;
+			if (!grid) return;
+			const rect = grid.getBoundingClientRect();
+			gridWidth = rect.width;
+			gridGap = parseFloat(getComputedStyle(grid).columnGap) || 8;
+			viewportTop = -rect.top;
+			viewportHeight = window.innerHeight;
+		});
+	}
+	$effect(() => {
+		void gallery.tree;
+		void panelOpen;
+		if (!grid) return;
+		const observer = new ResizeObserver(measureGrid);
+		observer.observe(grid);
+		measureGrid();
+		return () => {
+			observer.disconnect();
+			cancelAnimationFrame(frame);
+			frame = 0;
+		};
+	});
+
+	// Closing the viewer returns to the same scroll position, even after loading another page.
+	let viewerOpen = false;
+	let returnScroll = 0;
+	$effect(() => {
+		if (gallery.selected && !viewerOpen) {
+			viewerOpen = true;
+			returnScroll = window.scrollY;
+		} else if (!gallery.selected && viewerOpen) {
+			viewerOpen = false;
+			window.scrollTo({ top: returnScroll, behavior: 'instant' });
+			measureGrid();
+		}
+	});
 
 	$effect(() => {
 		void [prefs.sort, prefs.size, prefs.fit, prefs.badges, prefs.walk];
@@ -46,6 +127,7 @@
 
 	let selecting = $state(false);
 	let chosen = $state<string[]>([]);
+	const chosenIds = $derived(new Set(chosen));
 	let collectionOpen = $state(false);
 	let collectionChoice = $state('');
 	let collectionName = $state('');
@@ -130,12 +212,6 @@
 		if (await gallery.deleteMany(chosen)) toggleSelect();
 	}
 
-	// This device's slider wins over the profile setting; either only changes the grid's minimum column width.
-	const profileTile = $derived(
-		{ small: 120, large: 208 }[String(settingsState.data?.profile.thumbnail_size)] ?? 160
-	);
-	const tile = $derived(prefs.size || profileTile);
-
 	// Date folders arrive as bare digits (2026 / 10 / 03); show month and day names instead. Dates are UTC.
 	function folderName(path: string, name: string): string {
 		const m = /^Date\/(\d{4})\/(\d{2})(?:\/(\d{2}))?$/.exec(path);
@@ -197,6 +273,8 @@
 	}
 </script>
 
+<svelte:window onscroll={measureGrid} onresize={measureGrid} />
+
 <div class="page gallery stack" style:--gap="var(--space-2)">
 	<div class="row toolbar">
 		<h1 class="grow">Gallery</h1>
@@ -235,11 +313,7 @@
 				>Delete ({chosen.length})</button
 			>
 		{/if}
-		{#if selecting}
-			<button type="button" class="btn" onclick={() => (chosen = gallery.items.map((i) => i.id))}
-				>Select all</button
-			>
-		{/if}
+
 		<div class="row tools">
 			<button
 				type="button"
@@ -418,17 +492,25 @@
 	{:else if gallery.items.length === 0}
 		<p class="muted">No media matches these filters.</p>
 	{/if}
-	<ul class="grid" style:--tile={`${tile}px`} aria-busy={gallery.loading}>
+	<ul
+		class="grid"
+		bind:this={grid}
+		style:height={`${geometry.height}px`}
+		aria-busy={gallery.loading}
+		aria-label="Media"
+	>
 		{#each gridEntries as entry (entry.key)}
 			<li
 				class={entry.item ? 'tile' : 'group-header'}
+				style:top={`${entry.top}px`}
+				style:left={`${entry.left}px`}
+				style:width={`${entry.width}px`}
+				aria-posinset={entry.item ? entry.index + 1 : undefined}
+				aria-setsize={entry.item ? gallery.items.length : undefined}
 				class:fit={!!entry.item && prefs.fit}
 				class:unavailable={!!entry.item && gallery.isUnavailable(entry.item)}
 				class:picked={!!entry.item &&
-					(picked.some((p) => p.id === entry.item?.id) || chosen.includes(entry.item.id))}
-				animate:flip={{ duration: prefersReducedMotion.current ? 0 : 220, easing: cubicOut }}
-				in:fade={{ duration: prefersReducedMotion.current ? 0 : 140 }}
-				out:fade={{ duration: prefersReducedMotion.current ? 0 : 100 }}
+					(picked.some((p) => p.id === entry.item?.id) || chosenIds.has(entry.item.id))}
 			>
 				{#if entry.item}
 					{@const item = entry.item}
@@ -592,28 +674,30 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(var(--tile, 10rem), 1fr));
+		position: relative;
 		gap: var(--space-2);
 	}
 	.group-header {
-		grid-column: 1 / -1;
-		margin-top: var(--space-2);
-		overflow-wrap: anywhere;
+		position: absolute;
+		min-height: 48px;
+		display: flex;
+		align-items: center;
+		overflow: hidden;
 	}
 	.group-header h2 {
 		margin: 0;
 		font-size: var(--text-base);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		overflow: hidden;
 	}
 	.tile {
-		position: relative;
+		position: absolute;
 		min-width: 0;
 		overflow: hidden;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
 		background: var(--color-surface-2);
-		content-visibility: auto;
-		contain-intrinsic-size: auto var(--tile, 10rem);
 	}
 	.tile.fit :global(img) {
 		object-fit: contain;

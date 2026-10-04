@@ -10,10 +10,11 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from PIL import Image
+
 from app.media import MediaService
 from app.media import router as media_router
 from app.storage import DEFAULT_PROFILE_ID
-from PIL import Image
 
 # Absolute: under `discover -s tests` the top-level package is tests/ itself,
 # so a relative import climbs out of it.

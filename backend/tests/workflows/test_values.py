@@ -6,7 +6,6 @@ import json
 
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
-
 from tests.generations.test_routes import FakeUpstream
 from tests.workflows.test_layout import FIXTURES, GRAPH, LayoutTestCase, doc
 

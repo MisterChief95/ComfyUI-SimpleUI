@@ -30,6 +30,7 @@ from ..mapping import SeedPolicy, SubmissionError, build_submission_graph, resol
 from ..mapping.input_adapters import InputAdapterError, bind_upload
 from ..mapping.submission import DEFAULT_SEED_MAX
 from ..storage.db import in_thread
+from ..styles import apply_styles
 from .service import CancellationUnavailable, GenerationService
 from .store import GenerationBusy, GenerationConflict
 
@@ -49,6 +50,9 @@ class SubmitRequest(Model):
     #: ``true`` a bool and ``5`` an int rather than coercing either to a string.
     edits: dict[str, str | bool | int | float] = Field(default_factory=dict)
     seed_policy: SeedPolicy | None = None
+    #: Saved prompt styles (app/styles.py) applied in order to the traced
+    #: positive/negative prompt controls; the effective text is what is stored.
+    style_ids: list[Id] = Field(default_factory=list, max_length=10)
 
 
 class GenerationInfo(Model):
@@ -160,6 +164,10 @@ async def submit_generation(
         except InputAdapterError as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    styles = await in_thread(state.styles.get_many, principal.owner_id, body.style_ids)
+    if styles is None:
+        raise HTTPException(404, "Style was not found.")
+
     generations: GenerationService = state.generations
 
     def resolve() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -184,6 +192,7 @@ async def submit_generation(
             edits[control.binding_id] = str(
                 resolve_seed(current, seed_policy, maximum=maximum)
             )
+        apply_styles(styles, schema.controls, edits)
         submission_graph = build_submission_graph(graph, schema, edits)
         return submission_graph, edits
 
@@ -195,6 +204,7 @@ async def submit_generation(
                 "workflow_id": body.workflow_id,
                 "edits": body.edits,
                 "seed_policy": seed_policy,
+                **({"style_ids": body.style_ids} if body.style_ids else {}),
             },
             resolve=resolve,
             workflow_id=body.workflow_id,

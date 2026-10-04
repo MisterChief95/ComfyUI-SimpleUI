@@ -13,10 +13,10 @@ import json
 import unittest
 from pathlib import Path
 
-from app.catalog import normalize
-from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
 from starlette.websockets import WebSocketDisconnect
 
+from app.catalog import normalize
+from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
 from tests.auth.support import AuthTestCase
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
@@ -126,6 +126,40 @@ class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
         # The seed control's stored default survives -- it was not re-randomized
         # just because a seed policy exists (WORKFLOW_MAPPING.md).
         self.assertEqual(detail["effective_values"]["5:seed"], "123456789")
+
+    def test_styles_are_applied_and_the_effective_prompt_is_recorded(self) -> None:
+        client = self.local_client()
+        workflow_id = self.import_graph(client)
+        style = self.post(
+            client,
+            "/api/styles",
+            json={"name": "S", "positive": "{prompt}, STYLED", "negative": "NEG"},
+        ).json()
+
+        response = self.post(
+            client,
+            "/api/generations",
+            json={
+                "workflow_id": workflow_id,
+                "request_key": "styled-1",
+                "style_ids": [style["id"]],
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        values = response.json()["effective_values"].values()
+        self.assertTrue(any(str(v).endswith(", STYLED") for v in values))
+        self.assertTrue(any("NEG" in str(v) for v in values))
+
+        missing = self.post(
+            client,
+            "/api/generations",
+            json={
+                "workflow_id": workflow_id,
+                "request_key": "x",
+                "style_ids": ["nope"],
+            },
+        )
+        self.assertEqual(missing.status_code, 404)
 
     def test_the_submitted_graph_can_be_read_back_by_its_owner_only(self) -> None:
         self.enable_multi_user(PASSWORD)

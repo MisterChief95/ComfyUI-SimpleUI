@@ -4,6 +4,13 @@ import type { GenerationDetail, MediaInfo, MediaPage } from '$lib/contracts';
 import type { ViewPrefs } from './viewPrefs.svelte';
 import { advance, isLeaf, sibling, type WalkCursor, type WalkFolder } from './walk';
 
+type Provenance = {
+	source: string;
+	raw: Record<string, string>;
+	values: Record<string, string>;
+	diagnostics: string[];
+};
+
 type Folder = { path: string; name: string; count: number };
 type Collection = { id: string; name: string; count: number };
 type MediaTree = {
@@ -134,6 +141,7 @@ export class GalleryState {
 	error = $state<string | null>(null);
 	selected = $state<MediaInfo | null>(null);
 	detail = $state.raw<GenerationDetail | null>(null);
+	provenance = $state.raw<Provenance | null>(null);
 	detailLoading = $state(false);
 	detailError = $state<string | null>(null);
 	unavailable = $state<Record<string, boolean>>({});
@@ -381,7 +389,19 @@ export class GalleryState {
 		this.detail = null;
 		this.detailError = null;
 		this.detailLoading = false;
-		if (!item.generation_id) return;
+		this.provenance = null;
+		if (!item.generation_id) {
+			this.detailLoading = true;
+			try {
+				const result = await api<Provenance>(`/media/${item.id}/provenance`);
+				if (this.selected?.id === item.id) this.provenance = result;
+			} catch (cause) {
+				if (this.selected?.id === item.id) this.detailError = describeApiError(cause);
+			} finally {
+				if (this.selected?.id === item.id) this.detailLoading = false;
+			}
+			return;
+		}
 		this.detailLoading = true;
 		try {
 			const detail = await api<GenerationDetail>(`/generations/${item.generation_id}`);
@@ -394,6 +414,7 @@ export class GalleryState {
 	}
 
 	close(): void {
+		this.provenance = null;
 		this.selected = null;
 		this.detail = null;
 	}

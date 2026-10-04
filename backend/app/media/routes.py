@@ -49,7 +49,9 @@ async def gallery(
         int | None, Query(ge=0, le=9_223_372_036_854_775_807)
     ] = None,
     prompt: Annotated[str | None, Query(min_length=1, max_length=500)] = None,
-    search_field: Literal["prompt", "model", "any"] = "any",
+    search_field: Literal[
+        "prompt", "model", "seed", "workflow", "filename", "any"
+    ] = "any",
 ):
     try:
         return await in_thread(
@@ -82,7 +84,9 @@ async def filter_suggestions(
     principal: CurrentPrincipal,
     q: Annotated[str, Query(max_length=500)] = "",
     limit: Annotated[int, Query(ge=1, le=10)] = 10,
-    search_field: Literal["prompt", "model", "any"] = "any",
+    search_field: Literal[
+        "prompt", "model", "seed", "workflow", "filename", "any"
+    ] = "any",
 ):
     return await in_thread(
         request.app.state.media.filter_suggestions,
@@ -91,6 +95,18 @@ async def filter_suggestions(
         limit,
         search_field,
     )
+
+
+@router.get("/duplicates")
+async def duplicate_groups(
+    request: Request, principal: CurrentPrincipal, media_id: str
+):
+    result = await in_thread(
+        request.app.state.media.duplicate_groups, principal.owner_id, media_id
+    )
+    if result is None:
+        raise _missing()
+    return result
 
 
 @router.get("/tree")
@@ -309,6 +325,16 @@ async def download(request: Request, media_id: str, principal: CurrentPrincipal)
         media_type=located.row["media_type"],
         filename=PurePosixPath(located.row["storage_path"]).name,
     )
+
+
+@router.get("/{media_id}/provenance")
+async def provenance(request: Request, media_id: str, principal: CurrentPrincipal):
+    result = await in_thread(
+        request.app.state.media.provenance, principal.owner_id, media_id
+    )
+    if result is None:
+        raise _missing()
+    return result
 
 
 @router.get("/{media_id}/thumbnail")

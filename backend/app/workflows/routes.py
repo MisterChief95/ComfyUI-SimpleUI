@@ -9,6 +9,8 @@ exact large integers) apply to the real file instead of to a re-serialized copy.
 from __future__ import annotations
 
 import json
+import tempfile
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
@@ -24,6 +26,7 @@ from ..mapping.corrections import (
     SaveCorrection,
 )
 from ..mapping.submission import SubmissionError
+from ..media.metadata import VIDEO_SUFFIXES, embedded_api_prompt, read_metadata
 from ..storage.db import in_thread
 from ..storage.repository import LimitExceeded, RevisionConflict
 from .layout import BindingId, SaveLayout, WorkflowLayout
@@ -110,6 +113,66 @@ async def import_workflow(
         request.app.state.repository.get_workflow, principal.owner_id, workflow_id
     )
     return _info(row)
+
+
+MAX_MEDIA_IMPORT_BYTES = 256 * 1024 * 1024
+
+
+@router.post(
+    "/import-media",
+    response_model=WorkflowInfo,
+    status_code=201,
+    dependencies=[Mutation],
+)
+async def import_media_workflow(
+    request: Request,
+    principal: CurrentPrincipal,
+    name: Name,
+    filename: Annotated[str, Query(min_length=1, max_length=255)],
+) -> WorkflowInfo:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".png", ".webp", *VIDEO_SUFFIXES}:
+        raise HTTPException(
+            415, "Choose a PNG, WebP, video, or a ComfyUI API JSON export."
+        )
+    temporary = await in_thread(
+        lambda: tempfile.TemporaryDirectory(
+            prefix="workflow-import-", dir=request.app.state.config.data_dir
+        )
+    )
+    path = Path(temporary.name) / ("media" + suffix)
+    stream = None
+    try:
+        stream = await in_thread(lambda: path.open("wb"))
+        total = 0
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > MAX_MEDIA_IMPORT_BYTES:
+                raise HTTPException(
+                    413,
+                    "Workflow media import exceeds the 256 MiB limit. Use API JSON instead.",
+                )
+            await in_thread(stream.write, chunk)
+        await in_thread(stream.close)
+        provenance = await in_thread(read_metadata, path)
+        try:
+            payload = embedded_api_prompt(provenance)
+            workflow_id, _graph = await in_thread(
+                request.app.state.workflows.import_workflow,
+                principal.owner_id,
+                name,
+                payload,
+            )
+        except (ValueError, GraphImportError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        row = await in_thread(
+            request.app.state.repository.get_workflow, principal.owner_id, workflow_id
+        )
+        return _info(row)
+    finally:
+        if stream is not None:
+            await in_thread(stream.close)
+        await in_thread(temporary.cleanup)
 
 
 @router.patch("/{workflow_id}", response_model=WorkflowInfo, dependencies=[Mutation])

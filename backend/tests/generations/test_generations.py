@@ -173,6 +173,26 @@ class SubmissionTests(GenerationTestCase):
         self.assertEqual(self.upstream.submit_count, 1)
         self.assertEqual(self.resolutions, 1)
 
+    async def test_validation_rejection_is_definite_not_unknown(self) -> None:
+        from app.comfy_client import ComfyRejected
+
+        async def reject(*args, **kwargs):
+            raise ComfyRejected(
+                "bad",
+                {
+                    "message": "bad",
+                    "node_errors": [
+                        {"node_id": "3", "message": "m", "input_name": "seed"}
+                    ],
+                },
+            )
+
+        self.upstream.submit_prompt = reject
+        row = await self.submit()
+        self.assertEqual(row["status"], "failed")
+        errs = row["error"]["rejection"]["node_errors"]
+        self.assertEqual(errs[0]["field"], "3.inputs.seed")
+
     async def test_pending_caps_are_enforced_inside_acceptance(self) -> None:
         capped = GenerationService(self.store, self.upstream, global_pending_cap=1)
         await capped.submit(

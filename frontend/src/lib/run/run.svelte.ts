@@ -66,6 +66,8 @@ export class RunState {
 	cancelling = $state(false);
 	cancelError = $state<string | null>(null);
 	notice = $state<string | null>(null);
+	/** Prompt styles applied at submit, in this order (ids of app/styles.py rows). */
+	styleIds = $state<string[]>([]);
 	/** False once a draft write failed: the draft will not survive a reload. */
 	draftPersisted = $state(true);
 
@@ -396,7 +398,8 @@ export class RunState {
 				workflow_id: this.workflowId,
 				request_key: requestKey,
 				edits,
-				seed_policy: 'fixed'
+				seed_policy: 'fixed',
+				style_ids: this.styleIds
 			});
 			await this.tracker.adopt(detail);
 		} catch (cause) {

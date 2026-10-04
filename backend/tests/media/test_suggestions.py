@@ -139,13 +139,18 @@ class SuggestionsTest(MediaApiTestCase):
             )
         for i in range(100):
             self.generation({}, key=f"recent-{i}")
-        self.assertEqual(self.suggestions("needle"), [])
+        self.assertEqual(self.suggestions("needle"), ["old needle"])
         self.generation({"huge": "x" * 65537, "prompt": "large needle"}, key="large")
-        self.assertEqual(self.suggestions("needle"), [])
+        self.assertEqual(
+            set(self.suggestions("needle")), {"old needle", "large needle"}
+        )
         self.generation(
             {**{str(i): "" for i in range(200)}, "prompt": "late needle"}, key="many"
         )
-        self.assertEqual(self.suggestions("needle"), [])
+        self.assertEqual(
+            set(self.suggestions("needle")),
+            {"old needle", "large needle", "late needle"},
+        )
         plan = self.db.query(
             "EXPLAIN QUERY PLAN SELECT id FROM generations WHERE owner_id = ?"
             " ORDER BY created_ms DESC, id DESC LIMIT 100",

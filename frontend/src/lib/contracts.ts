@@ -185,6 +185,17 @@ export interface Preset {
 	updated_ms: ExactInt;
 }
 
+/** Reusable prompt snippets (app/styles.py); `{prompt}` in `positive` marks where the user's text goes. */
+export interface Style {
+	id: Id;
+	name: string;
+	positive: string;
+	negative: string;
+	revision: number;
+	created_ms: ExactInt;
+	updated_ms: ExactInt;
+}
+
 // --- mapping/corrections.py --------------------------------------------------
 
 export type CorrectionScope = 'workflow' | 'node_class';

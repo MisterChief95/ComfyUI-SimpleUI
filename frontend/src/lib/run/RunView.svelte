@@ -14,6 +14,7 @@
 	import { isolatePopoverInput } from '$lib/ui/isolateInput';
 	import GenerateBar from './GenerateBar.svelte';
 	import PresetsMenu from './PresetsMenu.svelte';
+	import StylesMenu from './StylesMenu.svelte';
 	import QueuePanel from './QueuePanel.svelte';
 	import ResultPanel from './ResultPanel.svelte';
 	import SectionCard from './SectionCard.svelte';
@@ -38,6 +39,7 @@
 	let resultW = $state<number | null>(readPanelWidth(WIDTH_KEY));
 
 	let presetsOpen = $state(false);
+	let stylesOpen = $state(false);
 	let queueOpen = $state(false);
 	const blocking = $derived(run.schema?.blocking ?? []);
 	const warnings = $derived(run.schema?.warnings ?? []);
@@ -126,6 +128,16 @@
 			}}
 		>
 			<Icon name="bookmark" size={16} /> <span class="lbl">Presets</span>
+		</button>
+		<button
+			type="button"
+			class="btn btn-ghost"
+			aria-label="Prompt styles"
+			disabled={run.loading || run.schema === null}
+			onclick={() => (stylesOpen = true)}
+		>
+			<Icon name="bookmark" size={16} />
+			<span class="lbl">Styles{run.styleIds.length ? ` (${run.styleIds.length})` : ''}</span>
 		</button>
 		<button type="button" class="btn btn-ghost" onclick={() => (queueOpen = true)}>Queue</button>
 		<button
@@ -277,6 +289,7 @@
 		</div>
 		<GenerateBar {run} />
 		<PresetsMenu {run} bind:open={presetsOpen} />
+		<StylesMenu {run} bind:open={stylesOpen} />
 		{#if queueOpen}<QueuePanel {run} onclose={() => (queueOpen = false)} />{/if}
 	{/if}
 </div>

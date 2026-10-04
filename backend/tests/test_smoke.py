@@ -9,11 +9,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+from pydantic import BaseModel, ValidationError
+
 from app.config import Config, ConfigError
 from app.contracts import ControlDescriptor, ErrorEnvelope, ExactInt, Page
 from app.main import create_app
-from fastapi.testclient import TestClient
-from pydantic import BaseModel, ValidationError
 
 
 class ConfigTest(unittest.TestCase):

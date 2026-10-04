@@ -9,7 +9,6 @@ from pathlib import Path
 
 from app.storage import Database
 from app.storage.db import MIGRATIONS_DIR
-
 from tests.generations.test_routes import FakeUpstream
 from tests.workflows.test_layout import (
     GRAPH,

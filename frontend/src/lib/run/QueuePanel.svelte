@@ -19,9 +19,43 @@
 	let message = $state<string | null>(null);
 	let stopped = false;
 	const retryKeys = new Map<string, string>();
+	let vram = $state<string | null>(null);
+	let freeing = $state(false);
+
+	async function readVram(): Promise<void> {
+		try {
+			const v = await api<{ used_bytes: number | null; total_bytes: number | null }>(
+				'/catalog/vram'
+			);
+			const gb = (n: number) => (n / 1024 ** 3).toFixed(1);
+			vram =
+				v.used_bytes === null || v.total_bytes === null
+					? null
+					: `VRAM ${gb(v.used_bytes)} / ${gb(v.total_bytes)} GB`;
+		} catch {
+			vram = null;
+		}
+	}
+
+	async function freeVram(): Promise<void> {
+		freeing = true;
+		error = message = null;
+		try {
+			await api('/catalog/free', { method: 'POST' });
+			message = 'Asked ComfyUI to unload models and free VRAM.';
+			// ComfyUI applies /free on its next loop tick, not instantly.
+			await new Promise((done) => setTimeout(done, 1500));
+		} catch (cause) {
+			error = describeApiError(cause);
+		} finally {
+			freeing = false;
+			if (!stopped) await readVram();
+		}
+	}
 
 	onMount(() => {
 		void refresh(true);
+		void readVram();
 		const timer = setInterval(() => void refresh(), 3000);
 		return () => {
 			stopped = true;
@@ -130,6 +164,8 @@
 		disabled={loading || busy !== null}
 		onclick={() => refresh(true)}>Refresh</button
 	>
+	<button class="btn" type="button" disabled={freeing} onclick={freeVram}>Free VRAM</button>
+	{#if vram}<span class="muted">{vram}</span>{/if}
 	<h3>Active</h3>
 	{#each active as item (item.id)}
 		<article>

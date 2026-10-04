@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { compileModule } from 'svelte/compiler';
 import ts from 'typescript';
+import { layoutGrid, visibleRows } from './grid.ts';
+import { startSlideshow } from './viewerPlayback.ts';
 
 // Compile the real rune state for node:test; only transport/settings are replaced.
 let source = readFileSync(new URL('./gallery.svelte.ts', import.meta.url), 'utf8')
@@ -411,4 +413,107 @@ test('empty starting leaves advance and duplicate media never creates repeated g
 		gallery.items.map((entry: { id: string }) => entry.id),
 		['b', 'c']
 	);
+});
+
+test('100k items keep the rendered window bounded on desktop and phone', () => {
+	for (const width of [343, 1024]) {
+		const grid = layoutGrid(100_000, width, 160, 8);
+		for (const top of [0, grid.height / 2, grid.height - 800]) {
+			const rows = visibleRows(grid.rows, top, 800);
+			const tiles = rows.reduce((count, row) => count + row.end - row.start, 0);
+			assert.ok(tiles <= 100, `${width}px: ${tiles} tiles`);
+			assert.ok(rows.length <= 15);
+		}
+		assert.equal(grid.rows.at(-1)?.end, 100_000);
+	}
+});
+
+test('group headers flush incomplete rows and retain each item exactly once', () => {
+	const grid = layoutGrid(
+		7,
+		500,
+		160,
+		8,
+		(index) => ({ 0: 'first', 2: 'second', 6: 'third' })[index] ?? null
+	);
+	assert.deepEqual(
+		grid.rows.map((row) => [row.start, row.end, row.group]),
+		[
+			[0, 0, 'first'],
+			[0, 2, null],
+			[2, 2, 'second'],
+			[2, 5, null],
+			[5, 6, null],
+			[6, 6, 'third'],
+			[6, 7, null]
+		]
+	);
+	assert.equal(grid.height, grid.rows.at(-1)!.top + grid.cell);
+	assert.deepEqual(
+		visibleRows(grid.rows, 0, 1, 0).map((row) => row.group),
+		['first']
+	);
+	assert.equal(layoutGrid(0, 343, 400, 8).height, 0);
+	assert.equal(layoutGrid(1, 343, 400, 8).cell, 343);
+});
+
+test('slideshow cancels on close/background, serializes advances and stops at the end', async (context) => {
+	context.mock.timers.enable({ apis: ['setTimeout'] });
+	const original = Object.getOwnPropertyDescriptor(globalThis, 'document');
+	const page = Object.assign(new EventTarget(), { hidden: false });
+	Object.defineProperty(globalThis, 'document', { configurable: true, value: page });
+	let calls = 0;
+	let stopped = 0;
+	let finish!: (moved: boolean) => void;
+	const advance = () => {
+		calls++;
+		return new Promise<boolean>((resolve) => {
+			finish = resolve;
+		});
+	};
+	const stop = () => {
+		stopped++;
+	};
+	const flush = async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	};
+	try {
+		const close = startSlideshow(advance, 5, stop);
+		context.mock.timers.tick(4999);
+		assert.equal(calls, 0);
+		context.mock.timers.tick(1);
+		assert.equal(calls, 1);
+		context.mock.timers.tick(10000);
+		assert.equal(calls, 1, 'no overlapping advance');
+		close();
+		finish(true);
+		await flush();
+		context.mock.timers.tick(10000);
+		assert.equal(calls, 1, 'close cancels an in-flight reschedule');
+		startSlideshow(advance, 2, stop);
+		context.mock.timers.tick(2000);
+		page.hidden = true;
+		page.dispatchEvent(new Event('visibilitychange'));
+		finish(true);
+		await flush();
+		context.mock.timers.tick(10000);
+		assert.equal(calls, 2);
+		assert.equal(stopped, 1);
+		page.hidden = false;
+		startSlideshow(advance, 2, stop);
+		context.mock.timers.tick(2000);
+		finish(false);
+		await flush();
+		context.mock.timers.tick(10000);
+		assert.equal(calls, 3);
+		assert.equal(stopped, 2, 'the last slide stops playback');
+		page.hidden = true;
+		startSlideshow(advance, 2, stop);
+		context.mock.timers.tick(10000);
+		assert.equal(calls, 3, 'background start schedules nothing');
+	} finally {
+		if (original) Object.defineProperty(globalThis, 'document', original);
+		else Reflect.deleteProperty(globalThis, 'document');
+	}
 });
