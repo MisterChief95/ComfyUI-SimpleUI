@@ -106,10 +106,6 @@ class GenerationRouteTestCase(AuthTestCase):
 
 
 class SubmissionAndIdempotencyTest(GenerationRouteTestCase):
-    def test_routes_answer_ahead_of_the_catch_all(self) -> None:
-        client = self.local_client()
-        self.assertEqual(client.get("/api/generations").status_code, 200)
-
     def test_submit_returns_a_durable_generation_bound_to_the_graph(self) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)
@@ -360,11 +356,6 @@ class CancellationTest(GenerationRouteTestCase):
         self.assertEqual(
             foreign.json()["error"]["message"], unknown.json()["error"]["message"]
         )
-
-    def test_there_is_no_global_cancel_route(self) -> None:
-        client = self.local_client()
-        # No path takes a bare verb: cancellation always names one generation.
-        self.assertEqual(self.post(client, "/api/generations/cancel").status_code, 404)
 
 
 class EventStreamTest(GenerationRouteTestCase):

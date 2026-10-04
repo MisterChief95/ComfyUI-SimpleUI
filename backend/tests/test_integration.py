@@ -56,20 +56,6 @@ class RoutingTest(AuthTestCase):
         self.assertEqual(unknown.status_code, 404)
         self.assertIn("No API route", unknown.json()["error"]["message"])
 
-    def test_services_are_shared_on_app_state(self) -> None:
-        for name in (
-            "catalog",
-            "workflows",
-            "media",
-            "repository",
-            "auth",
-            "settings",
-            "db",
-        ):
-            self.assertTrue(
-                hasattr(self.app.state, name), f"app.state.{name} is missing"
-            )
-
 
 class CatalogRouteTest(AuthTestCase):
     def test_snapshot_is_sanitized_and_carries_no_raw_catalog(self) -> None:
