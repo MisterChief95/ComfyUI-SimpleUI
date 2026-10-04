@@ -96,10 +96,14 @@ test('status vocabulary and error summaries', () => {
 	assert.equal(isTerminal('running'), false);
 	assert.equal(isTerminal('submission_unknown'), false);
 	assert.equal(isTerminal('succeeded'), true);
-	assert.equal(
-		statusInfo({ status: 'succeeded', output_state: 'partial' } as never).label,
-		'Done (partial)'
-	);
+	for (const output_state of ['ready', 'partial', 'unavailable']) {
+		assert.deepEqual(
+			statusInfo({ status: 'succeeded', output_state } as never),
+			{ label: 'Done', kind: 'success' },
+			`successful execution with ${output_state} output state`
+		);
+	}
+	assert.equal(statusInfo({ status: 'failed', output_state: 'partial' } as never).label, 'Failed');
 	const described = describeGenerationError({
 		execution: { exception_message: 'Out of memory', node_type: 'KSampler', node_id: '5' }
 	});

@@ -31,10 +31,6 @@ export function statusInfo(generation: GenerationInfo | null): { label: string; 
 		case 'succeeded':
 		case 'completed':
 		case 'success':
-			if (generation.output_state === 'partial')
-				return { label: 'Done (partial)', kind: 'warning' };
-			if (generation.output_state === 'unavailable')
-				return { label: 'Done, no output', kind: 'warning' };
 			return { label: 'Done', kind: 'success' };
 		case 'failed':
 			return { label: 'Failed', kind: 'danger' };
