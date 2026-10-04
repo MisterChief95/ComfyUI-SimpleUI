@@ -446,10 +446,8 @@ class LiteralsAndFlexibleInputs(unittest.TestCase):
         with self.assertRaises(SubmissionError):
             build_submission_graph(graph, schema, {enum.binding_id: "not-a-choice"})
         enum.options = []
-        # No catalog list (e.g. Ollama): a typed string passes through, empty doesn't.
-        build_submission_graph(graph, schema, {enum.binding_id: "typed.model"})
         with self.assertRaises(SubmissionError):
-            build_submission_graph(graph, schema, {enum.binding_id: ""})
+            build_submission_graph(graph, schema, {enum.binding_id: "typed.model"})
         build_submission_graph(graph, schema)  # unedited value still passes through
 
     def test_typed_combo_options_are_submitted_as_listed(self) -> None:
