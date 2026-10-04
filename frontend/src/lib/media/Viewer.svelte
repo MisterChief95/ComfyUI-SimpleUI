@@ -8,13 +8,16 @@
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import type { MediaInfo } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
+	import Thumbnail from '$lib/media/Thumbnail.svelte';
+	import ResizeHandle from '$lib/ui/ResizeHandle.svelte';
+	import { readPanelWidth, readFlag, writeFlag } from '$lib/ui/storage';
 	import { isolateInput } from '$lib/ui/isolateInput';
 	import { settingsState } from '$lib/settings.svelte';
 	import GraphJson from './GraphJson.svelte';
 	import MetaValues from './MetaValues.svelte';
+	import GenerationSummary from './GenerationSummary.svelte';
 	import Star from './Star.svelte';
 	import { formatDate } from './format';
-	import { workflowNames } from './workflowNames.svelte';
 	import type { GalleryState } from './gallery.svelte';
 
 	let { gallery }: { gallery: GalleryState } = $props();
@@ -22,71 +25,14 @@
 	const wide = new MediaQuery('min-width: 768px');
 	let dialog = $state<HTMLDialogElement>();
 	// Details side panel (desktop) or bottom panel (phone). Closed on phone by default.
-	let showDetails = $state(loadFlag('simpleui.viewerDetails', wide.current));
-	let showStrip = $state(loadFlag('simpleui.viewerStrip', true));
-	let vertical = $state(loadFlag('simpleui.viewerVertical', false));
-
-	function loadFlag(key: string, fallback: boolean): boolean {
-		try {
-			const saved = localStorage.getItem(key);
-			return saved === null ? fallback : saved === '1';
-		} catch {
-			return fallback;
-		}
-	}
-	function saveFlag(key: string, value: boolean): void {
-		try {
-			localStorage.setItem(key, value ? '1' : '0');
-		} catch {
-			/* not persisted */
-		}
-	}
+	let showDetails = $state(readFlag('simpleui.viewerDetails', wide.current));
+	let showStrip = $state(readFlag('simpleui.viewerStrip', true));
+	let vertical = $state(readFlag('simpleui.viewerVertical', false));
 
 	// Desktop details width in px; null = 22rem. Per-device preference. Below 768px the panel is a bottom sheet and not resizable.
 	const WIDTH_KEY = 'simpleui.viewerDetailsWidth';
 	let body = $state<HTMLElement>();
-	let detailsW = $state<number | null>(null);
-	try {
-		const saved = Number(localStorage.getItem(WIDTH_KEY));
-		if (saved > 0) detailsW = saved;
-	} catch {
-		/* storage blocked: default width */
-	}
-
-	function setWidth(px: number, save: boolean): void {
-		const total = body?.clientWidth ?? 0;
-		// ponytail: fixed 240px / 320px-stage bounds; make them tokens if designs need other limits
-		detailsW = Math.round(Math.min(Math.max(px, 240), Math.max(240, total - 320)));
-		if (save)
-			try {
-				localStorage.setItem(WIDTH_KEY, String(detailsW));
-			} catch {
-				/* not persisted */
-			}
-	}
-	function dragDivider(event: PointerEvent): void {
-		const handle = event.currentTarget as HTMLElement;
-		handle.setPointerCapture(event.pointerId);
-		const right = body!.getBoundingClientRect().right;
-		const move = (e: PointerEvent): void => setWidth(right - e.clientX, false);
-		const up = (): void => {
-			handle.removeEventListener('pointermove', move);
-			handle.removeEventListener('pointerup', up);
-			handle.removeEventListener('pointercancel', up);
-			if (detailsW) setWidth(detailsW, true);
-		};
-		handle.addEventListener('pointermove', move);
-		handle.addEventListener('pointerup', up);
-		handle.addEventListener('pointercancel', up);
-	}
-	function keyDivider(event: KeyboardEvent): void {
-		const step = event.shiftKey ? 64 : 16;
-		const now = detailsW ?? 352;
-		if (event.key === 'ArrowLeft') setWidth(now + step, true);
-		else if (event.key === 'ArrowRight') setWidth(now - step, true);
-		else return;
-		event.preventDefault();
-	}
+	let detailsW = $state<number | null>(readPanelWidth(WIDTH_KEY));
 
 	const item = $derived(gallery.selected);
 	const index = $derived(gallery.selectedIndex);
@@ -351,7 +297,7 @@
 						type="button"
 						class="btn btn-ghost"
 						aria-expanded={showDetails}
-						onclick={() => saveFlag('simpleui.viewerDetails', (showDetails = !showDetails))}
+						onclick={() => writeFlag('simpleui.viewerDetails', (showDetails = !showDetails))}
 					>
 						Details
 					</button>
@@ -470,7 +416,7 @@
 							class="btn btn-icon ctl fold"
 							aria-label={showStrip ? 'Hide thumbnails' : 'Show thumbnails'}
 							aria-expanded={showStrip}
-							onclick={() => saveFlag('simpleui.viewerStrip', (showStrip = !showStrip))}
+							onclick={() => writeFlag('simpleui.viewerStrip', (showStrip = !showStrip))}
 						>
 							<Icon name={showStrip ? 'chevron-down' : 'chevron-up'} size={16} />
 						</button>
@@ -484,16 +430,11 @@
 										aria-current={entry.id === item.id}
 										onclick={() => select(entry)}
 									>
-										{#if entry.media_kind !== 'other' && entry.state !== 'unavailable' && !gallery.thumbnailMissing[entry.id]}
-											<img
-												src={`/api/media/${entry.id}/thumbnail`}
-												alt=""
-												loading="lazy"
-												onerror={() => gallery.markThumbnailMissing(entry.id)}
-											/>
-										{:else}
-											<Icon name={entry.media_kind === 'video' ? 'video' : 'image'} size={24} />
-										{/if}
+										<Thumbnail
+											item={entry}
+											missing={gallery.thumbnailMissing[entry.id]}
+											onerror={() => gallery.markThumbnailMissing(entry.id)}
+										/>
 									</button>
 								{/each}
 							</div>
@@ -503,17 +444,17 @@
 			</div>
 
 			{#if showDetails}
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-				<div
+				<ResizeHandle
 					class="divider"
-					role="separator"
-					aria-orientation="vertical"
-					aria-label="Resize details panel"
-					tabindex="0"
-					onpointerdown={dragDivider}
-					onkeydown={keyDivider}
-				></div>
+					bind:width={detailsW}
+					container={body}
+					label="Resize details panel"
+					storageKey={WIDTH_KEY}
+					min={240}
+					remaining={320}
+					defaultWidth={352}
+				/>
+
 				<aside
 					class="details"
 					aria-label="Generation details"
@@ -524,7 +465,7 @@
 						<input
 							type="checkbox"
 							bind:checked={vertical}
-							onchange={() => saveFlag('simpleui.viewerVertical', vertical)}
+							onchange={() => writeFlag('simpleui.viewerVertical', vertical)}
 						/>
 						Swipe up/down to browse
 					</label>
@@ -536,24 +477,7 @@
 						<p class="error" role="alert">{gallery.detailError}</p>
 					{:else if gallery.detail}
 						{@const detail = gallery.detail}
-						<div class="row wrap">
-							<span
-								class="badge"
-								class:badge-success={detail.status === 'succeeded'}
-								class:badge-danger={detail.status === 'failed'}>{detail.status}</span
-							>
-							<span class="badge">{detail.output_state}</span>
-						</div>
-						{#if detail.workflow_id}
-							<p>
-								Workflow: <strong
-									>{workflowNames.name(detail.workflow_id) ?? detail.workflow_id}</strong
-								>
-							</p>
-						{/if}
-						{#if detail.error}
-							<pre class="error">{JSON.stringify(detail.error, null, 2)}</pre>
-						{/if}
+						<GenerationSummary {detail} />
 						{#if detail.effective_values}
 							<details>
 								<summary>Saved prompt and input values</summary>
@@ -785,11 +709,6 @@
 	.thumb[aria-current='true'] {
 		border-color: var(--color-accent);
 	}
-	.thumb img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
 
 	.nav {
 		position: absolute;
@@ -832,13 +751,7 @@
 	.details .btn {
 		align-self: flex-start;
 	}
-	.details pre {
-		margin: 0;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		font-size: var(--text-sm);
-		font-family: var(--font-mono);
-	}
+
 	.details summary {
 		cursor: pointer;
 		min-height: var(--control-h);
@@ -849,7 +762,7 @@
 		color: var(--color-danger);
 		overflow-wrap: anywhere;
 	}
-	.divider {
+	.body > :global(.divider) {
 		display: none;
 	}
 
@@ -857,7 +770,7 @@
 		.body.with-details {
 			flex-direction: row;
 		}
-		.divider {
+		.body > :global(.divider) {
 			display: block;
 			flex: none;
 			width: 6px;
@@ -866,8 +779,8 @@
 			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100%
 				no-repeat;
 		}
-		.divider:hover,
-		.divider:focus-visible {
+		.body > :global(.divider):hover,
+		.body > :global(.divider):focus-visible {
 			background-image: linear-gradient(var(--color-accent), var(--color-accent));
 			outline: none;
 		}

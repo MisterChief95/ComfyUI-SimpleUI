@@ -26,6 +26,8 @@ The coordination tool is implemented; inspect the filesystem and database for cu
 
 Read-only inspection needs no claim. Before writing repository files, use an appropriate task and reserve the exact files or subtrees you will edit. Do not repurpose a completed task or claim an unrelated task merely to obtain locks. For authorized work absent from the backlog, import a small new task specification through the CLI first; include dependencies and acceptance criteria.
 
+Put every temporary file created by an agent under `./.ai-temp/`. Do not scatter scratch scripts, logs, previews, exports, or one-off JSON files across the repository or `.dibs/`. `.ai-temp/` is gitignored. Remove only the temporary files you created there before completing your task. Keep DIBS state in `.dibs/tasks.sqlite3`; pass temporary import, amend, or handoff JSON to the CLI through `--file -` so it is stored in the database without leaving a separate file.
+
 Run commands from the repository root. Resolve `<DIBS_SCRIPT>` to `../../scripts/dibs.py` relative to the installed dibs `SKILL.md` (currently `C:/Users/brend/.codex/plugins/cache/dibs/dibs/1.4.0/scripts/dibs.py`). Pass `--workspace "."` on every command. Common options belong **after the command**. Give each agent a distinct, stable `--actor`. Use default text output for compact inspection; use `--json` for programmatic access, especially to capture lease tokens and revisions from mutations.
 
 ```cmd
@@ -49,7 +51,7 @@ Numbers above assume that exact sequence; use actual returned revisions. `reserv
 
 ## Finish with evidence or a useful handoff
 
-Validate the task's acceptance criteria. Save a uniquely named handoff JSON file under `.dibs/`, such as `.dibs/agent-compat-handoff.json`:
+Validate the task's acceptance criteria. Submit a handoff through the DIBS CLI so it is recorded in the database. Pass handoff JSON through `--file -` rather than leaving a separate handoff file in the repository:
 
 ```json
 {
@@ -61,8 +63,10 @@ Validate the task's acceptance criteria. Save a uniquely named handoff JSON file
 }
 ```
 
-```cmd
-python "<DIBS_SCRIPT>" complete COMPAT-001 --workspace "." --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 3 --file .dibs/agent-compat-handoff.json --ack-quiescent --json
+```powershell
+@'
+{"summary":"What changed and what is verified; editing has stopped.","next_steps":[],"changed_files":["src/example.py"],"checks":["Actual command and observed result"],"blockers":[]}
+'@ | python "<DIBS_SCRIPT>" complete COMPAT-001 --workspace "." --actor agent-compat --token "TOKEN_FROM_CLAIM" --revision 3 --file - --ack-quiescent --json
 ```
 
 Use `complete` only after the requirements are met. It records evidence and releases reservations atomically. Use `block` with specific blockers and next steps when you cannot proceed, or `review` to hand off for review; both require a handoff and `--ack-quiescent`. A standalone `handoff` keeps your lease. `resume` claims deliberately blocked/reviewed work with a fresh lease after dependencies pass. Only **done** prerequisites unblock dependent tasks.

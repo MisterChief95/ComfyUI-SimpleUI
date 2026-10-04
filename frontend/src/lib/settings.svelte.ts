@@ -1,6 +1,6 @@
 // Shared reactive settings state: GET /api/settings once, PUT per-key writes.
 // One instance for the whole app (a settings screen is never mounted twice).
-import { api, describeApiError } from './api';
+import { api, apiJson, describeApiError } from './api';
 import type { EffectiveSettings, SettingValue } from './contracts';
 
 class SettingsState {
@@ -35,11 +35,7 @@ class SettingsState {
 		const previous = this.data[scope][key];
 		this.data[scope][key] = value;
 		try {
-			await api(`/settings/${scope}`, {
-				method: 'PUT',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ key, value })
-			});
+			await apiJson(`/settings/${scope}`, 'PUT', { key, value });
 		} catch (cause) {
 			this.data[scope][key] = previous;
 			throw cause;

@@ -112,6 +112,7 @@ Desktop.ini
 
 # Local agent coordination state (tokens, handoffs)
 .dibs/
+.ai-temp/
 
 .coord/
 data/

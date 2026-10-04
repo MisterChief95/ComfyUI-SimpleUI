@@ -1,4 +1,4 @@
-import { api, describeApiError } from '$lib/api';
+import { api, apiJson, describeApiError } from '$lib/api';
 import { settingsState } from '$lib/settings.svelte';
 import type { GenerationDetail, MediaInfo, MediaPage } from '$lib/contracts';
 import type { ViewPrefs } from './viewPrefs.svelte';
@@ -413,11 +413,7 @@ export class GalleryState {
 	async toggleFavorite(item: MediaInfo): Promise<void> {
 		const favorite = !item.favorite;
 		try {
-			await api(`/media/${item.id}`, {
-				method: 'PUT',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ favorite })
-			});
+			await apiJson(`/media/${item.id}`, 'PUT', { favorite });
 			this.items = this.items.map((entry) =>
 				entry.id === item.id ? { ...entry, favorite } : entry
 			);
@@ -431,11 +427,7 @@ export class GalleryState {
 	/** Delete on the server, then drop the items locally. Returns whether it succeeded. */
 	async deleteMany(ids: string[]): Promise<boolean> {
 		try {
-			await api('/media/delete', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ ids })
-			});
+			await apiJson('/media/delete', 'POST', { ids });
 		} catch (cause) {
 			this.error = describeApiError(cause);
 			return false;

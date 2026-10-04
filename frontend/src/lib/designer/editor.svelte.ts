@@ -11,7 +11,7 @@
 // Dirty = the working doc is not the saved doc (reference compare, so undoing
 // back to the saved snapshot is clean) or any draft differs from the schema.
 import { tick } from 'svelte';
-import { api, ApiRequestError, describeApiError } from '$lib/api';
+import { api, apiJson, ApiRequestError, describeApiError } from '$lib/api';
 import type {
 	Correction,
 	ControlDescriptor,
@@ -84,8 +84,6 @@ export interface Failure {
 export type Placement = { kind: 'section'; id: string; title: string } | { kind: 'hidden' };
 
 const EMPTY_DOC: LayoutDoc = { version: 1, sections: [], hidden: [] };
-const JSON_HEADERS = { 'content-type': 'application/json' };
-
 export class Designer {
 	readonly workflowId: string;
 
@@ -318,6 +316,15 @@ export class Designer {
 
 	updateSection(id: string, patch: Parameters<typeof updateSection>[2]): void {
 		this.commit(updateSection(this.doc, id, patch));
+	}
+
+	confirmDeleteSection(id: string): void {
+		const section = this.doc.sections.find((entry) => entry.id === id);
+		if (!section) return;
+		const count = sectionItems(section).length;
+		if (count && !confirm(`Delete "${section.title}"? Its ${count} controls become unplaced.`))
+			return;
+		this.deleteSection(id);
 	}
 
 	deleteSection(id: string): void {
@@ -779,11 +786,11 @@ export class Designer {
 					});
 				} else {
 					try {
-						const result = await api<WorkflowLayout>(`/workflows/${this.workflowId}/layout`, {
-							method: 'PUT',
-							headers: JSON_HEADERS,
-							body: JSON.stringify({ layout: sent, expected_revision: this.layoutRevision })
-						});
+						const result = await apiJson<WorkflowLayout>(
+							`/workflows/${this.workflowId}/layout`,
+							'PUT',
+							{ layout: sent, expected_revision: this.layoutRevision }
+						);
 						this.layoutRevision = result.revision;
 						this.savedDoc = sent;
 						this.persisted = true;
@@ -808,16 +815,16 @@ export class Designer {
 					if (!patch || !control) continue;
 					const existing = this.savedCorrections[binding] ?? null;
 					try {
-						const result = await api<Correction>(`/workflows/${this.workflowId}/corrections`, {
-							method: 'PUT',
-							headers: JSON_HEADERS,
-							body: JSON.stringify({
+						const result = await apiJson<Correction>(
+							`/workflows/${this.workflowId}/corrections`,
+							'PUT',
+							{
 								scope: 'workflow',
 								binding_id: binding,
 								presentation: buildPresentation(existing?.presentation ?? null, patch),
 								expected_revision: existing?.revision ?? 0
-							})
-						});
+							}
+						);
 						this.savedCorrections = { ...this.savedCorrections, [binding]: result };
 						saved.push([binding, patch]);
 					} catch (cause) {
@@ -834,10 +841,9 @@ export class Designer {
 			const values = this.previewValues;
 			if (!this.layoutConflict && this.schema && Object.keys(values).length) {
 				try {
-					await api(`/workflows/${this.workflowId}/values`, {
-						method: 'PUT',
-						headers: JSON_HEADERS,
-						body: JSON.stringify({ edits: values, expected_revision: this.schema.revision })
+					await apiJson(`/workflows/${this.workflowId}/values`, 'PUT', {
+						edits: values,
+						expected_revision: this.schema.revision
 					});
 					// Edits made while the PUT was in flight stay dirty.
 					if (this.previewValues === values) this.previewValues = {};

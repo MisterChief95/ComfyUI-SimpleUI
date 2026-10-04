@@ -1,12 +1,10 @@
 // Presets of one workflow for the run page: list, apply, save the current
 // draft, overwrite, rename, delete. A 409 (changed elsewhere, or the 100-preset
 // cap) always ends in a refetch so the list shows the truth.
-import { api, ApiRequestError, describeApiError } from '$lib/api';
+import { api, apiJson, ApiRequestError, describeApiError } from '$lib/api';
 import type { Preset } from '$lib/contracts';
 import { describeApply, planApply, presetValues } from './presets';
 import type { RunState } from './run.svelte';
-
-const JSON_HEADERS = { 'content-type': 'application/json' };
 
 export class PresetsState {
 	items = $state<Preset[]>([]);
@@ -52,11 +50,7 @@ export class PresetsState {
 
 	create(name: string): Promise<boolean> {
 		return this.mutate('new', async () => {
-			await api<Preset>(this.base, {
-				method: 'POST',
-				headers: JSON_HEADERS,
-				body: JSON.stringify({ name, values: this.currentValues })
-			});
+			await apiJson<Preset>(this.base, 'POST', { name, values: this.currentValues });
 			const n = Object.keys(this.currentValues).length;
 			this.message = `Saved preset "${name}" (${n} changed value${n === 1 ? '' : 's'}).`;
 		});
@@ -87,10 +81,9 @@ export class PresetsState {
 		message: string | null
 	): Promise<boolean> {
 		return this.mutate(preset.id, async () => {
-			await api<Preset>(`${this.base}/${preset.id}`, {
-				method: 'PUT',
-				headers: JSON_HEADERS,
-				body: JSON.stringify({ ...patch, expected_revision: preset.revision })
+			await apiJson<Preset>(`${this.base}/${preset.id}`, 'PUT', {
+				...patch,
+				expected_revision: preset.revision
 			});
 			this.message = message;
 		});

@@ -6,6 +6,7 @@
 	import { workflowNames } from '$lib/media/workflowNames.svelte';
 	import { settingsState } from '$lib/settings.svelte';
 	import Sheet from '$lib/ui/Sheet.svelte';
+	import GenerationSummary from '$lib/media/GenerationSummary.svelte';
 
 	const history = new HistoryState();
 	const wide = new MediaQuery('min-width: 1000px');
@@ -45,21 +46,11 @@
 	{#if history.selected}
 		{@const selected = history.selected}
 		<div class="stack" style:--gap="var(--space-2)">
-			<div class="row wrap">
-				<span class="badge {statusClass(selected.status)}">{selected.status}</span>
-				<span class="badge">{selected.output_state}</span>
-			</div>
-			{#if selected.workflow_id}
-				<p>
-					Workflow: <strong
-						>{workflowNames.name(selected.workflow_id) ?? selected.workflow_id}</strong
-					>
-				</p>
-			{/if}
-			<p class="muted small">{formatDate(selected.created_ms)} · <code>{selected.id}</code></p>
-			{#if selected.error}
-				<pre class="error">{JSON.stringify(selected.error, null, 2)}</pre>
-			{/if}
+			<GenerationSummary
+				detail={selected}
+				showIdentity
+				statusClass={statusClass(selected.status)}
+			/>
 			{#if selected.effective_values}
 				<pre>{JSON.stringify(selected.effective_values, null, 2)}</pre>
 				{#if selected.workflow_id}

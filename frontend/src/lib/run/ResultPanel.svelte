@@ -2,6 +2,7 @@
 	// Latest result (or a picked recent output), live progress, errors, and the
 	// recent-outputs strip with "Reuse settings".
 	import Icon from '$lib/ui/Icon.svelte';
+	import Thumbnail from '$lib/media/Thumbnail.svelte';
 	import { api, describeApiError } from '$lib/api';
 	import type { GenerationDetail } from '$lib/contracts';
 	import Viewer from '$lib/media/Viewer.svelte';
@@ -261,11 +262,7 @@
 					aria-pressed={shown?.id === item.id}
 					onclick={() => void tracker.pick(item)}
 				>
-					{#if item.media_kind !== 'other' && item.state !== 'unavailable'}
-						<img src={`/api/media/${item.id}/thumbnail`} alt="" loading="lazy" />
-					{:else}
-						<Icon name={item.media_kind === 'video' ? 'video' : 'image'} size={24} />
-					{/if}
+					<Thumbnail {item} />
 				</button>
 			{/each}
 		</div>
@@ -432,11 +429,7 @@
 	.thumb[aria-pressed='true'] {
 		border-color: var(--color-accent);
 	}
-	.thumb img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
+
 	/* Tablet/desktop: the panel fills the aside's height with no scroll. The image fills the
 	   width, bounded by the height left after the toolbars; the recent strip takes the rest. */
 	@media (min-width: 768px) {

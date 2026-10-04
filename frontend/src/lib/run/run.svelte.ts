@@ -1,8 +1,9 @@
 // State of one open run page: schema + layout, the user's draft edits
 // (persisted per profile and workflow), section disclosure, and submission.
 import { tick } from 'svelte';
+import { readJson, writeJson } from '$lib/ui/storage';
 import { replaceState } from '$app/navigation';
-import { api, ApiRequestError, describeApiError } from '$lib/api';
+import { api, apiJson, ApiRequestError, describeApiError } from '$lib/api';
 import type {
 	ControlDescriptor,
 	ControlSchema,
@@ -42,35 +43,6 @@ export interface ViewEntry {
 	height?: ControlDescriptor;
 	ratio?: AspectRatioLayoutItem;
 	span: 'auto' | 'full';
-}
-
-function storage(): Storage | null {
-	try {
-		return localStorage;
-	} catch {
-		return null;
-	}
-}
-
-function readJson<T>(key: string, fallback: T): T {
-	try {
-		const raw = storage()?.getItem(key);
-		return raw ? (JSON.parse(raw) as T) : fallback;
-	} catch {
-		return fallback;
-	}
-}
-
-/** False when the value could not be stored (private mode, quota, blocked storage). */
-function writeJson(key: string, value: unknown): boolean {
-	try {
-		const store = storage();
-		if (!store) return false;
-		store.setItem(key, JSON.stringify(value));
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 export class RunState {
@@ -420,15 +392,11 @@ export class RunState {
 				typeof crypto.randomUUID === 'function'
 					? crypto.randomUUID()
 					: `${Date.now()}-${Math.random()}`;
-			const detail = await api<GenerationDetail>('/generations', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					workflow_id: this.workflowId,
-					request_key: requestKey,
-					edits,
-					seed_policy: 'fixed'
-				})
+			const detail = await apiJson<GenerationDetail>('/generations', 'POST', {
+				workflow_id: this.workflowId,
+				request_key: requestKey,
+				edits,
+				seed_policy: 'fixed'
 			});
 			await this.tracker.adopt(detail);
 		} catch (cause) {

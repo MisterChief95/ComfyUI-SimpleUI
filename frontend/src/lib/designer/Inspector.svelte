@@ -61,19 +61,6 @@
 		if (value === '') editor.unplaceControl(control.binding_id);
 		else editor.placeAt(control.binding_id, value);
 	}
-
-	function removeSection(): void {
-		if (!section) return;
-		if (
-			sectionItems(section).length > 0 &&
-			!confirm(
-				`Delete "${section.title}"? Its ${sectionItems(section).length} controls become unplaced.`
-			)
-		) {
-			return;
-		}
-		editor.deleteSection(section.id);
-	}
 </script>
 
 <div class="inspector stack">
@@ -369,7 +356,11 @@
 			/>
 			<span>Collapsed by default</span>
 		</label>
-		<button type="button" class="btn btn-danger" onclick={removeSection}>
+		<button
+			type="button"
+			class="btn btn-danger"
+			onclick={() => section && editor.confirmDeleteSection(section.id)}
+		>
 			<Icon name="trash" size={16} /> Delete section
 		</button>
 	{:else}

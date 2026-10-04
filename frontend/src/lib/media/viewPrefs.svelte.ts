@@ -1,3 +1,4 @@
+import { readJson, writeJson } from '$lib/ui/storage';
 // Per-device gallery view preferences. localStorage is a convenience only: every access is
 // guarded, and a `size` of 0 means "use the profile's thumbnail_size setting".
 const KEY = 'gallery.viewPrefs';
@@ -16,9 +17,10 @@ export class ViewPrefs {
 
 	constructor() {
 		try {
-			const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-			if (['newest', 'oldest', 'random'].includes(saved.sort)) this.sort = saved.sort;
-			if (saved.size >= MIN_TILE && saved.size <= MAX_TILE) this.size = saved.size;
+			const saved = readJson<Partial<ViewPrefs>>(KEY, {});
+			if (saved.sort && ['newest', 'oldest', 'random'].includes(saved.sort)) this.sort = saved.sort;
+			if (typeof saved.size === 'number' && saved.size >= MIN_TILE && saved.size <= MAX_TILE)
+				this.size = saved.size;
 			if (typeof saved.fit === 'boolean') this.fit = saved.fit;
 			if (typeof saved.badges === 'boolean') this.badges = saved.badges;
 			if (typeof saved.walk === 'boolean') this.walk = saved.walk;
@@ -28,20 +30,13 @@ export class ViewPrefs {
 	}
 
 	save(): void {
-		try {
-			localStorage.setItem(
-				KEY,
-				JSON.stringify({
-					sort: this.sort,
-					size: this.size,
-					fit: this.fit,
-					badges: this.badges,
-					walk: this.walk
-				})
-			);
-		} catch {
-			/* not persisted */
-		}
+		writeJson(KEY, {
+			sort: this.sort,
+			size: this.size,
+			fit: this.fit,
+			badges: this.badges,
+			walk: this.walk
+		});
 	}
 
 	reset(): void {

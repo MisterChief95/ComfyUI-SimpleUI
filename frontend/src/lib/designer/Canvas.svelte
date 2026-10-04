@@ -2,15 +2,8 @@
 	// The layout being designed: section cards in the chosen preview width, each
 	// with live widgets; changing a value drafts a new workflow default (saved by Save). Drag grips, tap buttons and the
 	// inspector all edit the same Designer state.
-	import AspectRatio from '$lib/controls/AspectRatio.svelte';
-	import {
-		itemBindings,
-		itemId,
-		sectionItems,
-		MAX_ROWS,
-		type ResolvedControl
-	} from '$lib/layout/model';
-	import ControlRow from '$lib/controls/ControlRow.svelte';
+	import LayoutControls from '$lib/controls/LayoutControls.svelte';
+	import { itemBindings, itemId, MAX_ROWS, type ResolvedControl } from '$lib/layout/model';
 	import type { LayoutSection } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { tick } from 'svelte';
@@ -48,18 +41,6 @@
 		const input = event.currentTarget as HTMLInputElement;
 		editor.updateSection(section.id, { title: input.value });
 		input.value = editor.doc.sections.find((s) => s.id === section.id)?.title ?? section.title;
-	}
-
-	function removeSection(section: LayoutSection): void {
-		if (
-			sectionItems(section).length > 0 &&
-			!confirm(
-				`Delete "${section.title}"? Its ${sectionItems(section).length} controls become unplaced.`
-			)
-		) {
-			return;
-		}
-		editor.deleteSection(section.id);
 	}
 
 	function setColumns(section: LayoutSection, n: 1 | 2 | 3): void {
@@ -142,35 +123,18 @@
 					>condition missing</span
 				>{/if}
 		</div>
-		{#if rc.item.kind === 'aspect_ratio' && rc.height}
-			<AspectRatio
-				width={control}
-				height={editor.preview(rc.height)}
-				presets={rc.item.presets}
-				widthValue={editor.previewValue(control)}
-				heightValue={editor.previewValue(rc.height)}
-				onchange={(w, h) => {
-					editor.setPreviewValue(id, w);
-					editor.setPreviewValue(rc.height!.binding_id, h);
-				}}
-			/>
-		{/if}
-		<ControlRow
+		<LayoutControls
 			{control}
-			value={editor.previewValue(control)}
-			onchange={(value) => editor.setPreviewValue(id, value)}
+			height={rc.height ? editor.preview(rc.height) : undefined}
+			ratio={rc.item.kind === 'aspect_ratio' ? rc.item : undefined}
+			valueFor={(entry) =>
+				editor.previewValue(
+					rc.height && entry.binding_id === rc.height.binding_id ? rc.height : entry
+				)}
+			onchange={(entry, value) => editor.setPreviewValue(entry.binding_id, value)}
 			compact
 			preview
 		/>
-		{#if rc.height}
-			<ControlRow
-				control={editor.preview(rc.height)}
-				value={editor.previewValue(rc.height)}
-				onchange={(value) => editor.setPreviewValue(rc.height!.binding_id, value)}
-				compact
-				preview
-			/>
-		{/if}
 		{#if picked}
 			<div class="actions" role="group" aria-label={`Actions for ${control.label}`}>
 				<button
@@ -408,7 +372,7 @@
 							type="button"
 							class="btn btn-ghost btn-icon danger"
 							aria-label={`Delete ${section.title}`}
-							onclick={() => removeSection(section)}
+							onclick={() => editor.confirmDeleteSection(section.id)}
 						>
 							<Icon name="trash" size={18} />
 						</button>
