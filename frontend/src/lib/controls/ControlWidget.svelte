@@ -77,9 +77,13 @@
 			Number.isSafeInteger(c.max)
 		);
 	});
-	const component = $derived(
-		control.component === 'slider' && !sliderUsable ? 'number' : control.component
-	);
+	// A select with no catalog options (e.g. Ollama models, listed by ComfyUI's
+	// own JS) becomes a text box so the value can still be typed.
+	const component = $derived.by(() => {
+		if (control.component === 'slider' && !sliderUsable) return 'number';
+		if (control.component === 'select' && !control.options?.length) return 'text';
+		return control.component;
+	});
 
 	// --- number / seed (ExactInt text) ---
 	// An untouched control is never flagged (its imported value may be null/empty);
