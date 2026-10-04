@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { api, describeApiError } from '$lib/api';
+	import { api, apiJson, describeApiError } from '$lib/api';
 	import type { GenerationDetail, GenerationInfo, Page } from '$lib/contracts';
 	import Sheet from '$lib/ui/Sheet.svelte';
 	import { statusInfo } from './status';
+	import { formatDate } from '$lib/media/format';
 	import type { RunState } from './run.svelte';
 
 	let { run, onclose }: { run: RunState; onclose: () => void } = $props();
@@ -83,10 +84,8 @@
 				// original submission rather than blindly executing it twice.
 				const key = retryKeys.get(item.id) ?? crypto.randomUUID();
 				retryKeys.set(item.id, key);
-				const created = await api<GenerationDetail>(`/generations/${item.id}/retry`, {
-					method: 'POST',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ request_key: key })
+				const created = await apiJson<GenerationDetail>(`/generations/${item.id}/retry`, 'POST', {
+					request_key: key
 				});
 				retryKeys.delete(item.id);
 				message =
@@ -114,6 +113,11 @@
 	const finished = $derived(recent.filter((item) => !active.some((job) => job.id === item.id)));
 </script>
 
+{#snippet summary(item: GenerationInfo)}
+	<strong>{name(item)}</strong>
+	<p>{statusInfo(item).label} · {formatDate(item.created_ms)}</p>
+{/snippet}
+
 <Sheet bind:open title="Generation queue" {onclose}>
 	<p class="muted">
 		Your generations across workflows. Retry uses the saved values, including the original seed.
@@ -129,8 +133,7 @@
 	<h3>Active</h3>
 	{#each active as item (item.id)}
 		<article>
-			<strong>{name(item)}</strong>
-			<p>{statusInfo(item).label} · {new Date(Number(item.created_ms)).toLocaleString()}</p>
+			{@render summary(item)}
 			<div class="actions">
 				{#if item.workflow_id}<a class="btn" href={resolve(`/generation/${item.workflow_id}`)}
 						>Open workflow</a
@@ -147,8 +150,7 @@
 	<h3>Recent submissions</h3>
 	{#each finished as item (item.id)}
 		<article>
-			<strong>{name(item)}</strong>
-			<p>{statusInfo(item).label} · {new Date(Number(item.created_ms)).toLocaleString()}</p>
+			{@render summary(item)}
 			<button
 				class="btn"
 				type="button"

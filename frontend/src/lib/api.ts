@@ -3,11 +3,13 @@
 import type { ApiError, ErrorEnvelope } from './contracts';
 
 export class ApiRequestError extends Error {
-	constructor(
-		readonly status: number,
-		readonly detail: ApiError
-	) {
+	readonly status: number;
+	readonly detail: ApiError;
+
+	constructor(status: number, detail: ApiError) {
 		super(detail.message);
+		this.status = status;
+		this.detail = detail;
 		this.name = 'ApiRequestError';
 	}
 }
@@ -57,4 +59,17 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 		);
 	}
 	return body as T;
+}
+
+/** JSON mutations use the same session, CSRF and error handling as every other request. */
+export function apiJson<T>(
+	path: string,
+	method: 'POST' | 'PUT' | 'PATCH',
+	value: unknown
+): Promise<T> {
+	return api<T>(path, {
+		method,
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(value)
+	});
 }

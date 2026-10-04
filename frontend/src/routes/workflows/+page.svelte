@@ -2,7 +2,7 @@
 	// Workflows: import an API-format ComfyUI export (file picker or drop a .json
 	// anywhere on the page), then Run, Design or Delete each workflow.
 	import { onMount } from 'svelte';
-	import { api, describeApiError } from '$lib/api';
+	import { api, apiJson, describeApiError } from '$lib/api';
 	import type { GraphReplaceResult, Page, WorkflowInfo, WorkflowLayout } from '$lib/contracts';
 	import { formatDate, relativeTime } from '$lib/media/format';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -118,10 +118,8 @@
 			return;
 		}
 		try {
-			const updated = await api<WorkflowInfo>(`/workflows/${workflow.id}`, {
-				method: 'PATCH',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ name: next })
+			const updated = await apiJson<WorkflowInfo>(`/workflows/${workflow.id}`, 'PATCH', {
+				name: next
 			});
 			workflows = workflows.map((w) => (w.id === updated.id ? updated : w));
 			renamingId = null;

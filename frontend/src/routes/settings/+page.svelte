@@ -4,143 +4,9 @@
 	import { session } from '$lib/session.svelte';
 	import { api, describeApiError } from '$lib/api';
 	import type { SettingValue } from '$lib/contracts';
-
-	type Field =
-		| { key: string; label: string; help: string; type: 'text' | 'number' | 'checkbox' }
-		| { key: string; label: string; help: string; type: 'select'; options: readonly string[] };
-
-	// Mirrors backend/app/settings/service.py HOST_SETTINGS. Keep both in sync.
-	const HOST_FIELDS: Field[] = [
-		{
-			key: 'comfy_url',
-			label: 'ComfyUI URL',
-			help: 'Where the ComfyUI server on this computer listens.',
-			type: 'text'
-		},
-		{
-			key: 'comfy_input_dir',
-			label: 'ComfyUI input folder',
-			help: 'Uploaded input files are copied here.',
-			type: 'text'
-		},
-		{
-			key: 'comfy_output_dir',
-			label: 'ComfyUI output folder',
-			help: 'Generated media is read from here.',
-			type: 'text'
-		},
-		{
-			key: 'upload_max_bytes',
-			label: 'Upload size limit (bytes)',
-			help: 'Largest single upload accepted.',
-			type: 'number'
-		},
-		{
-			key: 'pending_cap',
-			label: 'Pending generation cap',
-			help: 'Most queued generations allowed at once.',
-			type: 'number'
-		},
-		{
-			key: 'catalog_refresh_min_seconds',
-			label: 'Catalog refresh cooldown (seconds)',
-			help: 'Minimum time between node catalog refreshes.',
-			type: 'number'
-		},
-		{
-			key: 'backup_dir',
-			label: 'Backup folder',
-			help: 'Where database backups are written.',
-			type: 'text'
-		}
-	];
-
-	// Mirrors backend/app/settings/service.py PROFILE_SETTINGS. Keep both in sync.
-	const PROFILE_GROUPS: { title: string; fields: Field[] }[] = [
-		{
-			title: 'Appearance',
-			fields: [
-				{
-					key: 'theme',
-					label: 'Theme',
-					help: 'Follow the system, or force light or dark.',
-					type: 'select',
-					options: ['system', 'light', 'dark']
-				},
-				{
-					key: 'density',
-					label: 'Density',
-					help: 'Compact fits more controls on screen.',
-					type: 'select',
-					options: ['comfortable', 'compact']
-				}
-			]
-		},
-		{
-			title: 'Generation',
-			fields: [
-				{
-					key: 'show_advanced',
-					label: 'Show advanced controls',
-					help: 'Reveal rarely used workflow controls.',
-					type: 'checkbox'
-				},
-				{
-					key: 'live_previews',
-					label: 'Live previews',
-					help: 'Show intermediate images while generating.',
-					type: 'checkbox'
-				},
-				{
-					key: 'video_enabled',
-					label: 'Video generation',
-					help: 'Allow workflows that produce video.',
-					type: 'checkbox'
-				},
-				{
-					key: 'completion_sound',
-					label: 'Completion sound',
-					help: 'Play a sound when a generation finishes.',
-					type: 'checkbox'
-				}
-			]
-		},
-		{
-			title: 'Gallery',
-			fields: [
-				{
-					key: 'thumbnail_size',
-					label: 'Thumbnail size',
-					help: 'Size of tiles in the gallery grid.',
-					type: 'select',
-					options: ['small', 'medium', 'large']
-				},
-				{
-					key: 'gallery_autoplay',
-					label: 'Autoplay videos in gallery',
-					help: 'Start videos as soon as they open.',
-					type: 'checkbox'
-				},
-				{
-					key: 'gallery_page_size',
-					label: 'Gallery page size',
-					help: 'How many items to load at a time.',
-					type: 'number'
-				}
-			]
-		},
-		{
-			title: 'Privacy and history',
-			fields: [
-				{
-					key: 'store_history',
-					label: 'Store prompt/workflow history',
-					help: 'Keep prompts and inputs so past generations can be reused. Turning this off does not delete media.',
-					type: 'checkbox'
-				}
-			]
-		}
-	];
+	import { HOST_FIELDS, PROFILE_GROUPS } from '$lib/settings/fields';
+	import SettingField from '$lib/settings/SettingField.svelte';
+	import SettingRow from '$lib/settings/SettingRow.svelte';
 
 	onMount(() => {
 		if (!settingsState.data) settingsState.load();
@@ -194,76 +60,7 @@
 			refreshing = false;
 		}
 	}
-
-	function numberValue(event: Event): number {
-		return Number((event.currentTarget as HTMLInputElement).value);
-	}
-
-	function textValue(event: Event): string {
-		return (event.currentTarget as HTMLInputElement | HTMLSelectElement).value;
-	}
-
-	function checkedValue(event: Event): boolean {
-		return (event.currentTarget as HTMLInputElement).checked;
-	}
 </script>
-
-{#snippet row(
-	scope: 'profile' | 'host',
-	field: Field,
-	values: Record<string, SettingValue>,
-	writable: boolean
-)}
-	{@const id = `${scope}-${field.key}`}
-	{@const busy = savingKey === field.key}
-	<div class="setting" class:inline={field.type === 'checkbox'}>
-		<label class="text" for={id}>
-			<span class="label">{field.label}</span>
-			<span class="help muted">{field.help}</span>
-		</label>
-		<div class="control">
-			{#if field.type === 'checkbox'}
-				<input
-					{id}
-					type="checkbox"
-					class="switch"
-					role="switch"
-					checked={Boolean(values[field.key])}
-					disabled={!writable || busy}
-					onchange={(e) => save(scope, field.key, checkedValue(e))}
-				/>
-			{:else if field.type === 'select'}
-				<select
-					{id}
-					value={String(values[field.key] ?? field.options[0])}
-					disabled={!writable || busy}
-					onchange={(e) => save(scope, field.key, textValue(e))}
-				>
-					{#each field.options as option (option)}
-						<option value={option}>{option}</option>
-					{/each}
-				</select>
-			{:else if field.type === 'number'}
-				<input
-					{id}
-					type="number"
-					min="0"
-					value={Number(values[field.key] ?? 0)}
-					disabled={!writable || busy}
-					onchange={(e) => save(scope, field.key, numberValue(e))}
-				/>
-			{:else}
-				<input
-					{id}
-					type="text"
-					value={String(values[field.key] ?? '')}
-					disabled={!writable || busy}
-					onchange={(e) => save(scope, field.key, textValue(e))}
-				/>
-			{/if}
-		</div>
-	</div>
-{/snippet}
 
 <div class="page stack">
 	<h1>Settings</h1>
@@ -289,7 +86,13 @@
 				<section class="card">
 					<h2>{group.title}</h2>
 					{#each group.fields as field (field.key)}
-						{@render row('profile', field, data.profile, true)}
+						<SettingField
+							id={`profile-${field.key}`}
+							{field}
+							value={data.profile[field.key]}
+							disabled={savingKey === field.key}
+							onchange={(value) => save('profile', field.key, value)}
+						/>
 					{/each}
 				</section>
 			{/each}
@@ -305,65 +108,56 @@
 					{/if}
 				</p>
 				{#each HOST_FIELDS as field (field.key)}
-					{@render row('host', field, data.host, data.host_writable)}
+					<SettingField
+						id={`host-${field.key}`}
+						{field}
+						value={data.host[field.key]}
+						disabled={!data.host_writable || savingKey === field.key}
+						onchange={(value) => save('host', field.key, value)}
+					/>
 				{/each}
 			</section>
 
 			<section class="card">
 				<h2>Node catalog</h2>
-				<div class="setting inline">
-					<div class="text">
-						<span class="label">Refresh node catalog</span>
-						<span class="help muted">
-							Re-read installed ComfyUI nodes after installing or updating a node pack. Reload the
-							workflow afterwards.
-							{#if catalog}
-								{#if catalog.cooldown_active}
-									Skipped: a refresh ran too recently, try again shortly.
-								{:else if catalog.error}
-									Failed: {catalog.error.message}
-								{:else}
-									Updated {new Date(Number(catalog.fetched_ms)).toLocaleTimeString()} ({catalog.state}).
-								{/if}
+				<SettingRow label="Refresh node catalog" inline>
+					{#snippet help()}
+						Re-read installed ComfyUI nodes after installing or updating a node pack. Reload the
+						workflow afterwards.
+						{#if catalog}
+							{#if catalog.cooldown_active}
+								Skipped: a refresh ran too recently, try again shortly.
+							{:else if catalog.error}
+								Failed: {catalog.error.message}
+							{:else}
+								Updated {new Date(Number(catalog.fetched_ms)).toLocaleTimeString()} ({catalog.state}).
 							{/if}
-							{#if catalogError}<span class="error" role="alert">{catalogError}</span>{/if}
-						</span>
-					</div>
-					<div class="control">
-						<button type="button" class="btn" onclick={refreshCatalog} disabled={refreshing}>
-							{refreshing ? 'Refreshing…' : 'Refresh'}
-						</button>
-					</div>
-				</div>
+						{/if}
+						{#if catalogError}<span class="error" role="alert">{catalogError}</span>{/if}
+					{/snippet}
+					<button type="button" class="btn" onclick={refreshCatalog} disabled={refreshing}>
+						{refreshing ? 'Refreshing…' : 'Refresh'}
+					</button>
+				</SettingRow>
 			</section>
 
 			<section class="card">
 				<h2>Profile</h2>
-				<div class="setting inline">
-					<div class="text">
-						<span class="label">Signed in as</span>
-						<span class="help muted">
-							{data.multi_user
-								? 'Multi-user mode is on: each profile keeps its own inputs, history and outputs, protected by a password.'
-								: 'Single-user mode: the Default profile is used without a password.'}
-						</span>
-					</div>
-					<div class="control">
-						<strong>{session.info?.profile?.name ?? 'Default'}</strong>
-					</div>
-				</div>
+				<SettingRow
+					label="Signed in as"
+					inline
+					help={data.multi_user
+						? 'Multi-user mode is on: each profile keeps its own inputs, history and outputs, protected by a password.'
+						: 'Single-user mode: the Default profile is used without a password.'}
+				>
+					<strong>{session.info?.profile?.name ?? 'Default'}</strong>
+				</SettingRow>
 				{#if data.multi_user}
-					<div class="setting inline">
-						<div class="text">
-							<span class="label">Switch profile</span>
-							<span class="help muted">Sign out and choose another profile.</span>
-						</div>
-						<div class="control">
-							<button type="button" class="btn" onclick={switchProfile} disabled={switching}>
-								{switching ? 'Switching…' : 'Switch profile'}
-							</button>
-						</div>
-					</div>
+					<SettingRow label="Switch profile" help="Sign out and choose another profile." inline>
+						<button type="button" class="btn" onclick={switchProfile} disabled={switching}>
+							{switching ? 'Switching…' : 'Switch profile'}
+						</button>
+					</SettingRow>
 				{/if}
 			</section>
 		</div>
@@ -391,59 +185,6 @@
 		margin-bottom: var(--space-1);
 	}
 
-	.setting {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		padding: var(--space-3) 0;
-		border-top: 1px solid var(--color-border);
-	}
-	.card h2 + .setting,
-	.card .scope-note + .setting {
-		border-top: 0;
-	}
-	.text {
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		min-width: 0;
-	}
-	.label {
-		font-weight: 600;
-	}
-	.help {
-		font-size: var(--text-sm);
-	}
-	.control {
-		min-width: 0;
-	}
-	/* Phone: a toggle keeps its row; other controls go under their label. */
-	.setting.inline {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-3);
-	}
-	.setting.inline .control {
-		flex: none;
-	}
-	@media (min-width: 640px) {
-		.setting {
-			flex-direction: row;
-			align-items: center;
-			justify-content: space-between;
-			gap: var(--space-4);
-		}
-		.setting .text {
-			flex: 1 1 0;
-		}
-		.setting .control {
-			flex: 0 1 18rem;
-		}
-		.setting.inline .control {
-			flex: none;
-		}
-	}
 	.error {
 		color: var(--color-danger);
 	}

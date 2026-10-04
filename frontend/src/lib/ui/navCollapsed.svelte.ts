@@ -1,24 +1,13 @@
+import { readFlag, writeFlag } from './storage';
 // Whether the desktop sidebar is collapsed to the icon rail. Per device, remembered in localStorage.
 const KEY = 'simpleui:navCollapsed';
 
-function read(): boolean {
-	try {
-		return localStorage.getItem(KEY) === '1';
-	} catch {
-		return false; // blocked storage: just no memory
-	}
-}
-
 class NavCollapsed {
-	value = $state(read());
+	value = $state(readFlag(KEY));
 
 	toggle(): void {
 		this.value = !this.value;
-		try {
-			localStorage.setItem(KEY, this.value ? '1' : '0');
-		} catch {
-			// ignore
-		}
+		writeFlag(KEY, this.value);
 	}
 }
 

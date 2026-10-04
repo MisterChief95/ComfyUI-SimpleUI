@@ -1,6 +1,6 @@
 // Shared reactive session state: who is signed in, and the profile picker
 // list for the sign-in screen. One instance for the whole app.
-import { api, setCsrfToken, describeApiError } from './api';
+import { api, apiJson, setCsrfToken, describeApiError } from './api';
 import { settingsState } from './settings.svelte';
 import type { ProfileInfo, SessionInfo } from './contracts';
 
@@ -34,11 +34,7 @@ class SessionState {
 	}
 
 	async login(name: string, password: string): Promise<void> {
-		const info = await api<SessionInfo>('/session', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ name, password })
-		});
+		const info = await apiJson<SessionInfo>('/session', 'POST', { name, password });
 		this._adopt(info);
 	}
 

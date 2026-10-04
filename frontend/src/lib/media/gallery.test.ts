@@ -7,8 +7,8 @@ import ts from 'typescript';
 // Compile the real rune state for node:test; only transport/settings are replaced.
 let source = readFileSync(new URL('./gallery.svelte.ts', import.meta.url), 'utf8')
 	.replace(
-		"import { api, describeApiError } from '$lib/api';",
-		'let request; export function mockApi(fn) { request = fn; } const api = (url, init) => request(url, init); const describeApiError = (error) => error.message;'
+		"import { api, apiJson, describeApiError } from '$lib/api';",
+		'let request; export function mockApi(fn) { request = fn; } const api = (url, init) => request(url, init); const apiJson = (url, method, value) => api(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(value) }); const describeApiError = (error) => error.message;'
 	)
 	.replace(
 		"import { settingsState } from '$lib/settings.svelte';",

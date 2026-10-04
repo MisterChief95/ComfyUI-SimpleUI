@@ -2,8 +2,7 @@
 	// One layout section: a disclosure header and a grid of controls. Column
 	// counts collapse by the width of the controls column (see .controls in
 	// RunView): 1 on phones, at most 2 on tablets, the section's hint on desktop.
-	import ControlRow from '$lib/controls/ControlRow.svelte';
-	import AspectRatio from '$lib/controls/AspectRatio.svelte';
+	import LayoutControls from '$lib/controls/LayoutControls.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -24,38 +23,17 @@
 
 {#snippet cell({ control, height, ratio, span }: ViewEntry)}
 	<div class="cell" class:full={span === 'full'}>
-		{#if ratio && height}
-			<AspectRatio
-				width={control}
-				{height}
-				presets={ratio.presets}
-				widthValue={run.valueFor(control)}
-				heightValue={run.valueFor(height)}
-				onchange={(w, h) => {
-					run.setValue(control, w);
-					run.setValue(height, h);
-				}}
-			/>
-		{/if}
-		<ControlRow
+		<LayoutControls
 			{control}
+			{height}
+			{ratio}
 			workflowId={run.workflowId}
-			lastSeed={control.component === 'seed' ? run.lastSeed(control) : undefined}
-			value={run.valueFor(control)}
-			onchange={(value) => run.setValue(control, value)}
-			modified={run.isModified(control)}
-			onreset={() => run.reset(control)}
+			valueFor={(entry) => run.valueFor(entry)}
+			onchange={(entry, value) => run.setValue(entry, value)}
+			isModified={(entry) => run.isModified(entry)}
+			onreset={(entry) => run.reset(entry)}
+			lastSeed={(entry) => run.lastSeed(entry)}
 		/>
-		{#if height}
-			<ControlRow
-				control={height}
-				workflowId={run.workflowId}
-				value={run.valueFor(height)}
-				onchange={(value) => run.setValue(height, value)}
-				modified={run.isModified(height)}
-				onreset={() => run.reset(height)}
-			/>
-		{/if}
 	</div>
 {/snippet}
 

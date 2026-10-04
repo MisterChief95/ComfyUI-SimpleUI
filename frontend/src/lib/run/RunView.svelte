@@ -9,6 +9,8 @@
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/ui/Icon.svelte';
+	import ResizeHandle from '$lib/ui/ResizeHandle.svelte';
+	import { readPanelWidth } from '$lib/ui/storage';
 	import { isolatePopoverInput } from '$lib/ui/isolateInput';
 	import GenerateBar from './GenerateBar.svelte';
 	import PresetsMenu from './PresetsMenu.svelte';
@@ -33,50 +35,8 @@
 	// Result column width in px (tablet/desktop); null = the 40% default. Per-device preference.
 	const WIDTH_KEY = 'simpleui.resultWidth';
 	let body = $state<HTMLElement>();
-	let resultW = $state<number | null>(null);
-	try {
-		const saved = Number(localStorage.getItem(WIDTH_KEY));
-		if (saved > 0) resultW = saved;
-	} catch {
-		/* storage blocked: default width */
-	}
+	let resultW = $state<number | null>(readPanelWidth(WIDTH_KEY));
 
-	function setWidth(px: number, save: boolean): void {
-		const total = body?.clientWidth ?? 0;
-		// ponytail: fixed 260px/360px minimums; make them tokens if designs need other bounds
-		resultW = Math.round(Math.min(Math.max(px, 260), Math.max(260, total - 360)));
-		if (save)
-			try {
-				localStorage.setItem(WIDTH_KEY, String(resultW));
-			} catch {
-				/* not persisted */
-			}
-	}
-	function dragDivider(event: PointerEvent): void {
-		const handle = event.currentTarget as HTMLElement;
-		handle.setPointerCapture(event.pointerId);
-		const right = body!.getBoundingClientRect().right;
-		const move = (e: PointerEvent): void => setWidth(right - e.clientX, false);
-		const up = (): void => {
-			handle.removeEventListener('pointermove', move);
-			handle.removeEventListener('pointerup', up);
-			handle.removeEventListener('pointercancel', up);
-			if (resultW) setWidth(resultW, true);
-		};
-		handle.addEventListener('pointermove', move);
-		handle.addEventListener('pointerup', up);
-		handle.addEventListener('pointercancel', up);
-	}
-	function keyDivider(event: KeyboardEvent): void {
-		const step = event.shiftKey ? 64 : 16;
-		const now = resultW ?? Math.round((body?.clientWidth ?? 0) * 0.4);
-		if (event.key === 'ArrowLeft') setWidth(now + step, true);
-		else if (event.key === 'ArrowRight') setWidth(now - step, true);
-		else if (event.key === 'Home' || event.key === 'End')
-			setWidth(event.key === 'Home' ? 9999 : 0, true);
-		else return;
-		event.preventDefault();
-	}
 	let presetsOpen = $state(false);
 	let queueOpen = $state(false);
 	const blocking = $derived(run.schema?.blocking ?? []);
@@ -299,17 +259,18 @@
 				{/each}
 			</div>
 
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-			<div
+			<ResizeHandle
 				class="divider"
-				role="separator"
-				aria-orientation="vertical"
-				aria-label="Resize result panel"
-				tabindex="0"
-				onpointerdown={dragDivider}
-				onkeydown={keyDivider}
-			></div>
+				bind:width={resultW}
+				container={body}
+				label="Resize result panel"
+				storageKey={WIDTH_KEY}
+				min={260}
+				remaining={360}
+				defaultWidth={Math.round((body?.clientWidth ?? 0) * 0.4)}
+				extremes
+			/>
+
 			<aside class="result" aria-label="Result">
 				<ResultPanel {run} />
 			</aside>
@@ -420,7 +381,7 @@
 		padding: 0 var(--page-pad) var(--space-3);
 		gap: var(--space-3);
 	}
-	.divider {
+	.body > :global(.divider) {
 		display: none;
 	}
 	.result {
@@ -546,7 +507,7 @@
 			grid-row: 1;
 			min-height: 0;
 		}
-		.divider {
+		.body > :global(.divider) {
 			display: block;
 			grid-column: 2;
 			grid-row: 1;
@@ -556,8 +517,8 @@
 			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100%
 				no-repeat;
 		}
-		.divider:hover,
-		.divider:focus-visible {
+		.body > :global(.divider):hover,
+		.body > :global(.divider):focus-visible {
 			background-color: var(--color-accent-soft, transparent);
 			background-image: linear-gradient(var(--color-accent), var(--color-accent));
 			outline: none;

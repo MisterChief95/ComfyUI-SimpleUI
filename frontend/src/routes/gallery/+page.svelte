@@ -13,8 +13,11 @@
 	import Compare from '$lib/media/Compare.svelte';
 	import type { MediaInfo } from '$lib/contracts';
 	import Viewer from '$lib/media/Viewer.svelte';
-	import { ViewPrefs, MAX_TILE, MIN_TILE, type GallerySort } from '$lib/media/viewPrefs.svelte';
+	import { ViewPrefs } from '$lib/media/viewPrefs.svelte';
 	import Star from '$lib/media/Star.svelte';
+	import Thumbnail from '$lib/media/Thumbnail.svelte';
+	import GalleryFilters from '$lib/media/GalleryFilters.svelte';
+	import GalleryViewSettings from '$lib/media/GalleryViewSettings.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Sheet from '$lib/ui/Sheet.svelte';
 
@@ -194,83 +197,6 @@
 	}
 </script>
 
-{#snippet fields()}
-	<form id="gallery-filters" class="fields" onsubmit={apply}>
-		<label>
-			<span>Type</span>
-			<select bind:value={gallery.mediaKind}>
-				<option value="">All media</option>
-				<option value="image">Images</option>
-				<option value="video">Videos</option>
-				<option value="other">Other</option>
-			</select>
-		</label>
-		<label>
-			<span>Favorite</span>
-			<select bind:value={gallery.favorite}>
-				<option value="">All</option>
-				<option value="true">Favorites</option>
-				<option value="false">Not favorites</option>
-			</select>
-		</label>
-		<label>
-			<span>Workflow</span>
-			<select bind:value={gallery.workflowId}>
-				<option value="">Any workflow</option>
-				{#each workflowNames.list as workflow (workflow.id)}
-					<option value={workflow.id}>{workflow.name}</option>
-				{/each}
-			</select>
-		</label>
-		<label>
-			<span>From</span>
-			<input type="date" bind:value={gallery.createdAfter} />
-		</label>
-		<label>
-			<span>Through</span>
-			<input type="date" bind:value={gallery.createdBefore} />
-		</label>
-		<label>
-			<span>Search in</span>
-			<select
-				value={gallery.searchField}
-				onchange={(event) => gallery.setSearchField(event.currentTarget.value)}
-			>
-				<option value="any">Any saved value / workflow</option>
-				<option value="prompt">Prompt / text inputs</option>
-				<option value="model">Model / checkpoint inputs</option>
-			</select>
-		</label>
-		<label>
-			<span>Collection</span>
-			<select bind:value={gallery.collectionId}>
-				<option value="">Any collection</option>
-				{#each gallery.collections as collection (collection.id)}
-					<option value={collection.id}>{collection.name}</option>
-				{/each}
-			</select>
-		</label>
-		<label class="prompt">
-			<span>Saved metadata</span>
-			<input
-				value={gallery.prompt}
-				oninput={(event) => gallery.setPrompt(event.currentTarget.value)}
-				list="gallery-suggestions"
-				maxlength="500"
-				autocomplete="off"
-				placeholder="Search retained values"
-				aria-describedby="search-scope"
-			/>
-			<datalist id="gallery-suggestions">
-				{#each gallery.suggestions as value (value)}<option {value}></option>{/each}
-			</datalist>
-			<small id="search-scope"
-				>Searches retained inputs of the latest 1,000 generations. Imported files have no metadata.</small
-			>
-		</label>
-	</form>
-{/snippet}
-
 <div class="page gallery stack" style:--gap="var(--space-2)">
 	<div class="row toolbar">
 		<h1 class="grow">Gallery</h1>
@@ -365,7 +291,7 @@
 
 	{#if wide.current && panelOpen}
 		<div class="card panel">
-			{@render fields()}
+			<GalleryFilters {gallery} onapply={apply} />
 			<div class="row actions">
 				<button
 					type="submit"
@@ -382,7 +308,7 @@
 
 	{#if !wide.current}
 		<Sheet bind:open={sheetOpen} title="Filters" variant="sheet">
-			{@render fields()}
+			<GalleryFilters {gallery} onapply={apply} />
 			{#snippet footer()}
 				<div class="row">
 					<button type="button" class="btn grow" onclick={reset} disabled={gallery.loading}
@@ -399,68 +325,10 @@
 		</Sheet>
 	{/if}
 
-	<Sheet bind:open={prefsOpen} title="View settings" variant="sheet">
-		<div class="fields">
-			<label>
-				<span>Sort</span>
-				<select
-					bind:value={
-						() => prefs.sort,
-						(sort: GallerySort) => {
-							prefs.sort = sort;
-							void gallery.load(true);
-						}
-					}
-				>
-					<option value="newest">Newest</option>
-					<option value="oldest">Oldest</option>
-					<option value="random">Random</option>
-				</select>
-			</label>
-			<label>
-				<span>Thumbnail width: {tile}px{prefs.size ? '' : ' (profile default)'}</span>
-				<input
-					type="range"
-					min={MIN_TILE}
-					max={MAX_TILE}
-					step="8"
-					bind:value={() => tile, (px: number) => (prefs.size = px)}
-				/>
-			</label>
-			<label class="check"
-				><input type="checkbox" bind:checked={prefs.fit} /> Show whole image (no crop)</label
-			>
-			<label class="check"
-				><input type="checkbox" bind:checked={prefs.badges} /> Show video badges</label
-			>
-			<label class="check"
-				><input
-					type="checkbox"
-					bind:checked={
-						() => prefs.walk,
-						(walk: boolean) => {
-							prefs.walk = walk;
-							void gallery.load(true);
-						}
-					}
-				/> Walk across sibling folders</label
-			>
-		</div>
-		{#snippet footer()}
-			<button
-				type="button"
-				class="btn grow"
-				onclick={() => {
-					const changed = prefs.sort !== 'newest' || prefs.walk;
-					prefs.reset();
-					if (changed) void gallery.load(true);
-				}}>Reset to defaults</button
-			>
-		{/snippet}
-	</Sheet>
+	<GalleryViewSettings bind:open={prefsOpen} {prefs} {gallery} {tile} />
 
 	<Sheet bind:open={collectionOpen} title="Add to collection" variant="sheet">
-		<form class="fields" onsubmit={addToCollection}>
+		<form class="field-grid" onsubmit={addToCollection}>
 			<label
 				><span>Collection</span><select
 					bind:value={collectionChoice}
@@ -572,18 +440,21 @@
 						title={item.filename}
 						onclick={(event) => open(item, event)}
 					>
-						{#if unavailable}
-							<span class="placeholder">File unavailable</span>
-						{:else if item.media_kind !== 'other' && !gallery.thumbnailMissing[item.id]}
-							<img
-								src={`/api/media/${item.id}/thumbnail`}
-								alt=""
-								loading="lazy"
-								onerror={() => gallery.markThumbnailMissing(item.id)}
-							/>
-						{:else}
-							<span class="placeholder">{item.media_kind === 'video' ? 'Video' : 'File'}</span>
-						{/if}
+						<Thumbnail
+							{item}
+							missing={unavailable || gallery.thumbnailMissing[item.id]}
+							onerror={() => gallery.markThumbnailMissing(item.id)}
+						>
+							{#snippet fallback()}
+								<span class="placeholder"
+									>{unavailable
+										? 'File unavailable'
+										: item.media_kind === 'video'
+											? 'Video'
+											: 'File'}</span
+								>
+							{/snippet}
+						</Thumbnail>
 						{#if item.media_kind === 'video' && prefs.badges}
 							<span class="badge video-badge"><Icon name="video" size={14} /> Video</span>
 						{/if}
@@ -709,34 +580,6 @@
 		max-width: none;
 	}
 
-	.fields {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-		gap: var(--space-2) var(--space-3);
-	}
-	.fields label {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		min-width: 0;
-		font-size: var(--text-sm);
-		color: var(--color-text-muted);
-	}
-	.fields .check {
-		flex-direction: row;
-		align-items: center;
-		gap: var(--space-2);
-	}
-	.fields .prompt {
-		grid-column: 1 / -1;
-	}
-	.fields small {
-		font-size: var(--text-xs);
-	}
-	/* Inside the phone sheet: single column. */
-	:global(dialog) .fields {
-		grid-template-columns: 1fr;
-	}
 	.actions {
 		margin-top: var(--space-2);
 	}
@@ -769,7 +612,7 @@
 		content-visibility: auto;
 		contain-intrinsic-size: auto var(--tile, 10rem);
 	}
-	.tile.fit img {
+	.tile.fit :global(img) {
 		object-fit: contain;
 	}
 	.tile.picked {
@@ -788,7 +631,7 @@
 		color: inherit;
 		cursor: pointer;
 	}
-	.preview img,
+	.preview :global(img),
 	.placeholder {
 		display: flex;
 		width: 100%;
@@ -801,7 +644,7 @@
 		color: var(--color-text-muted);
 		font-size: var(--text-sm);
 	}
-	.preview:hover img {
+	.preview:hover :global(img) {
 		filter: brightness(1.08);
 	}
 	.video-badge {
