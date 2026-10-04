@@ -171,3 +171,9 @@ test('validateValue checks float finiteness and range; other types pass', () => 
 	assert.equal(validateValue(make('string', ''), ''), null);
 	assert.equal(validateValue(make('boolean', false), true), null);
 });
+
+test('seed controls default to -1 (random) regardless of the imported seed', () => {
+	const seed = { logical_type: 'int', component: 'seed', value: '42' } as ControlDescriptor;
+	assert.equal(baseValue(seed), '-1');
+	assert.equal(sameValue(seed, '42', baseValue(seed)), false);
+});

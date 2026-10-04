@@ -18,7 +18,7 @@
 	import { RunState } from './run.svelte';
 	import { statusInfo } from './status';
 	import { runShortcut } from './shortcuts';
-	import { DEFAULT_SEED_MAX, randomExactInt } from '$lib/controls/exact';
+	import { RANDOM_SEED } from './values';
 
 	let { workflowId }: { workflowId: string } = $props();
 
@@ -102,16 +102,7 @@
 			const seed = run.sections
 				.flatMap((section) => section.entries)
 				.find(({ control }) => control.component === 'seed')?.control;
-			if (!seed) return;
-			const bounds = seed.constraints;
-			run.useSeed(
-				seed,
-				randomExactInt(
-					bounds?.exact_min ?? (bounds?.min != null ? String(Math.trunc(bounds.min)) : '0'),
-					bounds?.exact_max ??
-						(bounds?.max != null ? String(Math.trunc(bounds.max)) : DEFAULT_SEED_MAX)
-				)
-			);
+			if (seed) run.setValue(seed, RANDOM_SEED);
 		}
 	}
 
@@ -187,7 +178,7 @@
 			<strong>Keyboard shortcuts</strong>
 			<p><kbd>Ctrl/Cmd + Enter</kbd> Generate</p>
 			<p><kbd>P</kbd> Focus first prompt</p>
-			<p><kbd>R</kbd> Randomize first seed and use fixed policy</p>
+			<p><kbd>R</kbd> Set first seed to random (-1)</p>
 			<label
 				><input type="checkbox" bind:checked={shortcutsEnabled} /> Enable P and R shortcuts</label
 			>

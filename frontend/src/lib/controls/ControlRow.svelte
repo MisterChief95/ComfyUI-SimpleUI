@@ -15,7 +15,8 @@
 		modified = false,
 		preview = false,
 		onreset,
-		workflowId
+		workflowId,
+		lastSeed
 	}: {
 		control: ControlDescriptor;
 		value: EditValue;
@@ -29,6 +30,8 @@
 		/** Reset to the imported value; the button shows only when `modified`. */
 		onreset?: () => void;
 		workflowId?: string;
+		/** See ControlWidget: seed controls only. */
+		lastSeed?: string | null;
 	} = $props();
 
 	// Stable ids derived from the binding so help and mapping errors can describe the input.
@@ -71,6 +74,7 @@
 		{describedby}
 		{id}
 		{workflowId}
+		{lastSeed}
 	/>
 	{#if control.help_text}<p class="help" id={helpId}>{control.help_text}</p>{/if}
 	{#each control.unresolved as detail, index (detail.code + (detail.field ?? ''))}
