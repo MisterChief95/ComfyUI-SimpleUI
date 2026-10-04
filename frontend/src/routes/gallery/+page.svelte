@@ -387,7 +387,7 @@
 	</nav>
 	{#if gallery.folderPath.startsWith('Collections/')}
 		<form
-			class="row folder-list"
+			class="row folder-list collection-actions"
 			onsubmit={(event) => {
 				event.preventDefault();
 				void gallery.changeCollection('PUT', gallery.currentCollection, { name: renameName });
@@ -506,6 +506,9 @@
 {/if}
 
 <style>
+	.collection-actions {
+		align-items: flex-end;
+	}
 	.tools {
 		gap: var(--space-1);
 	}

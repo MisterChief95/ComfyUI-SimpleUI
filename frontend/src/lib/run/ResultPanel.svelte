@@ -106,6 +106,24 @@
 <div class="panel" class:empty>
 	<div class="panel-head">
 		<span class="panel-title"><Icon name="image" size={16} /> Output</span>
+		{#if latest && !isTerminal(latest.status)}
+			<div class="progress" role="status">
+				<span class={`badge badge-${info.kind}`}>{info.label}</span>
+				<span class="muted grow node">
+					{#if nodeLabel}{nodeLabel}{:else if latest.status === 'queued'}Waiting in the ComfyUI
+						queue{/if}{#if nodePos}{nodeLabel ? ' · ' : ''}{nodePos}{/if}
+				</span>
+				{#if tracker.progress}
+					<span class="muted steps">{tracker.progress.value}/{tracker.progress.max}</span>
+				{/if}
+				<progress
+					max="100"
+					value={percent ?? undefined}
+					aria-label="Generation progress"
+					aria-valuetext={percent === null ? 'In progress' : `${percent}%`}
+				></progress>
+			</div>
+		{/if}
 		<a
 			class="btn btn-ghost btn-icon"
 			href="/gallery"
@@ -115,26 +133,6 @@
 			<Icon name="external" size={16} />
 		</a>
 	</div>
-	{#if latest && !isTerminal(latest.status)}
-		<div class="progress" role="status">
-			<div class="row">
-				<span class={`badge badge-${info.kind}`}>{info.label}</span>
-				<span class="muted grow node">
-					{#if nodeLabel}{nodeLabel}{:else if latest.status === 'queued'}Waiting in the ComfyUI
-						queue{/if}{#if nodePos}{nodeLabel ? ' · ' : ''}{nodePos}{/if}
-				</span>
-				{#if tracker.progress}
-					<span class="muted">{tracker.progress.value}/{tracker.progress.max}</span>
-				{/if}
-			</div>
-			<progress
-				max="100"
-				value={percent ?? undefined}
-				aria-label="Generation progress"
-				aria-valuetext={percent === null ? 'In progress' : `${percent}%`}
-			></progress>
-		</div>
-	{/if}
 
 	{#if failure}
 		<div class="failure" role="alert">
@@ -284,6 +282,7 @@
 		gap: var(--space-3);
 	}
 	.panel-head {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -291,6 +290,7 @@
 		flex: none;
 	}
 	.panel-title {
+		flex: none;
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -322,8 +322,15 @@
 	}
 	.progress {
 		display: flex;
-		flex-direction: column;
+		align-items: center;
+		flex: 1;
+		min-width: 0;
 		gap: var(--space-2);
+	}
+	.steps {
+		flex: none;
+		font-size: var(--text-sm);
+		white-space: nowrap;
 	}
 	.node {
 		overflow: hidden;
@@ -332,8 +339,11 @@
 		font-size: var(--text-sm);
 	}
 	progress {
+		position: absolute;
+		left: 0;
+		bottom: -0.25rem;
 		width: 100%;
-		height: 0.5rem;
+		height: 0.25rem;
 		accent-color: var(--color-accent);
 	}
 	.failure {
