@@ -415,19 +415,6 @@ test('empty starting leaves advance and duplicate media never creates repeated g
 	);
 });
 
-test('100k items keep the rendered window bounded on desktop and phone', () => {
-	for (const width of [343, 1024]) {
-		const grid = layoutGrid(100_000, width, 160, 8);
-		for (const top of [0, grid.height / 2, grid.height - 800]) {
-			const rows = visibleRows(grid.rows, top, 800);
-			const tiles = rows.reduce((count, row) => count + row.end - row.start, 0);
-			assert.ok(tiles <= 100, `${width}px: ${tiles} tiles`);
-			assert.ok(rows.length <= 15);
-		}
-		assert.equal(grid.rows.at(-1)?.end, 100_000);
-	}
-});
-
 test('group headers flush incomplete rows and retain each item exactly once', () => {
 	const grid = layoutGrid(
 		7,

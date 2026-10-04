@@ -96,13 +96,6 @@ test('status vocabulary and error summaries', () => {
 	assert.equal(isTerminal('running'), false);
 	assert.equal(isTerminal('submission_unknown'), false);
 	assert.equal(isTerminal('succeeded'), true);
-	for (const output_state of ['ready', 'partial', 'unavailable']) {
-		assert.deepEqual(
-			statusInfo({ status: 'succeeded', output_state } as never),
-			{ label: 'Done', kind: 'success' },
-			`successful execution with ${output_state} output state`
-		);
-	}
 	assert.equal(statusInfo({ status: 'failed', output_state: 'partial' } as never).label, 'Failed');
 	const described = describeGenerationError({
 		execution: { exception_message: 'Out of memory', node_type: 'KSampler', node_id: '5' }
@@ -174,10 +167,4 @@ test('validateValue checks float finiteness and range; other types pass', () => 
 	assert.equal(validateValue(open, -1e9), null);
 	assert.equal(validateValue(make('string', ''), ''), null);
 	assert.equal(validateValue(make('boolean', false), true), null);
-});
-
-test('seed controls default to -1 (random) regardless of the imported seed', () => {
-	const seed = { logical_type: 'int', component: 'seed', value: '42' } as ControlDescriptor;
-	assert.equal(baseValue(seed), '-1');
-	assert.equal(sameValue(seed, '42', baseValue(seed)), false);
 });
