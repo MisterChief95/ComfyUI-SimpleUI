@@ -301,6 +301,7 @@
 						<input
 							class="title"
 							value={section.title}
+							size={Math.max(1, section.title.length)}
 							maxlength="80"
 							aria-label="Section title"
 							onfocus={() => editor.selectSection(section.id)}
@@ -640,8 +641,11 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 	.title {
-		flex: 1 1 8rem;
-		min-width: 0;
+		field-sizing: content;
+		flex: 0 1 auto;
+		width: auto;
+		min-width: 6rem;
+		max-width: 100%;
 		font-weight: 650;
 		background: transparent;
 		border-color: transparent;
