@@ -1,7 +1,6 @@
 <script lang="ts">
 	// Always-visible bar at the bottom of the run page (above the tab bar on a
 	// phone, because the page is a flex column that ends here).
-	import type { SeedPolicy } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { isTerminal } from './status';
 	import type { RunState } from './run.svelte';
@@ -24,19 +23,6 @@
 	{#if message}<p class="msg" role="alert">{message}</p>{/if}
 	<div class="row actions">
 		<span class="hint">Generate <kbd>Ctrl / ⌘ + Enter</kbd></span>
-		<label class="seed">
-			<span class="sr-only">Seed policy</span>
-			<select
-				aria-label="Seed policy"
-				title="Seed policy"
-				value={run.seedPolicy}
-				onchange={(e) => (run.seedChoice = e.currentTarget.value as SeedPolicy)}
-			>
-				<option value="random">Random seed</option>
-				<option value="increment">Increment seed</option>
-				<option value="fixed">Fixed seed</option>
-			</select>
-		</label>
 		{#if cancellable && latest && !isTerminal(latest.status)}
 			<button
 				type="button"
@@ -88,16 +74,10 @@
 		font-size: var(--text-sm);
 		color: var(--color-danger);
 	}
-	/* Wraps instead of overflowing: with Cancel visible on a 320px phone the
-	   seed select and Cancel share the first row and Generate takes the second. */
+	/* Wraps instead of overflowing on a 320px phone when Cancel is visible. */
 	.actions {
 		flex-wrap: wrap;
 		justify-content: flex-end;
-	}
-	.seed {
-		flex: 1 1 8rem;
-		min-width: 0;
-		max-width: 11rem;
 	}
 	.btn {
 		white-space: nowrap;
@@ -110,9 +90,6 @@
 	@media (max-width: 767px) {
 		.hint {
 			display: none;
-		}
-		.seed {
-			max-width: none;
 		}
 		.generate {
 			max-width: none;

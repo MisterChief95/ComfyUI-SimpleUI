@@ -10,7 +10,6 @@ import type {
 	EditValue,
 	GenerationDetail,
 	Page,
-	SeedPolicy,
 	WorkflowInfo,
 	WorkflowLayout
 } from '$lib/contracts';
@@ -20,7 +19,8 @@ import { settingsState } from '$lib/settings.svelte';
 import { lastWorkflow } from '$lib/ui/lastWorkflow.svelte';
 import { PresetsState } from './presets.svelte';
 import { GenerationTracker } from './tracker.svelte';
-import { baseValue, coerceValue, sameValue, validateValue } from './values';
+import { DEFAULT_SEED_MAX, randomExactInt } from '$lib/controls/exact';
+import { RANDOM_SEED, baseValue, coerceValue, sameValue, validateValue } from './values';
 
 export const MORE_ID = '__more';
 const PERSIST_MS = 300;
@@ -89,7 +89,6 @@ export class RunState {
 	draft = $state<Record<string, EditValue>>({});
 	modifiedOnly = $state(false);
 	open = $state<Record<string, boolean>>({});
-	seedChoice = $state<SeedPolicy | null>(null);
 	submitting = $state(false);
 	submitError = $state<string | null>(null);
 	cancelling = $state(false);
@@ -100,11 +99,6 @@ export class RunState {
 
 	name = $derived(this.workflows.find((w) => w.id === this.workflowId)?.name ?? null);
 	resolved = $derived(this.schema ? resolveLayout(this.schema, this.layout?.layout ?? null) : null);
-	seedPolicy = $derived(
-		this.seedChoice ??
-			(settingsState.data?.profile.seed_policy as SeedPolicy | undefined) ??
-			'random'
-	);
 	blockingReason = $derived(this.schema?.blocking[0]?.message ?? null);
 
 	/** Edited, visible controls whose value cannot be submitted, in page order: binding id -> reason. */
@@ -309,10 +303,9 @@ export class RunState {
 		this.schedulePersist();
 	}
 
-	/** Reuse a resolved seed: set it on the control and stop the seed from changing. */
-	useSeed(control: ControlDescriptor, value: string): void {
-		this.setValue(control, value);
-		this.seedChoice = 'fixed';
+	/** The seed the latest generation resolved for this control, or null before the first run. */
+	lastSeed(control: ControlDescriptor): string | null {
+		return this.seedResults.find((r) => r.control.binding_id === control.binding_id)?.value ?? null;
 	}
 
 	get modifiedCount(): number {
@@ -408,9 +401,19 @@ export class RunState {
 		this.notice = null;
 		try {
 			const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
-			const edits = Object.fromEntries(
+			const edits: Record<string, EditValue> = Object.fromEntries(
 				Object.entries(this.draft).filter(([id]) => !hidden.has(id))
 			);
+			// A seed left at -1 becomes a fresh random one; anything else stays fixed.
+			for (const control of schema.controls) {
+				if (control.component !== 'seed' || hidden.has(control.binding_id)) continue;
+				if (String(this.valueFor(control)) !== RANDOM_SEED) continue;
+				const c = control.constraints;
+				edits[control.binding_id] = randomExactInt(
+					c?.exact_min ?? (c?.min != null ? String(Math.trunc(c.min)) : '0'),
+					c?.exact_max ?? (c?.max != null ? String(Math.trunc(c.max)) : DEFAULT_SEED_MAX)
+				);
+			}
 			// ponytail: a fresh key per click; GenerationService already guarantees a key
 			// that did reach the server is never resubmitted upstream.
 			const requestKey =
@@ -424,7 +427,7 @@ export class RunState {
 					workflow_id: this.workflowId,
 					request_key: requestKey,
 					edits,
-					seed_policy: this.seedPolicy
+					seed_policy: 'fixed'
 				})
 			});
 			await this.tracker.adopt(detail);

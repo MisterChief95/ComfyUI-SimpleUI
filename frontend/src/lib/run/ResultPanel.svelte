@@ -240,9 +240,9 @@
 					<button
 						type="button"
 						class="btn"
-						disabled={run.seedPolicy === 'fixed' && String(run.valueFor(control)) === value}
-						title="Set this seed in the controls and use a fixed seed policy"
-						onclick={() => run.useSeed(control, value)}
+						disabled={String(run.valueFor(control)) === value}
+						title="Set this seed in the controls"
+						onclick={() => run.setValue(control, value)}
 					>
 						Use this seed
 					</button>

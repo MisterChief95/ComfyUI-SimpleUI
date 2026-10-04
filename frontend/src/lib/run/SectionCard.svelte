@@ -40,6 +40,7 @@
 		<ControlRow
 			{control}
 			workflowId={run.workflowId}
+			lastSeed={control.component === 'seed' ? run.lastSeed(control) : undefined}
 			value={run.valueFor(control)}
 			onchange={(value) => run.setValue(control, value)}
 			modified={run.isModified(control)}

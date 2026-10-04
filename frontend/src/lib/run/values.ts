@@ -4,8 +4,12 @@
 import type { ControlDescriptor, EditValue } from '../contracts.ts';
 import { inExactRange } from '../controls/exact.ts';
 
-/** The imported value of a control as an EditValue (null becomes false / ''). */
+/** Seed value meaning "pick a fresh random seed for every run" (Forge / ComfyUI convention). */
+export const RANDOM_SEED = '-1';
+
+/** The imported value of a control as an EditValue (null becomes false / ''); seeds default to random. */
 export function baseValue(control: ControlDescriptor): EditValue {
+	if (control.component === 'seed') return RANDOM_SEED;
 	const value = control.value;
 	if (value === null || value === undefined) return control.logical_type === 'boolean' ? false : '';
 	return value;

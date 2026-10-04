@@ -11,8 +11,7 @@
 	import { onDestroy, tick } from 'svelte';
 	import { api, describeApiError } from '$lib/api';
 	import type { ControlDescriptor, EditValue } from '$lib/contracts';
-	import { DEFAULT_SEED_MAX, randomExactInt } from './exact';
-	import { baseValue, sameValue, validateValue } from '$lib/run/values';
+	import { RANDOM_SEED, baseValue, sameValue, validateValue } from '$lib/run/values';
 	import Icon from '$lib/ui/Icon.svelte';
 	import SearchableSelect from '$lib/ui/SearchableSelect.svelte';
 	import RecentPrompts from './RecentPrompts.svelte';
@@ -27,7 +26,8 @@
 		preview = false,
 		describedby,
 		id = control.binding_id,
-		workflowId
+		workflowId,
+		lastSeed
 	}: {
 		control: ControlDescriptor;
 		value: EditValue;
@@ -42,6 +42,8 @@
 		/** DOM id of the focusable input, so a <label for> can target it. */
 		id?: string;
 		workflowId?: string;
+		/** Seed controls: the previous run's seed (null = none yet). Omit to hide the "use last" button. */
+		lastSeed?: string | null;
 	} = $props();
 
 	const text = $derived(value === null || value === undefined ? '' : String(value));
@@ -80,14 +82,6 @@
 	);
 
 	// --- number / seed (ExactInt text) ---
-	const exactMin = $derived(
-		constraints?.exact_min ??
-			(constraints?.min != null ? String(Math.trunc(constraints.min)) : null)
-	);
-	const exactMax = $derived(
-		constraints?.exact_max ??
-			(constraints?.max != null ? String(Math.trunc(constraints.max)) : null)
-	);
 	// An untouched control is never flagged (its imported value may be null/empty);
 	// RunState runs the same validateValue on edited values to block Generate.
 	const error = $derived(
@@ -98,10 +92,6 @@
 		[describedby, error ? hintId : ''].filter(Boolean).join(' ') || undefined
 	);
 	const invalid = $derived(error ? true : undefined);
-
-	function rollSeed(): void {
-		onchange(randomExactInt(exactMin ?? '0', exactMax ?? DEFAULT_SEED_MAX));
-	}
 
 	// --- float / slider numeric parsing ---
 	function emitNumber(el: HTMLInputElement): void {
@@ -304,11 +294,23 @@
 				class="btn btn-icon"
 				{disabled}
 				aria-label="Random seed"
-				title="Random seed"
-				onclick={rollSeed}
+				title="Random seed (-1)"
+				onclick={() => onchange(RANDOM_SEED)}
 			>
 				<Icon name="dice" />
 			</button>
+			{#if lastSeed !== undefined}
+				<button
+					type="button"
+					class="btn btn-icon"
+					disabled={disabled || lastSeed === null}
+					aria-label="Use last seed"
+					title={lastSeed === null ? 'No previous seed yet' : 'Use last seed'}
+					onclick={() => lastSeed !== null && onchange(lastSeed)}
+				>
+					<Icon name="recycle" />
+				</button>
+			{/if}
 		</div>
 	{:else if component === 'number'}
 		{#if isInt}

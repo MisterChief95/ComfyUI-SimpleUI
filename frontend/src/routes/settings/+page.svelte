@@ -86,13 +86,6 @@
 					type: 'checkbox'
 				},
 				{
-					key: 'seed_policy',
-					label: 'Seed policy',
-					help: 'How the seed changes after each run.',
-					type: 'select',
-					options: ['fixed', 'random', 'increment']
-				},
-				{
 					key: 'live_previews',
 					label: 'Live previews',
 					help: 'Show intermediate images while generating.',
