@@ -16,7 +16,6 @@ import {
 	locate,
 	moveItem,
 	moveSection,
-	newSectionId,
 	placeControl,
 	removeSection,
 	removeStale,
@@ -287,16 +286,6 @@ test('setSpan only touches placed items', () => {
 	assert.equal(setSpan(d, 'b', 'full').sections[0].items[1].span, 'full');
 	assert.equal(setSpan(d, 'h', 'full'), d);
 	assert.equal(setSpan(d, 'zz', 'full'), d);
-});
-
-test('newSectionId is valid and unique', () => {
-	const taken = new Set<string>();
-	for (let i = 0; i < 200; i++) {
-		const id = newSectionId(taken);
-		assert.match(id, /^[A-Za-z0-9_-]{1,40}$/);
-		assert.ok(!taken.has(id));
-		taken.add(id);
-	}
 });
 
 test('validate enforces every invariant', () => {

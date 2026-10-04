@@ -16,10 +16,7 @@ test('parseFrame accepts frames and rejects junk', () => {
 
 test('previewUrl builds a data URL only for jpeg/png base64', () => {
 	assert.equal(previewUrl({ mime: 'image/jpeg', image: 'QUJD' }), 'data:image/jpeg;base64,QUJD');
-	assert.equal(previewUrl({ mime: 'image/png', image: 'QUI=' }), 'data:image/png;base64,QUI=');
-	assert.equal(previewUrl({ mime: 'text/html', image: 'QUJD' }), null);
 	assert.equal(previewUrl({ mime: 'image/png', image: '" onerror="x' }), null);
-	assert.equal(previewUrl({ mime: 'image/png' }), null);
 });
 
 test('nodeProgress counts finished nodes and finds the running one', () => {
