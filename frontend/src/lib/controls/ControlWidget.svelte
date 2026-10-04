@@ -93,7 +93,6 @@
 	);
 	const invalid = $derived(error ? true : undefined);
 
-
 	// --- float / slider numeric parsing ---
 	function emitNumber(el: HTMLInputElement): void {
 		if (isInt) {
