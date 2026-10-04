@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import PurePosixPath
 from typing import Any
 
+from ..comfy_client import ComfyRejected
 from ..events import EventBroker
 from .store import GenerationStore
 
@@ -101,6 +102,25 @@ class GenerationService:
             response = await self.upstream.submit_prompt(
                 accepted.row["graph"], client_id=self.client_id, extra_data=extra_data
             )
+        except ComfyRejected as exc:
+            # A 400 validation answer is definite: nothing was queued.
+            rejection = {
+                **exc.rejection,
+                "node_errors": [
+                    {**e, "field": f"{e['node_id']}.inputs.{e['input_name']}"}
+                    if "input_name" in e
+                    else e
+                    for e in exc.rejection["node_errors"]
+                ],
+            }
+            self.store.update(
+                owner_id,
+                generation_id,
+                status="failed",
+                output_state="unavailable",
+                error={"rejection": rejection},
+            )
+            return self.store.get(owner_id, generation_id)
         except Exception:  # noqa: BLE001 - any failure leaves the outcome unknown
             # The request may have reached ComfyUI. Retrying here could execute
             # it twice, so only reconciliation may move this record forward.

@@ -21,7 +21,14 @@ from ..auth.service import BaselineStatus
 from ..generations.store import TERMINAL
 from ..settings.service import SettingsStore
 from ..storage.db import Database
-from ..storage.repository import DEFAULT_PROFILE_ID, Repository, new_id, now_ms
+from ..storage.repository import (
+    DEFAULT_PROFILE_ID,
+    Repository,
+    new_id,
+    now_ms,
+    search_values,
+)
+from .metadata import read_metadata
 
 IMAGE_EXTENSIONS = frozenset(
     {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
@@ -156,7 +163,85 @@ class MediaService:
             max_workers=1, thread_name_prefix="media-thumbnail"
         )
         self._ensure_capture_source()
+        self._recover_provenance()
         self._recover_thumbnails()
+
+    def _recover_provenance(self) -> None:
+        """Backfill only external imports. Captures never rehydrate history."""
+        cursor = ""
+        while True:
+            rows = self.db.query(
+                "SELECT m.id, m.owner_id FROM media m JOIN media_locations l ON l.media_id = m.id"
+                " LEFT JOIN media_provenance p ON p.media_id = m.id"
+                " WHERE m.id > ? AND m.generation_id IS NULL AND l.source_id != 'captures'"
+                " AND m.hidden = 0 AND p.media_id IS NULL ORDER BY m.id LIMIT 100",
+                (cursor,),
+            )
+            if not rows:
+                return
+            for row in rows:
+                self.provenance(row["owner_id"], row["id"])
+            cursor = rows[-1]["id"]
+
+    def provenance(self, owner_id: str, media_id: str) -> dict[str, Any] | None:
+        row = self.db.query_one(
+            "SELECT m.*, l.source_id FROM media m JOIN media_locations l ON l.media_id = m.id"
+            " WHERE m.id = ? AND m.owner_id = ? AND m.hidden = 0",
+            (media_id, owner_id),
+        )
+        if row is None:
+            return None
+        if row["generation_id"] is not None or row["source_id"] == "captures":
+            return {
+                "source": "generation",
+                "raw": {},
+                "values": {},
+                "diagnostics": ["Use retained generation history for this file."],
+            }
+        saved = self.db.query_one(
+            "SELECT provenance_json FROM media_provenance WHERE media_id = ? AND file_version = ?",
+            (media_id, row["file_version"]),
+        )
+        if saved:
+            return json.loads(saved["provenance_json"])
+        located = self.locate(owner_id, media_id)
+        if located is None:
+            return {
+                "source": "unknown",
+                "raw": {},
+                "values": {},
+                "diagnostics": [
+                    "The imported file is unavailable. Rescan its output folder."
+                ],
+            }
+        result = read_metadata(located.path)
+        # Filesystem work is outside the transaction; do not publish stale metadata.
+        current = self.locate(owner_id, media_id)
+        if (
+            current is None
+            or current.row["file_version"] != located.row["file_version"]
+        ):
+            return None
+        with self.db.write() as conn:
+            if not conn.execute(
+                "SELECT 1 FROM media WHERE id = ? AND owner_id = ? AND file_version = ?",
+                (media_id, owner_id, row["file_version"]),
+            ).fetchone():
+                return None
+            conn.execute(
+                "INSERT INTO media_provenance VALUES (?, ?, ?) ON CONFLICT(media_id)"
+                " DO UPDATE SET file_version = excluded.file_version, provenance_json = excluded.provenance_json",
+                (media_id, row["file_version"], json.dumps(result)),
+            )
+            conn.execute("DELETE FROM media_search WHERE media_id = ?", (media_id,))
+            conn.executemany(
+                "INSERT INTO media_search VALUES (?, ?, ?, ?, ?)",
+                [
+                    (media_id, owner_id, *record)
+                    for record in search_values(result["values"])
+                ],
+            )
+        return result
 
     def _recover_thumbnails(self) -> None:
         """Requeue indexed media without a thumbnail after a process restart."""
@@ -392,6 +477,7 @@ class MediaService:
                             "UPDATE media SET state = ? WHERE id = ?",
                             (state, row["id"]),
                         )
+                self.provenance(owner_id, row["id"])
                 self._schedule_thumbnail(owner_id, row["id"])
                 return row["id"]
         media_id = new_id()
@@ -418,6 +504,7 @@ class MediaService:
                 "INSERT INTO media_locations (media_id, source_id, relative_path) VALUES (?, ?, ?)",
                 (media_id, source_id, relative),
             )
+        self.provenance(owner_id, media_id)
         self._schedule_thumbnail(owner_id, media_id)
         return media_id
 
@@ -834,6 +921,85 @@ class MediaService:
         for row in rows:
             (self.thumbnails / f"{row['id']}.jpg").unlink(missing_ok=True)
         return len(rows)
+
+    @staticmethod
+    def _content_hash(located: LocatedMedia) -> str | None:
+        """Stream a bounded buffer; reject files changed before/during the read."""
+        try:
+            with located.path.open("rb") as source:
+                before = os.fstat(source.fileno())
+                version = f"{before.st_dev}:{before.st_ino}:{before.st_size}:{before.st_mtime_ns}"
+                if version != located.row["file_version"]:
+                    return None
+                digest = hashlib.sha256()
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk)
+                after = os.fstat(source.fileno())
+                version_after = (
+                    f"{after.st_dev}:{after.st_ino}:{after.st_size}:{after.st_mtime_ns}"
+                )
+                if version != version_after or _version(located.path) != version:
+                    return None
+                return digest.hexdigest()
+        except OSError:
+            return None
+
+    def duplicate_groups(
+        self, owner_id: str, media_id: str | None = None
+    ) -> dict | None:
+        """On-demand exact groups. Stat/size first, hash only same-size candidates."""
+        target = self.locate(owner_id, media_id) if media_id is not None else None
+        if media_id is not None and target is None:
+            return None
+        try:
+            target_size = target.path.stat().st_size if target else None
+        except OSError:
+            return None
+        repo = Repository(self.db)
+        sizes: dict[int, list[tuple[dict, LocatedMedia]]] = {}
+        unavailable = 0
+        for row in repo.duplicate_candidates(owner_id):
+            try:
+                located = self.locate(owner_id, row["id"])
+                size = located.path.stat().st_size if located else None
+            except OSError:
+                located, size = None, None
+            if located is None:
+                unavailable += 1
+                continue
+            if target_size is None or size == target_size:
+                sizes.setdefault(size, []).append((row, located))
+        groups = []
+        for size, candidates in sizes.items():
+            if len(candidates) < 2:
+                continue
+            hashes: dict[str, list[dict]] = {}
+            for row, located in candidates:
+                digest = row["cached_sha256"] if row["hash_size"] == size else None
+                if digest is None:
+                    digest = self._content_hash(located)
+                    if digest:
+                        repo.cache_media_hash(
+                            owner_id, row["id"], row["file_version"], size, digest
+                        )
+                if digest is None:
+                    unavailable += 1
+                    continue
+                hashes.setdefault(digest, []).append(row)
+            for matches in hashes.values():
+                if len(matches) < 2 or (
+                    media_id is not None
+                    and not any(row["id"] == media_id for row in matches)
+                ):
+                    continue
+                groups.append(
+                    {
+                        "byte_size": str(size),
+                        "count": len(matches),
+                        "items": [self.public_item(row) for row in matches[:200]],
+                    }
+                )
+        return {"groups": groups, "unavailable": unavailable}
 
     def _safe_under(self, root: Path, path: Path) -> bool:
         """True when every component from root down to path is a real entry.

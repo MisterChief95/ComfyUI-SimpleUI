@@ -379,21 +379,30 @@ def _project_combo(
     # Options keep the JSON type ComfyUI sent (numbers and booleans are not stringified).
     options = [c for c in choices if is_scalar(c)]
     values = [c for c in options if isinstance(c, str)]
-    upload_hint = any(str(key).endswith("_upload") and opts[key] for key in opts)
-    media_kind = _media_kind(values)
+    flagged = _flagged_kind(opts)
+    ext_kind = _media_kind(values)
 
-    if upload_hint or media_kind is not None:
+    if flagged is not None or ext_kind is not None:
         # Shared ComfyUI input-directory filenames: other profiles' uploads can
         # be in this list. Always withheld; the client picks from its own
         # uploads and the backend substitutes the real filename at submission.
-        kind = media_kind or "image"
+        # The explicit upload flag wins; extensions are only a fallback.
+        kind = flagged or ext_kind
         projected: dict[str, Any] = {
             "logical_type": "OWNED_INPUT_REF",
             "media_kind": kind,
             "choices": [],
             "choices_withheld": True,
         }
-        if kind == "image":
+        if flagged and ext_kind and flagged != "file" and ext_kind != flagged:
+            projected["classification_conflict"] = {
+                "flag": flagged,
+                "extensions": ext_kind,
+            }
+        # LoadImageOutput-style loaders read ComfyUI's output/temp folder, not
+        # the input directory, so the input-dir upload adapter cannot serve them.
+        output_folder = opts.get("image_folder") in ("output", "temp")
+        if kind == "image" and not output_folder:
             projected["loader_adapter"] = "comfy_input_dir_filename"
         else:
             # No universal video/audio upload route is established, so this
@@ -423,6 +432,24 @@ def _project_combo(
     if is_scalar(opts.get("default")):
         projected["default"] = opts["default"]
     return projected, []
+
+
+_UPLOAD_FLAGS = {
+    "image_upload": "image",
+    "video_upload": "video",
+    "audio_upload": "audio",
+    # Generic uploads say nothing about the media kind.
+    "file_upload": "file",
+    "model_upload": "file",
+    "text_upload": "file",
+}
+
+
+def _flagged_kind(opts: dict[str, Any]) -> str | None:
+    for flag, kind in _UPLOAD_FLAGS.items():
+        if opts.get(flag):
+            return kind
+    return None
 
 
 def _media_kind(values: list[str]) -> str | None:

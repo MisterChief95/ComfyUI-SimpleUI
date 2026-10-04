@@ -71,6 +71,53 @@ class ComfyUnavailable(Exception):
         return {"code": self.code, "message": self.message}
 
 
+class ComfyRejected(ComfyUnavailable):
+    """ComfyUI answered ``/prompt`` with a 400 validation failure.
+
+    Unlike a transport error this is a definite "not queued": ``rejection``
+    holds sanitized messages only (no ``details``/``extra_info`` bodies, which
+    can carry host paths or full option lists).
+    """
+
+    def __init__(self, message: str, rejection: dict[str, Any]) -> None:
+        super().__init__("upstream_rejected", message)
+        self.rejection = rejection
+
+
+_MAX_REJECTION_TEXT = 300
+
+
+def _clip(value: Any) -> str:
+    return str(value)[:_MAX_REJECTION_TEXT]
+
+
+def sanitize_rejection(body: Any) -> dict[str, Any] | None:
+    """Reduce a ``/prompt`` 400 body to ``{message, node_errors:[...]}``, or None."""
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    message = _clip(error.get("message", "")) if isinstance(error, dict) else ""
+    node_errors: list[dict[str, str]] = []
+    raw = body.get("node_errors")
+    for node_id, entry in raw.items() if isinstance(raw, dict) else ():
+        errors = entry.get("errors") if isinstance(entry, dict) else None
+        for item in errors if isinstance(errors, list) else ():
+            if not isinstance(item, dict):
+                continue
+            extra = item.get("extra_info")
+            input_name = extra.get("input_name") if isinstance(extra, dict) else None
+            record = {
+                "node_id": str(node_id),
+                "message": _clip(item.get("message", "")),
+            }
+            if isinstance(input_name, str):
+                record["input_name"] = _clip(input_name)
+            node_errors.append(record)
+    if not message and not node_errors:
+        return None
+    return {"message": message, "node_errors": node_errors}
+
+
 class ComfyClient:
     """Async ComfyUI HTTP client. One instance per process; close it at shutdown."""
 
@@ -135,6 +182,16 @@ class ComfyClient:
                 "upstream_unreachable", f"ComfyUI is not reachable at {self.safe_url}"
             ) from None
         if response.status_code >= 400:
+            if response.status_code == 400 and path == "/prompt":
+                try:
+                    rejection = sanitize_rejection(response.json())
+                except ValueError:
+                    rejection = None
+                if rejection is not None:
+                    raise ComfyRejected(
+                        rejection["message"] or "ComfyUI rejected the prompt",
+                        rejection,
+                    )
             raise ComfyUnavailable(
                 "upstream_error",
                 f"ComfyUI returned HTTP {response.status_code} for {safe_path}",
@@ -187,6 +244,31 @@ class ComfyClient:
         global interrupt; that form is never sent.)
         """
         await self._post("/interrupt", {"prompt_id": prompt_id})
+
+    async def get_image(
+        self, path: str, *, max_bytes: int = 4_000_000
+    ) -> tuple[bytes, str]:
+        """GET an image once (previews are optional, so no retries); returns (body, type)."""
+        try:
+            response = await self._client.get(path)
+        except httpx.TimeoutException:
+            raise ComfyUnavailable(
+                "upstream_timeout", "ComfyUI did not respond"
+            ) from None
+        except httpx.HTTPError:
+            raise ComfyUnavailable(
+                "upstream_unreachable", f"ComfyUI is not reachable at {self.safe_url}"
+            ) from None
+        kind = response.headers.get("content-type", "").split(";")[0].strip()
+        if response.status_code != 200 or not kind.startswith("image/"):
+            raise ComfyUnavailable("upstream_error", "No preview available")
+        if len(response.content) > max_bytes:
+            raise ComfyUnavailable("upstream_error", "Preview too large")
+        return response.content, kind
+
+    async def free_memory(self) -> None:
+        """Ask ComfyUI to unload models and free VRAM (empty 200; applied asynchronously)."""
+        await self._post("/free", {"unload_models": True, "free_memory": True})
 
     async def __aenter__(self) -> Self:
         return self

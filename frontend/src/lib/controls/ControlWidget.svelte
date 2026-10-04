@@ -8,14 +8,23 @@
 	//   int (any widget) ExactInt string, e.g. "42" -- never rounded through Number
 	//   float           number (an empty/unparseable box emits its raw string, "")
 	//   everything else string (select: option value; file: uploaded id, "" = none)
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { api, describeApiError } from '$lib/api';
 	import type { ControlDescriptor, EditValue } from '$lib/contracts';
 	import { RANDOM_SEED, baseValue, sameValue, validateValue } from '$lib/run/values';
 	import Icon from '$lib/ui/Icon.svelte';
 	import SearchableSelect from '$lib/ui/SearchableSelect.svelte';
 	import RecentPrompts from './RecentPrompts.svelte';
-	import { insertText } from './prompt';
+	import ModelInfo from './ModelInfo.svelte';
+	import { registerPrompt } from './promptTarget';
+	import { adjustWeight, completionAt, completionText, insertText, suggest } from './prompt';
+
+	const MODEL_FOLDERS: Record<string, string> = {
+		lora_name: 'loras',
+		ckpt_name: 'checkpoints',
+		vae_name: 'vae',
+		control_net_name: 'controlnet'
+	};
 
 	let {
 		control,
@@ -61,6 +70,73 @@
 		textarea?.focus();
 		textarea?.setSelectionRange(selection.start + prompt.length, selection.start + prompt.length);
 	}
+
+	// Prompt helpers: embedding:/<lora: autocomplete (names fetched once, lazily)
+	// and Ctrl/Cmd+Up/Down weight editing.
+	let namesRequested = false;
+	let caret = $state(0);
+	const completion = $derived(completionAt(text, caret));
+	let pool = $state.raw<{ embeddings: string[]; loras: string[] }>({ embeddings: [], loras: [] });
+	const choices = $derived(
+		completion
+			? suggest(completion.kind === 'embedding' ? pool.embeddings : pool.loras, completion.partial)
+			: []
+	);
+	async function loadNames(): Promise<void> {
+		if (namesRequested || preview) return;
+		namesRequested = true;
+		try {
+			pool = await api('/catalog/completions');
+		} catch {
+			namesRequested = false; // retry on the next focus; typing works without suggestions
+		}
+	}
+	function trackCaret(): void {
+		caret = textarea?.selectionStart ?? 0;
+	}
+	onMount(() => {
+		if (component !== 'textarea' || preview) return;
+		// Trigger-word chips append at the caret (or the end if never focused).
+		return registerPrompt((word) => {
+			const at = textarea?.selectionStart ?? text.length;
+			void applyEdit(insertAt(at, word));
+		});
+	});
+	function insertAt(at: number, word: string): { value: string; start: number; end: number } {
+		const end = at + word.length;
+		return { value: insertText(text, word, at, at), start: end, end };
+	}
+	async function applyEdit(edit: { value: string; start: number; end: number }): Promise<void> {
+		onchange(edit.value);
+		await tick();
+		textarea?.setSelectionRange(edit.start, edit.end);
+		trackCaret();
+	}
+	function onPromptKey(e: KeyboardEvent): void {
+		if (!(e.ctrlKey || e.metaKey) || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+		const edit = adjustWeight(
+			text,
+			textarea?.selectionStart ?? 0,
+			textarea?.selectionEnd ?? 0,
+			e.key === 'ArrowUp' ? 0.1 : -0.1
+		);
+		if (!edit) return;
+		e.preventDefault();
+		void applyEdit(edit);
+	}
+	function accept(name: string): void {
+		if (!completion) return;
+		const insert = completionText(completion.kind, name);
+		const edit = {
+			value: text.slice(0, completion.start) + insert + text.slice(caret),
+			start: completion.start + insert.length,
+			end: completion.start + insert.length
+		};
+		void applyEdit(edit).then(() => textarea?.focus());
+	}
+	const modelFolder = $derived(
+		control.group === 'model' ? (MODEL_FOLDERS[control.input_name] ?? null) : null
+	);
 	const constraints = $derived(control.constraints);
 	const isInt = $derived(control.logical_type === 'int');
 
@@ -215,7 +291,27 @@
 			value={text}
 			{disabled}
 			rows="2"
-			oninput={(e) => onchange(e.currentTarget.value)}></textarea>
+			onfocus={() => {
+				void loadNames();
+				registerPrompt(
+					(word) => void applyEdit(insertAt(textarea?.selectionStart ?? text.length, word)),
+					true
+				);
+			}}
+			onkeydown={onPromptKey}
+			onkeyup={trackCaret}
+			onclick={trackCaret}
+			oninput={(e) => {
+				onchange(e.currentTarget.value);
+				trackCaret();
+			}}></textarea>
+		{#if choices.length}
+			<ul class="suggest" aria-label="Suggestions">
+				{#each choices as name (name)}
+					<li><button type="button" class="btn" onclick={() => accept(name)}>{name}</button></li>
+				{/each}
+			</ul>
+		{/if}
 		{#if workflowId && !preview}
 			<RecentPrompts
 				{workflowId}
@@ -251,6 +347,9 @@
 			search={!preview}
 			onchange={(index) => onchange(options[index].value)}
 		/>
+		{#if modelFolder && selected >= 0 && !preview}
+			<ModelInfo folder={modelFolder} filename={String(options[selected].value)} />
+		{/if}
 	{:else if component === 'slider'}
 		<div class="slider">
 			<input
@@ -398,6 +497,14 @@
 		--input-font: 0.875rem;
 	}
 
+	.suggest {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		margin: var(--space-1) 0 0;
+		padding: 0;
+		list-style: none;
+	}
 	textarea {
 		overflow-y: auto;
 		max-height: 50dvh;

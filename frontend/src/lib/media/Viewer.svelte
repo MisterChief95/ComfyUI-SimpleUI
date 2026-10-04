@@ -4,13 +4,15 @@
 	// Navigation: prev/next buttons, ArrowLeft/ArrowRight, horizontal swipe on images,
 	// and (opt-in, per device) vertical swipe: up = next, down = previous.
 	import { onMount } from 'svelte';
+	import { api, describeApiError } from '$lib/api';
+	import { startSlideshow } from './viewerPlayback';
 	import { on } from 'svelte/events';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import type { MediaInfo } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Thumbnail from '$lib/media/Thumbnail.svelte';
 	import ResizeHandle from '$lib/ui/ResizeHandle.svelte';
-	import { readPanelWidth, readFlag, writeFlag } from '$lib/ui/storage';
+	import { readPanelWidth, readFlag, writeFlag, readStored, writeStored } from '$lib/ui/storage';
 	import { isolateInput } from '$lib/ui/isolateInput';
 	import { settingsState } from '$lib/settings.svelte';
 	import GraphJson from './GraphJson.svelte';
@@ -33,11 +35,88 @@
 	const WIDTH_KEY = 'simpleui.viewerDetailsWidth';
 	let body = $state<HTMLElement>();
 	let detailsW = $state<number | null>(readPanelWidth(WIDTH_KEY));
+	let fullscreen = $state(false);
+	let playbackError = $state<string | null>(null);
+	let playing = $state(false);
+	const savedSeconds = Number(readStored('simpleui.slideshowSeconds'));
+	let seconds = $state([2, 5, 10, 30].includes(savedSeconds) ? savedSeconds : 5);
+	type DuplicateResult = {
+		groups: { byte_size: string; count: number; items: MediaInfo[] }[];
+		unavailable: number;
+	};
+	let duplicates = $state<DuplicateResult | null>(null);
+	let duplicatesLoading = $state(false);
+	let duplicatesError = $state<string | null>(null);
+
+	async function toggleFullscreen(): Promise<void> {
+		playbackError = null;
+		try {
+			if (document.fullscreenElement === body) await document.exitFullscreen();
+			else await body?.requestFullscreen();
+		} catch {
+			playbackError = 'Fullscreen is unavailable in this browser or window.';
+		}
+	}
+	function closeViewer(): void {
+		playing = false;
+		if (document.fullscreenElement === body) void document.exitFullscreen().catch(() => {});
+		gallery.close();
+	}
+	$effect(() => {
+		if (!playing) return;
+		return startSlideshow(
+			async () => {
+				if (!hasNext) return false;
+				const before = gallery.selected?.id;
+				previous = shownItem;
+				await gallery.step(1);
+				return gallery.selected?.id !== before;
+			},
+			seconds,
+			() => {
+				playing = false;
+			}
+		);
+	});
+	$effect(() => {
+		void item?.id;
+		duplicates = null;
+		duplicatesError = null;
+		duplicatesLoading = false;
+	});
+	async function findDuplicates(): Promise<void> {
+		const id = item?.id;
+		if (!id) return;
+		duplicatesLoading = true;
+		duplicatesError = null;
+		try {
+			const result = await api<DuplicateResult>(
+				`/media/duplicates?media_id=${encodeURIComponent(id)}`
+			);
+			if (gallery.selected?.id === id) duplicates = result;
+		} catch (cause) {
+			if (gallery.selected?.id === id) duplicatesError = describeApiError(cause);
+		} finally {
+			if (gallery.selected?.id === id) duplicatesLoading = false;
+		}
+	}
+	async function deleteDuplicate(entry: MediaInfo): Promise<void> {
+		if (
+			!confirm(
+				`Delete “${entry.filename}” from the gallery? Captured copies are deleted; indexed originals are preserved.`
+			)
+		)
+			return;
+		if (await gallery.deleteMany([entry.id])) await findDuplicates();
+	}
 
 	const item = $derived(gallery.selected);
 	const index = $derived(gallery.selectedIndex);
 	const hasPrev = $derived(index >= 0 && (index > 0 || gallery.canLoadPrevious));
 	const hasNext = $derived(index >= 0 && (index < gallery.items.length - 1 || gallery.canLoadMore));
+	const stripItems = $derived(
+		gallery.items.slice(Math.max(0, index - 30), Math.max(0, index) + 31)
+	);
 	const decoded = new SvelteSet<string>();
 	let previous = $state.raw<MediaInfo | null>(null);
 	// Keep the outgoing image visible until the requested image has decoded.
@@ -152,6 +231,9 @@
 
 	onMount(() => {
 		dialog?.showModal();
+		return () => {
+			if (document.fullscreenElement === body) void document.exitFullscreen().catch(() => {});
+		};
 	});
 
 	// Keep the current thumbnail in view in the strip.
@@ -172,7 +254,13 @@
 			target.isContentEditable
 		)
 			return;
-		if (event.key === 'ArrowLeft' && hasPrev) {
+		if (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+			event.preventDefault();
+			void toggleFullscreen();
+		} else if (event.key === ' ' && !target.closest('button, a')) {
+			event.preventDefault();
+			playing = !playing;
+		} else if (event.key === 'ArrowLeft' && hasPrev) {
 			event.preventDefault();
 			step(-1);
 		} else if (event.key === 'ArrowRight' && hasNext) {
@@ -227,13 +315,19 @@
 	const titleId = $props.id();
 </script>
 
+<svelte:document
+	onfullscreenchange={() => {
+		fullscreen = document.fullscreenElement === body;
+	}}
+/>
+
 {#if item}
 	<dialog
 		{@attach (element) => on(element, 'keydown', onkeydown)}
 		{@attach isolateInput}
 		bind:this={dialog}
 		aria-labelledby={titleId}
-		onclose={() => gallery.close()}
+		onclose={closeViewer}
 	>
 		<div class="body" class:with-details={showDetails} bind:this={body}>
 			<div class="view">
@@ -296,6 +390,26 @@
 					<button
 						type="button"
 						class="btn btn-ghost"
+						aria-pressed={fullscreen}
+						title="Fullscreen (F)"
+						onclick={toggleFullscreen}
+					>
+						{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+					</button>
+					<button
+						type="button"
+						class="btn btn-ghost"
+						aria-pressed={playing}
+						title="Slideshow (Space)"
+						onclick={() => {
+							playing = !playing;
+						}}
+					>
+						{playing ? 'Pause' : 'Slideshow'}
+					</button>
+					<button
+						type="button"
+						class="btn btn-ghost"
 						aria-expanded={showDetails}
 						onclick={() => writeFlag('simpleui.viewerDetails', (showDetails = !showDetails))}
 					>
@@ -310,6 +424,7 @@
 						<Icon name="close" />
 					</button>
 				</header>
+				{#if playbackError}<p class="error playback-error" role="alert">{playbackError}</p>{/if}
 				{#if gallery.error}<p class="error" role="alert">{gallery.error}</p>{/if}
 				{#if gallery.loading}<p class="muted" role="status">Loading media…</p>{/if}
 
@@ -422,7 +537,7 @@
 						</button>
 						{#if showStrip}
 							<div class="strip" role="group" aria-label="Items" bind:this={strip}>
-								{#each gallery.items as entry (entry.id)}
+								{#each stripItems as entry (entry.id)}
 									<button
 										type="button"
 										class="thumb"
@@ -461,6 +576,43 @@
 					style:width={wide.current && detailsW ? `${detailsW}px` : undefined}
 				>
 					<h3>Generation details</h3>
+					<label class="row"
+						>Slideshow interval
+						<select
+							bind:value={seconds}
+							onchange={() => writeStored('simpleui.slideshowSeconds', String(seconds))}
+						>
+							{#each [2, 5, 10, 30] as interval (interval)}<option value={interval}
+									>{interval} seconds</option
+								>{/each}
+						</select>
+					</label>
+					<button type="button" class="btn" disabled={duplicatesLoading} onclick={findDuplicates}>
+						{duplicatesLoading ? 'Checking exact duplicates…' : 'Find exact duplicates'}
+					</button>
+					{#if duplicatesError}<p class="error" role="alert">{duplicatesError}</p>{/if}
+					{#if duplicates}
+						{#if !duplicates.groups.length}<p role="status">No exact duplicates found.</p>{/if}
+						{#if duplicates.unavailable}<p class="muted">
+								{duplicates.unavailable} unavailable or changed files were skipped.
+							</p>{/if}
+						{#each duplicates.groups as group (group.byte_size)}
+							<p>{group.count} identical files ({group.byte_size} bytes). Showing up to 200.</p>
+							{#each group.items.filter((entry) => entry.id !== item.id) as entry (entry.id)}
+								<div class="row duplicate">
+									<button type="button" class="btn btn-ghost" onclick={() => select(entry)}
+										>{entry.filename}</button
+									>
+									<button
+										type="button"
+										class="btn"
+										aria-label={`Delete duplicate ${entry.filename}`}
+										onclick={() => deleteDuplicate(entry)}>Delete</button
+									>
+								</div>
+							{/each}
+						{/each}
+					{/if}
 					<label class="row">
 						<input
 							type="checkbox"
@@ -469,12 +621,22 @@
 						/>
 						Swipe up/down to browse
 					</label>
-					{#if !item.generation_id}
-						<p class="muted">Workflow and prompt are unknown for this imported media.</p>
-					{:else if gallery.detailLoading}
+					{#if gallery.detailLoading}
 						<p class="muted">Loading generation…</p>
 					{:else if gallery.detailError}
 						<p class="error" role="alert">{gallery.detailError}</p>
+					{:else if !item.generation_id && gallery.provenance}
+						<p>Imported provenance: {gallery.provenance.source}</p>
+						{#if Object.keys(gallery.provenance.values).length}
+							<MetaValues values={gallery.provenance.values} />
+						{/if}
+						{#each gallery.provenance.diagnostics as diagnostic (diagnostic)}
+							<p class="muted">{diagnostic}</p>
+						{/each}
+						<details>
+							<summary>Raw embedded metadata</summary>
+							<pre>{JSON.stringify(gallery.provenance.raw, null, 2)}</pre>
+						</details>
 					{:else if gallery.detail}
 						{@const detail = gallery.detail}
 						<GenerationSummary {detail} />
@@ -530,6 +692,22 @@
 		flex-direction: column;
 	}
 
+	.body:fullscreen {
+		width: 100%;
+		height: 100dvh;
+		background: #090909;
+		color: #fff;
+	}
+	.playback-error {
+		position: absolute;
+		top: 6rem;
+		z-index: 3;
+		background: #090909;
+	}
+	.duplicate {
+		flex-wrap: wrap;
+		overflow-wrap: anywhere;
+	}
 	.view {
 		position: relative;
 		flex: 1 1 0;
@@ -545,6 +723,7 @@
 		pointer-events: none;
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: var(--space-1);
 		padding: var(--space-1) max(var(--space-2), env(safe-area-inset-right)) var(--space-1)
 			max(var(--space-3), env(safe-area-inset-left));
@@ -552,7 +731,7 @@
 		text-shadow: 0 1px 3px #000;
 	}
 	/* No scrim over the media: each control carries its own chip instead. */
-	header :is(button, a),
+	header :is(button, a, select),
 	.fold {
 		pointer-events: auto;
 		background: rgb(0 0 0 / 0.5);

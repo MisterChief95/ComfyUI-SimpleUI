@@ -25,8 +25,11 @@ into the database.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 from typing import Any
+from urllib.parse import quote, urlencode
 
 from ..comfy_client import ComfyClient, ComfyUnavailable
 from ..contracts import ErrorDetail
@@ -63,6 +66,7 @@ class CatalogService:
         self._inflight: asyncio.Task[CatalogSnapshot] | None = None
         self._cache: dict[str, Any] | None = None
         self._loaded = False
+        self._previews: dict[tuple[str, str], tuple[bytes, str]] = {}
         self._failures = 0
         self._last_attempt_ms: int | None = None
         self._next_allowed_ms: int | None = None
@@ -244,6 +248,80 @@ class CatalogService:
         )
         return self._build_snapshot()
 
+    async def vram(self) -> dict[str, int | None]:
+        """Live primary-device VRAM; raises ComfyUnavailable if ComfyUI is down."""
+        stats = await self._client.get_json("/system_stats")
+        devices = stats.get("devices") if isinstance(stats, dict) else None
+        device = devices[0] if isinstance(devices, list) and devices else {}
+        total, free = device.get("vram_total"), device.get("vram_free")
+        ok = all(isinstance(v, int) and not isinstance(v, bool) for v in (total, free))
+        return {
+            "used_bytes": total - free if ok else None,
+            "total_bytes": total if ok else None,
+        }
+
+    async def completions(self) -> dict[str, list[str]]:
+        """Embedding and LoRA names for prompt autocomplete. Names only, never paths."""
+        try:
+            raw = await self._client.get_json("/embeddings")
+        except ComfyUnavailable:
+            raw = []
+        embeddings = (
+            sorted(n for n in raw if isinstance(n, str))
+            if isinstance(raw, list)
+            else []
+        )
+        nodes = ((self._cache or {}).get("normalized") or {}).get("nodes") or {}
+        loras = {
+            c
+            for node in nodes.values()
+            for name, spec in (node.get("inputs") or {}).items()
+            if name == "lora_name"
+            for c in spec.get("choices") or []
+            if isinstance(c, str)
+        }
+        return {"embeddings": embeddings, "loras": sorted(loras)}
+
+    def _model_names(self) -> set[str]:
+        nodes = ((self._cache or {}).get("normalized") or {}).get("nodes") or {}
+        return {
+            c
+            for node in nodes.values()
+            for spec in (node.get("inputs") or {}).values()
+            if spec.get("choices_source") == "server_model_catalog"
+            for c in spec.get("choices") or []
+            if isinstance(c, str)
+        }
+
+    def _check_model(self, folder: str, filename: str) -> None:
+        # Only names the catalog already offers may reach ComfyUI: no path probing.
+        if not re.fullmatch(r"[a-z_]+", folder) or filename not in self._model_names():
+            raise KeyError(filename)
+
+    async def model_info(self, folder: str, filename: str) -> dict[str, Any]:
+        """Base model and suggested trigger words from safetensors metadata (best effort)."""
+        self._check_model(folder, filename)
+        try:
+            meta = await self._client.get_json(
+                f"/view_metadata/{folder}?{urlencode({'filename': filename})}"
+            )
+        except ComfyUnavailable:
+            meta = {}
+        return _model_info(meta if isinstance(meta, dict) else {})
+
+    async def model_preview(self, folder: str, filename: str) -> tuple[bytes, str]:
+        self._check_model(folder, filename)
+        key = (folder, filename)
+        if key not in self._previews:
+            path = f"/experiment/models/preview/{folder}/0/{quote(filename, safe='/')}"
+            self._previews[key] = await self._client.get_image(path)
+            while len(self._previews) > 64:
+                self._previews.pop(next(iter(self._previews)))
+        return self._previews[key]
+
+    async def free_memory(self) -> None:
+        await self._client.free_memory()
+
     # --- capability record ------------------------------------------------
 
     async def _capability_record(self, node_packs: list[str]) -> dict[str, Any]:
@@ -354,6 +432,26 @@ class CatalogService:
             nodes=nodes,
             capabilities=document.get("capabilities") or {},
         )
+
+
+def _model_info(meta: dict[str, Any]) -> dict[str, Any]:
+    """Pick named fields from safetensors metadata; the raw header is never returned."""
+    counts: dict[str, int] = {}
+    try:
+        frequencies = json.loads(meta.get("ss_tag_frequency") or "{}")
+    except (TypeError, ValueError):
+        frequencies = {}
+    for tags in frequencies.values() if isinstance(frequencies, dict) else ():
+        for tag, n in tags.items() if isinstance(tags, dict) else ():
+            if isinstance(n, int) and not isinstance(n, bool):
+                counts[str(tag).strip()] = counts.get(str(tag).strip(), 0) + n
+    top = sorted(counts, key=lambda t: (-counts[t], t))[:15]
+    phrase = _text(meta.get("modelspec.trigger_phrase"))
+    words = ([phrase] if phrase else []) + [t for t in top if t and t != phrase]
+    base = _text(
+        meta.get("ss_base_model_version") or meta.get("modelspec.architecture")
+    )
+    return {"base_model": base, "trigger_words": words[:15]}
 
 
 def _text(value: Any) -> str | None:

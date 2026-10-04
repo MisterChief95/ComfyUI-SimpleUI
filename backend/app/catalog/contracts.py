@@ -45,6 +45,13 @@ class CatalogFreshness(Model):
     error: ErrorDetail | None = None
 
 
+class VramInfo(Model):
+    """Primary device memory from ``/system_stats``; ``None`` when not reported."""
+
+    used_bytes: int | None = None
+    total_bytes: int | None = None
+
+
 class CatalogSnapshot(Model):
     """The sanitized, profile-safe catalog projection plus its freshness.
 

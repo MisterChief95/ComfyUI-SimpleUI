@@ -32,6 +32,7 @@ DEFAULT_PROFILE_ID = "default"
 PAGE_SIZE = 50
 
 SEARCH_INPUTS = {
+    "seed": frozenset({"seed", "noise_seed"}),
     "prompt": frozenset(
         {"text", "prompt", "positive", "negative", "positive_prompt", "negative_prompt"}
     ),
@@ -56,23 +57,20 @@ SEARCH_INPUTS = {
 }
 
 
-def _saved_search_values(raw: str | None, field: str) -> list[str]:
-    """Search retained scalar controls by input name, never guessed graph roles."""
-    if not raw or len(raw) > 65536:
-        return []
-    values = json.loads(raw)
-    if not isinstance(values, dict):
-        return []
-    result = []
-    for key, value in list(values.items())[:200]:
-        if (
-            field != "any"
-            and key.rsplit(":", 1)[-1].casefold() not in SEARCH_INPUTS[field]
-        ):
+def search_values(values: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """Normalize scalar controls without coercing exact Python integers."""
+    records = []
+    for key, value in values.items():
+        if type(value) not in (str, int, float, bool):
             continue
-        if type(value) in (str, int, float, bool):
-            result.append(json.dumps(value) if type(value) is bool else str(value))
-    return result
+        name = key.rsplit(":", 1)[-1].casefold()
+        field = next(
+            (field for field, names in SEARCH_INPUTS.items() if name in names), "other"
+        )
+        text = (json.dumps(value) if type(value) is bool else str(value)).strip()
+        if text:
+            records.append((field, text, text.casefold()))
+    return records
 
 
 def now_ms() -> int:
@@ -665,66 +663,128 @@ class Repository:
 
     # --- media ------------------------------------------------------------
 
+    def _sync_search(self, owner_id: str) -> None:
+        """Backfill in bounded transactions; triggers invalidate snapshots immediately."""
+        while True:
+            with self.db.write() as conn:
+                rows = conn.execute(
+                    "SELECT g.id, g.effective_values_json FROM generation_search_pending p"
+                    " JOIN generations g ON g.id = p.generation_id WHERE g.owner_id = ? LIMIT 100",
+                    (owner_id,),
+                ).fetchall()
+                if not rows:
+                    break
+                for row in rows:
+                    try:
+                        values = json.loads(row["effective_values_json"])
+                    except (ValueError, TypeError):
+                        values = {}
+                    records = search_values(values) if isinstance(values, dict) else []
+                    conn.executemany(
+                        "INSERT INTO generation_search VALUES (?, ?, ?, ?, ?)",
+                        [(row["id"], owner_id, *record) for record in records],
+                    )
+                    conn.execute(
+                        "DELETE FROM generation_search_pending WHERE generation_id = ?",
+                        (row["id"],),
+                    )
+        # Functions belong to the current thread's SQLite connection.
+        self.db.connect().create_function(
+            "gallery_fold",
+            1,
+            lambda value: str(value or "").casefold(),
+            deterministic=True,
+        )
+        self.db.connect().create_function(
+            "gallery_filename",
+            1,
+            lambda path: path.replace("\\", "/").rsplit("/", 1)[-1],
+            deterministic=True,
+        )
+
+    @staticmethod
+    def _search_field(field: str) -> str:
+        if field not in {"any", "prompt", "model", "seed", "workflow", "filename"}:
+            raise ValueError("Unknown search field")
+        return "" if field == "any" else " AND field = ?"
+
     def media_filter_suggestions(
         self, owner_id: str, query: str, limit: int = 10, search_field: str = "any"
     ) -> list[str]:
         query = query.strip().casefold()
-        if len(query) < 2 or len(query) > 500:
+        if not 2 <= len(query) <= 500:
             return []
-        limit = max(1, min(limit, 10))
-        # ponytail: search the latest 100 generations; add an owner-scoped index if older suggestions are needed.
-        # Bound rows and snapshot characters before parsing; never load graph/file locators.
+        field_sql = self._search_field(search_field)
+        self._sync_search(owner_id)
+        sources, params = [], []
+        if search_field not in {"workflow", "filename"}:
+            sources.append(
+                "SELECT value, folded FROM generation_search WHERE owner_id = ?"
+                + field_sql
+            )
+            params.extend([owner_id] + ([search_field] if field_sql else []))
+            sources.append(
+                "SELECT s.value, s.folded FROM media_search s JOIN media m ON m.id = s.media_id"
+                " AND m.owner_id = s.owner_id WHERE s.owner_id = ? AND m.hidden = 0"
+                + field_sql
+            )
+            params.extend([owner_id] + ([search_field] if field_sql else []))
+        if search_field in {"any", "workflow"}:
+            sources.append(
+                "SELECT w.name AS value, gallery_fold(w.name) AS folded FROM workflows w"
+                " WHERE w.owner_id = ? AND EXISTS (SELECT 1 FROM generations g"
+                " WHERE g.workflow_id = w.id AND g.owner_id = w.owner_id)"
+            )
+            params.append(owner_id)
+        if search_field in {"any", "filename"}:
+            sources.append(
+                "SELECT gallery_filename(storage_path) AS value,"
+                " gallery_fold(gallery_filename(storage_path)) AS folded FROM media"
+                " WHERE owner_id = ? AND hidden = 0"
+            )
+            params.append(owner_id)
         rows = self.db.query(
-            "SELECT substr(g.effective_values_json, 1, 65537) AS saved_values,"
-            " substr(w.name, 1, 501) AS name FROM generations g"
-            " LEFT JOIN workflows w ON w.id = g.workflow_id AND w.owner_id = g.owner_id"
-            " WHERE g.owner_id = ? ORDER BY g.created_ms DESC, g.id DESC LIMIT 100",
-            (owner_id,),
+            "SELECT MIN(value) AS value FROM (" + " UNION ALL ".join(sources) + ")"
+            " WHERE instr(folded, ?) > 0 AND length(value) BETWEEN 2 AND 500"
+            " AND instr(value, '/') = 0 AND instr(value, char(92)) = 0"
+            " GROUP BY folded ORDER BY folded LIMIT ?",
+            (*params, query, max(1, min(limit, 10))),
         )
-        items: list[str] = []
-        seen: set[str] = set()
-        for row in rows:
-            candidates = [row["name"]] if search_field == "any" else []
-            candidates.extend(_saved_search_values(row["saved_values"], search_field))
-            for value in candidates:
-                if type(value) not in (str, int, float, bool):
-                    continue
-                text = json.dumps(value) if type(value) is bool else str(value).strip()
-                folded = text.casefold()
-                # Conservatively exclude path-bearing values, including relative/embedded paths.
-                if not 2 <= len(text) <= 500 or "/" in text or "\\" in text:
-                    continue
-                if query not in folded or folded in seen:
-                    continue
-                seen.add(folded)
-                items.append(text)
-                if len(items) == limit:
-                    return items
-        return items
+        return [row["value"] for row in rows]
 
-    def _media_search_generations(
+    def _media_search(
         self, owner_id: str, term: str, field: str
-    ) -> list[str]:
-        if field not in {"any", *SEARCH_INPUTS} or not 1 <= len(term) <= 500:
-            raise ValueError("Invalid saved metadata search")
-        # ponytail: latest 1,000 generations only; add a maintained search index for older history.
-        # Parse each bounded snapshot once, independent of the number of output files.
-        rows = self.db.query(
-            "SELECT g.id, substr(g.effective_values_json, 1, 65537) AS saved_values,"
-            " substr(w.name, 1, 501) AS name FROM generations g"
-            " LEFT JOIN workflows w ON w.id = g.workflow_id AND w.owner_id = g.owner_id"
-            " WHERE g.owner_id = ? ORDER BY g.created_ms DESC, g.id DESC LIMIT 1000",
-            (owner_id,),
-        )
-        term = term.casefold()
-        matches = []
-        for row in rows:
-            candidates = _saved_search_values(row["saved_values"], field)
-            if field == "any" and row["name"]:
-                candidates.append(row["name"])
-            if any(term in value.casefold() for value in candidates):
-                matches.append(row["id"])
-        return matches
+    ) -> tuple[str, list[Any]]:
+        field_sql = self._search_field(field)
+        self._sync_search(owner_id)
+        predicates, params = [], []
+        if field not in {"workflow", "filename"}:
+            predicates.append(
+                "EXISTS (SELECT 1 FROM generation_search s"
+                " WHERE s.owner_id = media.owner_id AND s.generation_id = media.generation_id"
+                " AND instr(s.folded, ?) > 0" + field_sql + ")"
+            )
+            params.extend([term.casefold()] + ([field] if field_sql else []))
+            predicates.append(
+                "EXISTS (SELECT 1 FROM media_search s WHERE s.owner_id = media.owner_id"
+                " AND s.media_id = media.id AND instr(s.folded, ?) > 0"
+                + field_sql
+                + ")"
+            )
+            params.extend([term.casefold()] + ([field] if field_sql else []))
+        if field in {"any", "workflow"}:
+            predicates.append(
+                "EXISTS (SELECT 1 FROM generations g JOIN workflows w ON w.id = g.workflow_id"
+                " AND w.owner_id = g.owner_id WHERE g.id = media.generation_id"
+                " AND g.owner_id = media.owner_id AND instr(gallery_fold(w.name), ?) > 0)"
+            )
+            params.append(term.casefold())
+        if field in {"any", "filename"}:
+            predicates.append(
+                "instr(gallery_fold(gallery_filename(media.storage_path)), ?) > 0"
+            )
+            params.append(term.casefold())
+        return "AND (" + " OR ".join(predicates) + ")", params
 
     def record_media(
         self,
@@ -778,6 +838,30 @@ class Repository:
             "SELECT * FROM media WHERE id = ? AND owner_id = ?", (media_id, owner_id)
         )
         return dict(row) if row else None
+
+    def duplicate_candidates(self, owner_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in self.db.query(
+                "SELECT m.*, h.sha256 AS cached_sha256, h.byte_size AS hash_size FROM media m"
+                " LEFT JOIN media_hashes h ON h.media_id = m.id AND h.file_version = m.file_version"
+                " WHERE m.owner_id = ? AND m.hidden = 0 ORDER BY m.id",
+                (owner_id,),
+            )
+        ]
+
+    def cache_media_hash(
+        self, owner_id: str, media_id: str, version: str, size: int, digest: str
+    ) -> None:
+        with self.db.write() as conn:
+            conn.execute(
+                "INSERT INTO media_hashes (media_id, file_version, byte_size, sha256)"
+                " SELECT id, file_version, ?, ? FROM media WHERE id = ? AND owner_id = ?"
+                " AND file_version = ? AND hidden = 0"
+                " ON CONFLICT(media_id) DO UPDATE SET file_version = excluded.file_version,"
+                " byte_size = excluded.byte_size, sha256 = excluded.sha256",
+                (size, digest, media_id, owner_id, version),
+            )
 
     def list_collections(self, owner_id: str) -> list[dict[str, Any]]:
         return [
@@ -1030,9 +1114,11 @@ class Repository:
             clauses.append("AND media.created_ms <= ?")
             params.append(created_before)
         if prompt:
-            matches = self._media_search_generations(owner_id, prompt, search_field)
-            clauses.append("AND generation_id IN (SELECT value FROM json_each(?))")
-            params.append(json.dumps(matches))
+            search_sql, search_params = self._media_search(
+                owner_id, prompt, search_field
+            )
+            clauses.append(search_sql)
+            params.extend(search_params)
         if sort not in {"newest", "oldest", "random"}:
             raise ValueError("Unknown gallery sort")
         seed = secrets.token_hex(16) if sort == "random" else None
