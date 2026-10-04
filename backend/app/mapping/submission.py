@@ -174,8 +174,16 @@ def _decode(control: ControlDescriptor, raw: Any) -> Any:
             )
         return raw
     if control.logical_type == "enum":
+        # No catalog options (list is filled client-side in ComfyUI, e.g. Ollama
+        # models): the UI offers a text box, so pass the typed string through.
+        if not control.options:
+            if not isinstance(raw, str) or not raw:
+                raise SubmissionError(
+                    "invalid_value", f"{control.label} must be text.", binding
+                )
+            return raw
         # The option itself is returned, so ComfyUI gets the type it listed.
-        for option in control.options or []:
+        for option in control.options:
             if option.available and same_choice(raw, option.value):
                 return option.value
         raise SubmissionError(
