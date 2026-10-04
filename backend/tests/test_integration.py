@@ -13,11 +13,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.auth.security import CSRF_HEADER
 from app.config import Config
 from app.main import create_app
+from fastapi.testclient import TestClient
+
 from tests.auth.support import LOCAL_ORIGIN, AuthTestCase
 
 PASSWORD = "default-password"

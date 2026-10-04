@@ -17,8 +17,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
-
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
 from app.mapping import parse_graph
@@ -32,6 +30,7 @@ from app.mapping.corrections import (
 from app.storage import Database
 from app.storage.repository import Repository, RevisionConflict
 from app.workflows import WorkflowService
+from pydantic import ValidationError
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 GRAPHS = FIXTURES / "graphs"

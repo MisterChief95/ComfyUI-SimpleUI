@@ -1,9 +1,9 @@
 import unittest
 
 import httpx
-
 from app.catalog import CatalogService
 from app.comfy_client import ComfyClient, ComfyUnavailable
+
 from tests.auth.support import AuthTestCase
 
 

@@ -3,9 +3,6 @@
 import json
 from unittest.mock import patch
 
-from PIL import Image
-from PIL.PngImagePlugin import PngInfo
-
 from app.media.metadata import (
     MAX_METADATA_BYTES,
     embedded_api_prompt,
@@ -14,6 +11,8 @@ from app.media.metadata import (
 )
 from app.media.service import MediaService
 from app.storage import DEFAULT_PROFILE_ID, Repository
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 from .test_api import MediaApiTestCase
 

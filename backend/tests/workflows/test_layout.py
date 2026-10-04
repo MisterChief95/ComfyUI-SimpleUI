@@ -16,6 +16,7 @@ from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
 from app.storage import Database
 from app.storage.db import MIGRATIONS_DIR
+
 from tests.auth.support import AuthTestCase
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"

@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 
 from app.styles import apply_styles
+
 from tests.auth.support import AuthTestCase
 
 

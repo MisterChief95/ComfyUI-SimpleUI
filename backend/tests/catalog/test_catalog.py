@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import httpx
-
 from app.catalog import CatalogService, CatalogStore, evaluate_selections, normalize
 from app.catalog.normalize import NormalizeError
 from app.comfy_client import ComfyClient, ComfyUnavailable, redact_url

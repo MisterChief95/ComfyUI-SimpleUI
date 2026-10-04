@@ -13,10 +13,10 @@ import json
 import unittest
 from pathlib import Path
 
-from starlette.websockets import WebSocketDisconnect
-
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
+from starlette.websockets import WebSocketDisconnect
+
 from tests.auth.support import AuthTestCase
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"

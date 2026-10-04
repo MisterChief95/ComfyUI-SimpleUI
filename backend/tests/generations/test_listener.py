@@ -9,9 +9,9 @@ import struct
 import unittest
 
 import httpx
-
 from app.comfy_client import ComfyClient, ComfyUnavailable
 from app.generations.listener import ComfyListener
+
 from tests.generations.test_generations import PROMPTS, GenerationTestCase
 from tests.generations.test_routes import GenerationRouteTestCase
 
