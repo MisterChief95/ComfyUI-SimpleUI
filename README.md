@@ -44,10 +44,11 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
 - **Generation.** The run page offers drafts that survive reloads, presets, live progress
   from ComfyUI's WebSocket, cancel (queued jobs everywhere, running jobs on ComfyUI ≥ 0.38),
   a result panel with recent outputs, and "reuse settings". Live-verified end to end for
-  both an image and a video generation.
-- **Media.** Owner-scoped gallery, thumbnails, range-capable streaming and
-  original-filename download, plus the one-time local baseline import that
-  must complete before multi-user mode can be enabled.
+  both an image and a video generation. Loader inputs upload through ComfyUI for
+  LoadImage, LoadVideo and LoadAudio; LoadAudio accepts audio tracks from MP4 files.
+- **Media.** Owner-scoped image, video and audio gallery, with thumbnails, audio/video
+  playback, range-capable streaming and original-filename download, plus the one-time
+  local baseline import required before multi-user mode can be enabled.
 
 Checks: `cd backend && python -m unittest discover -s tests -v` (the repository has no
 committed virtualenv; create one from `backend/requirements.txt` first), then
@@ -63,8 +64,8 @@ format: `ruff check` and `ruff format --check`.
    `frontend/build/index.html` exists, or set `SIMPLEUI_DEV=1` to run the API alone.
 3. Start ComfyUI, then the backend: `cd backend && python -m uvicorn app.main:create_app
    --factory --port 8000` (a virtualenv per `requirements.txt` first).
-4. In the app's Settings, set the ComfyUI input/output folders so uploads and gallery
-   capture know where to look, then run the local media import once before enabling
+4. In the app's Settings, set the ComfyUI output folder so gallery capture knows where
+   to look; uploads are sent to ComfyUI's `/upload/image` API. Run the local media import before enabling
    multi-user mode.
 
 There is no backup command yet: `Database.backup()` exists in `backend/app/storage/db.py`

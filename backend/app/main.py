@@ -99,7 +99,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     repository = Repository(database)
     workflows = WorkflowService(repository)
     media = MediaService(database, settings, config.data_dir)
-    uploads = UploadService(database, settings, config.data_dir)
+    uploads = UploadService(database, settings, config.data_dir, comfy)
     # The real baseline gate, replacing the placeholder in auth/service.py:
     # multi-user mode cannot be enabled over an un-indexed output folder.
     auth.baseline_gate = media.baseline_status

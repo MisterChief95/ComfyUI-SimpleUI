@@ -57,7 +57,7 @@ def _hand_built(**overrides) -> ControlDescriptor:
         "group": "inputs",
         "order": 0,
         "label": "Some loader: File input",
-        "inference_reason": "loader_adapter:comfy_input_dir_filename;owned_input",
+        "inference_reason": "loader_adapter:comfy_input_filename_image;owned_input",
         "raw_metadata": {"media_kind": "image"},
     }
     base.update(overrides)
@@ -65,72 +65,94 @@ def _hand_built(**overrides) -> ControlDescriptor:
 
 
 class RealFixtureBindingTest(UploadTestCase):
-    def test_supported_image_loader_control_binds_to_an_upload(self) -> None:
+    async def test_supported_image_loader_control_binds_to_an_upload(self) -> None:
         control = _image_control()
         self.assertEqual(control.logical_type, "file")
         self.assertEqual(control.component, "file")
 
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        staged = bind_upload(control, self.uploads, OWNER, row["id"])
+        staged = await bind_upload(control, self.uploads, OWNER, row["id"])
         self.assertTrue(staged.startswith(f"simpleui/{OWNER}/"))
-        self.assertTrue((self.comfy_input / staged).is_file())
 
 
 class DiagnosticsTest(UploadTestCase):
-    def test_non_file_control_is_rejected_outright(self) -> None:
+    async def test_non_file_control_is_rejected_outright(self) -> None:
         control = _hand_built(logical_type="string", component="text")
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, "whatever")
+            await bind_upload(control, self.uploads, OWNER, "whatever")
         self.assertEqual(ctx.exception.detail.code, "not_a_loader_control")
 
-    def test_unavailable_video_adapter_is_an_actionable_diagnostic(self) -> None:
+    async def test_video_loader_control_binds_video_upload(self) -> None:
         # This is normalize.py's actual shape for a video/audio OWNED_INPUT_REF:
-        # logical_type stays "file" but component falls back to "readonly"
-        # because no loader_adapter name was assigned.
+        control = _hand_built(
+            inference_reason="loader_adapter:comfy_input_filename_video;owned_input",
+            raw_metadata={"media_kind": "video"},
+        )
+        row = self.store(OWNER, "video", "clip.mp4", VIDEO_BYTES)
+        result = await bind_upload(control, self.uploads, OWNER, row["id"])
+        self.assertTrue(result.endswith(".mp4"))
+
+    async def test_audio_loader_accepts_video_container_upload(self) -> None:
+        control = _hand_built(
+            inference_reason="loader_adapter:comfy_input_filename_audio;owned_input",
+            raw_metadata={"media_kind": "audio"},
+        )
+        row = self.store(OWNER, "audio", "clip.mp4", VIDEO_BYTES)
+        self.assertTrue(
+            (await bind_upload(control, self.uploads, OWNER, row["id"])).endswith(
+                ".mp4"
+            )
+        )
+
+    async def test_unsupported_loader_metadata_is_actionable(self) -> None:
         control = _hand_built(
             component="readonly",
             inference_reason="adapter_required;owned_input",
             raw_metadata={"media_kind": "video"},
         )
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, "whatever")
+            await bind_upload(control, self.uploads, OWNER, "whatever")
         self.assertEqual(ctx.exception.detail.code, "unsupported_loader_adapter")
         self.assertIn("video", ctx.exception.detail.message)
 
-    def test_unrecognized_adapter_name_is_rejected_even_if_marked_editable(
+    async def test_unrecognized_adapter_name_is_rejected_even_if_marked_editable(
         self,
     ) -> None:
         control = _hand_built(
             inference_reason="loader_adapter:some_future_adapter;owned_input"
         )
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, "whatever")
+            await bind_upload(control, self.uploads, OWNER, "whatever")
         self.assertEqual(ctx.exception.detail.code, "unsupported_loader_adapter")
 
-    def test_foreign_or_missing_upload_id_is_reported_uniformly(self) -> None:
+    async def test_foreign_or_missing_upload_id_is_reported_uniformly(self) -> None:
         control = _hand_built()
         row = self.store(OTHER, "image", "ref.png", png_bytes())
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, row["id"])
+            await bind_upload(control, self.uploads, OWNER, row["id"])
         self.assertEqual(ctx.exception.detail.code, "upload_missing")
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, "does-not-exist")
+            await bind_upload(control, self.uploads, OWNER, "does-not-exist")
         self.assertEqual(ctx.exception.detail.code, "upload_missing")
 
-    def test_kind_mismatch_is_rejected(self) -> None:
+    async def test_kind_mismatch_is_rejected(self) -> None:
         control = _hand_built()  # expects image
         row = self.store(OWNER, "video", "clip.mp4", VIDEO_BYTES)
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, row["id"])
+            await bind_upload(control, self.uploads, OWNER, row["id"])
         self.assertEqual(ctx.exception.detail.code, "upload_kind_mismatch")
 
-    def test_staging_failure_surfaces_the_upload_error_code(self) -> None:
+    async def test_staging_failure_surfaces_the_upload_error_code(self) -> None:
         control = _hand_built()
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        self.settings.set_host("comfy_input_dir", "")
         with self.assertRaises(InputAdapterError) as ctx:
-            bind_upload(control, self.uploads, OWNER, row["id"])
-        self.assertEqual(ctx.exception.detail.code, "input_dir_unavailable")
+            self.comfy.response = {
+                "name": "wrong.png",
+                "subfolder": "foreign",
+                "type": "input",
+            }
+            await bind_upload(control, self.uploads, OWNER, row["id"])
+        self.assertEqual(ctx.exception.detail.code, "invalid_upload_response")
 
 
 if __name__ == "__main__":

@@ -341,7 +341,7 @@ class GenerationService:
                     ):
                         unknown += 1
                         continue
-                    recognized = key in ("images", "gifs", "videos")
+                    recognized = key in ("images", "gifs", "videos", "audio")
                     if not recognized:
                         unknown += 1
                         continue

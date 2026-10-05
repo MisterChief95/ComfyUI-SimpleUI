@@ -541,7 +541,9 @@
 										? 'File unavailable'
 										: item.media_kind === 'video'
 											? 'Video'
-											: 'File'}</span
+											: item.media_kind === 'audio'
+												? 'Audio'
+												: 'File'}</span
 								>
 							{/snippet}
 						</Thumbnail>

@@ -11,12 +11,6 @@ export const HOST_FIELDS: Field[] = [
 		type: 'text'
 	},
 	{
-		key: 'comfy_input_dir',
-		label: 'ComfyUI input folder',
-		help: 'Uploaded input files are copied here.',
-		type: 'text'
-	},
-	{
 		key: 'comfy_output_dir',
 		label: 'ComfyUI output folder',
 		help: 'Generated media is read from here.',

@@ -1,9 +1,4 @@
-"""Shared fixtures for the INPUT-001 tests.
-
-A temporary private data directory plus a separate temporary "ComfyUI input"
-directory, so staging is exercised against real files and real paths: nothing
-here stubs the filesystem.
-"""
+"""Shared private upload fixtures for upload service tests."""
 
 from __future__ import annotations
 
@@ -12,10 +7,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from PIL import Image
+
 from app.settings.service import SettingsStore
 from app.storage import Database
 from app.uploads.service import UploadService
-from PIL import Image
 
 
 #: A tiny valid PNG, built in-process so the test never depends on a fixture file.
@@ -29,16 +25,30 @@ def png_bytes(color: tuple[int, int, int] = (30, 120, 200)) -> bytes:
 VIDEO_BYTES = b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 4
 
 
-class UploadTestCase(unittest.TestCase):
+class StubComfy:
+    def __init__(self):
+        self.calls = []
+        self.response = None
+
+    async def upload_image(self, path, *, filename, subfolder):
+        self.calls.append((path, filename, subfolder))
+        return self.response or {
+            "name": filename,
+            "subfolder": subfolder,
+            "type": "input",
+        }
+
+
+class UploadTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self._tmp.name)
-        self.comfy_input = self.root / "comfy_input"
-        self.comfy_input.mkdir()
         self.db = Database(self.root / "app.sqlite3")
         self.settings = SettingsStore(self.db)
-        self.settings.set_host("comfy_input_dir", str(self.comfy_input))
-        self.uploads = UploadService(self.db, self.settings, self.root / "data")
+        self.comfy = StubComfy()
+        self.uploads = UploadService(
+            self.db, self.settings, self.root / "data", self.comfy
+        )
         # "default" already exists (migration 001); a second profile for
         # ownership-isolation tests needs a real row -- uploads.owner_id is a
         # foreign key.

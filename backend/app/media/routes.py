@@ -37,7 +37,7 @@ async def gallery(
     sort: Literal["newest", "oldest", "random"] = "newest",
     path: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    media_kind: Literal["image", "video", "other"] | None = None,
+    media_kind: Literal["image", "video", "audio", "other"] | None = None,
     favorite: bool | None = None,
     workflow_id: str | None = None,
     collection_id: str | None = None,

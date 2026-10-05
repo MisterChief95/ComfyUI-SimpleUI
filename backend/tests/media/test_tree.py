@@ -83,6 +83,7 @@ class MediaTreeTest(MediaApiTestCase):
                 "Workflow": 5,
                 "Favorites": 1,
                 "Videos": 1,
+                "Audio": 0,
                 "Unsorted": 2,
                 "Collections": 0,
             },

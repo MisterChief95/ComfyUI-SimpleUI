@@ -26,7 +26,7 @@ class LoaderClassificationTests(unittest.TestCase):
     def test_extension_fallback_without_flag(self) -> None:
         got = combo(["a.png"])
         self.assertEqual(got["media_kind"], "image")
-        self.assertEqual(got["loader_adapter"], "comfy_input_dir_filename")
+        self.assertEqual(got["loader_adapter"], "comfy_input_filename_image")
 
     def test_output_folder_loader_has_no_input_adapter(self) -> None:
         got = combo(["a.png"], image_upload=True, image_folder="output")

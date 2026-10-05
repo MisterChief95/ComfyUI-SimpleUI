@@ -399,14 +399,15 @@ def _project_combo(
                 "flag": flagged,
                 "extensions": ext_kind,
             }
-        # LoadImageOutput-style loaders read ComfyUI's output/temp folder, not
-        # the input directory, so the input-dir upload adapter cannot serve them.
-        output_folder = opts.get("image_folder") in ("output", "temp")
-        if kind == "image" and not output_folder:
-            projected["loader_adapter"] = "comfy_input_dir_filename"
+        # Output-folder loaders cannot consume files uploaded into ComfyUI input.
+        output_folder = any(
+            opts.get(f"{folder}_folder") in ("output", "temp")
+            for folder in ("image", "video", "audio")
+        )
+        if kind in ("image", "video", "audio") and not output_folder:
+            projected["loader_adapter"] = f"comfy_input_filename_{kind}"
         else:
-            # No universal video/audio upload route is established, so this
-            # picker stays unavailable rather than becoming a generic dropdown.
+            # Unknown upload kinds and output-folder inputs remain read-only.
             projected["loader_adapter"] = None
             projected["editable"] = False
             projected["diagnostic"] = "adapter_required"

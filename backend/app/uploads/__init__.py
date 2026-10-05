@@ -2,7 +2,7 @@
 
 Wiring (app/main.py)::
 
-    uploads = UploadService(database, settings, config.data_dir)
+    uploads = UploadService(database, settings, config.data_dir, comfy)
     app.state.uploads = uploads
     app.include_router(uploads_router)   # BEFORE the /api/{path} catch-all
 """

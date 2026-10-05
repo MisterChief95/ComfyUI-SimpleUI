@@ -279,7 +279,7 @@ export interface GenerationDetail extends GenerationInfo {
 
 // --- media/routes.py --------------------------------------------------------
 
-export type MediaKind = 'image' | 'video' | 'other';
+export type MediaKind = 'image' | 'video' | 'audio' | 'other';
 
 export interface MediaInfo {
 	id: Id;

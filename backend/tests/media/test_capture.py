@@ -127,6 +127,19 @@ class CaptureTest(MediaTestCase):
         rows = self.db.query("SELECT state FROM capture_attempts")
         self.assertEqual([row["state"] for row in rows], ["ready"])
 
+    def test_audio_capture_is_a_gallery_item(self) -> None:
+        audio = self.output / "SimpleUI_00002_.wav"
+        audio.write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt ")
+        media_id = self.media.capture_output(
+            DEFAULT_PROFILE_ID,
+            self.generation,
+            audio.name,
+            output_node="10",
+            ordinal=0,
+        )
+        item = next(item for item in self.gallery() if item["id"] == media_id)
+        self.assertEqual(item["media_kind"], "audio")
+
     def test_capture_precomputes_its_thumbnail(self) -> None:
         media_id = self.capture()
         thumbnail = self.media.thumbnails / f"{media_id}.jpg"

@@ -28,6 +28,7 @@ PROMPTS = {
     "video": "00000000-0000-4000-8000-000000000002",
     "cached": "00000000-0000-4000-8000-000000000003",
     "partial": "00000000-0000-4000-8000-000000000004",
+    "audio": "00000000-0000-4000-8000-000000000005",
 }
 
 
@@ -257,6 +258,25 @@ class EventTests(GenerationTestCase):
 
 
 class ReconciliationTests(GenerationTestCase):
+    async def test_audio_key_in_history_is_captured(self) -> None:
+        prompt_id = PROMPTS["audio"]
+        self.upstream.response = {"prompt_id": prompt_id, "node_errors": {}}
+        row = await self.submit()
+        self.upstream.history = {
+            prompt_id: {
+                "outputs": {
+                    "12": {
+                        "audio": [
+                            {"filename": "voice.wav", "subfolder": "", "type": "output"}
+                        ]
+                    }
+                },
+                "status": {"status_str": "success", "completed": True},
+            }
+        }
+        await self.service.reconcile()
+        self.assertIn(("default", row["id"], "12", 0, "voice.wav"), self.media.keys)
+
     async def test_image_and_video_histories_attach_outputs_to_original_owner(
         self,
     ) -> None:

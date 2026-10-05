@@ -226,6 +226,18 @@
 	// Aborted on destroy or when a newer pick supersedes it; a late completion is ignored.
 	let pending: AbortController | null = null;
 	const hasFile = $derived(preview ? previewUrl !== null : text !== '');
+	const uploadKind = $derived(
+		control.raw_metadata?.media_kind === 'video' || control.raw_metadata?.media_kind === 'audio'
+			? control.raw_metadata.media_kind
+			: 'image'
+	);
+	const uploadAccept = $derived(
+		uploadKind === 'image'
+			? 'image/*'
+			: uploadKind === 'video'
+				? 'video/*,.mkv,.webm,.mp4,.mov,.avi,.m4v'
+				: 'audio/*,.mkv,.webm,.mp4,.mov,.avi,.m4v'
+	);
 
 	function setPreview(file: File | null): void {
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -237,8 +249,6 @@
 		setPreview(null);
 	});
 
-	// The one supported loader adapter binds both a reference image and a mask
-	// through the "image" upload kind (app/mapping/input_adapters.py).
 	async function upload(event: Event): Promise<void> {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
@@ -254,7 +264,7 @@
 		uploading = true;
 		try {
 			const uploaded = await api<{ id: string }>(
-				`/uploads?kind=image&filename=${encodeURIComponent(file.name)}`,
+				`/uploads?kind=${uploadKind}&filename=${encodeURIComponent(file.name)}`,
 				{ method: 'POST', body: file, signal: request.signal }
 			);
 			if (request.signal.aborted) return;
@@ -458,7 +468,7 @@
 		{/if}
 	{:else if component === 'file'}
 		<div class="file">
-			{#if previewUrl}
+			{#if previewUrl && uploadKind === 'image'}
 				<img class="thumb" src={previewUrl} alt={fileName || 'Selected image'} />
 			{/if}
 			<div class="file-body">
@@ -470,7 +480,7 @@
 						{id}
 						aria-describedby={described}
 						type="file"
-						accept="image/*"
+						accept={uploadAccept}
 						disabled={disabled || uploading}
 						onchange={upload}
 					/>

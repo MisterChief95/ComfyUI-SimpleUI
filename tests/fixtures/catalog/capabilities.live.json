@@ -30,7 +30,7 @@
     "GET /history/{prompt_id}": {"purpose": "completed results and output descriptors", "verified": true},
     "GET /queue": {"purpose": "reconciliation of running and pending jobs", "verified": true, "note": "Exercised through the app's GenerationService.reconcile() and directly for the cancellation probe below."},
     "WS /ws?clientId=...": {"purpose": "execution events and previews", "verified": false, "note": "IMPORTANT: the application never opens this connection at all (grepped; nothing in backend/app calls it). GenerationService.process_event(), which would consume it, is only ever called from tests. All real-world state transitions go through history/queue reconciliation instead (see GEN-003's handoff). This is not a gap this capture closes; it is a confirmed architectural fact worth carrying into the release review."},
-    "POST /upload/image": {"purpose": "image and mask upload into the input directory", "verified": false, "note": "Not exercised this session; INPUT-001's own tests are the only coverage."},
+    "POST /upload/image": {"purpose": "arbitrary-byte upload into a profile-scoped ComfyUI input subfolder", "verified": true, "note": "Exercised through ComfyClient.upload_image and UploadService.ensure_staged. Multipart image, subfolder=simpleui/default, type=input, overwrite=true; returned name/subfolder/type validated and used. LoadImage, LoadVideo and LoadAudio all completed from returned uploaded paths."},
     "POST /interrupt": {"purpose": "global interrupt of the RUNNING job", "verified": false, "note": "Not probed. The app correctly never calls it: GenerationService.cancel() only offers running-job cancellation when the upstream client exposes a per-job cancel_job, which ComfyClient does not define, so running cancellation stays disabled by construction, matching the required safe default."},
     "POST /queue": {"purpose": "body {\"delete\": [prompt_id]} removes a PENDING job", "verified": true, "note": "See cancellation below."}
   },
@@ -59,8 +59,10 @@
     "verified": true
   },
   "loader_contract": {
-    "LoadImage": {"verified": false, "note": "Not exercised live this session; INPUT-001's own tests are the only coverage."},
-    "video_upload": {"verified": false, "note": "Not exercised live this session."}
+    "LoadImage": {"verified": true, "note": "Uploaded a generated PNG through UploadService and loaded the returned subfolder/name with LoadImage -> SaveImage; history status success."},
+    "LoadVideo": {"verified": true, "note": "Uploaded an MP4 through UploadService and loaded the returned subfolder/name with LoadVideo -> GetVideoComponents -> SaveWEBM; history status success."},
+    "LoadAudio": {"verified": true, "note": "Uploaded a synthetic MP4 with an AAC audio track through UploadService and loaded the returned path with LoadAudio -> SaveAudio; history status success."},
+    "LoadAudio_mp4_history_key": "audio"
   },
   "release_blockers_resolved": [
     "No live ComfyUI revision, node pack list, or device report recorded. -- RESOLVED: version/python/torch/device and a 34-pack node_packs list are recorded above.",
@@ -70,7 +72,6 @@
   ],
   "release_blockers_remaining": [
     "Cancellation capability is now probed for the pending-job path (confirmed working, with a documented and now empirically-observed race risk on fast pipelines); running-job cancellation remains correctly unavailable by construction and unprobed by design.",
-    "No real loader contract confirmed for image/mask/video inputs; POST /upload/image was not exercised this session.",
     "The application never opens a live WebSocket to ComfyUI's own /ws endpoint at all -- this is confirmed application behavior, not a missing capture, and should be recorded as a known architectural fact rather than a blocker to resolve."
   ]
 }
