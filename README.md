@@ -51,7 +51,7 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   input of the next. A stage starts only after the previous one succeeded with its output
   captured; failure, cancellation, an uncertain submission or a missing output pauses the
   run (Resume retries the stage under a new attempt key, so a restart can never duplicate
-  one). Not yet live-verified.
+  one). Live-verified: a text-to-image then 2x scale chain ran end to end.
 - **Media.** Owner-scoped image, video and audio gallery, with thumbnails, audio/video
   playback, range-capable streaming and original-filename download, plus the one-time
   local baseline import required before multi-user mode can be enabled.

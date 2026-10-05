@@ -61,9 +61,13 @@ class ChainService:
         repository: Any,
         generations: Any,
         submit: SubmitStage,
+        reconcile: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self.db, self.repository, self.generations = db, repository, generations
         self._submit = submit
+        # Pulls ComfyUI's history into active generations; without an open
+        # events socket nothing else would notice a stage finishing.
+        self._reconcile = reconcile
         self._locks: dict[str, asyncio.Lock] = {}
 
     # --- definitions ------------------------------------------------------
@@ -277,6 +281,8 @@ class ChainService:
 
     async def advance(self, owner_id: str, run_id: str) -> dict[str, Any] | None:
         """Move a running run as far as it can go without waiting on ComfyUI."""
+        if self._reconcile is not None:
+            await self._reconcile()
         async with self._locks.setdefault(run_id, asyncio.Lock()):
             while True:
                 run = await in_thread(self._run, owner_id, run_id)

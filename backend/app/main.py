@@ -129,7 +129,12 @@ def create_app(config: Config | None = None) -> FastAPI:
     async def submit_stage(owner_id: str, **request: Any) -> Any:
         return await submit_for_owner(app.state, owner_id, SubmitRequest(**request))
 
-    chains = ChainService(database, repository, generations, submit_stage)
+    async def reconcile_active() -> None:
+        await generations.reconcile_if_due(history_retention=await in_thread(retention))
+
+    chains = ChainService(
+        database, repository, generations, submit_stage, reconcile_active
+    )
 
     async def drive_chains() -> None:
         """Advance running chains; restart-safe because stage keys are deterministic."""
