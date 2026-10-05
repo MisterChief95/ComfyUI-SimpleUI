@@ -3,6 +3,7 @@
 // floats numerically, booleans as booleans, everything else as strings.
 import type { ControlDescriptor, EditValue } from '../contracts.ts';
 import { inExactRange } from '../controls/exact.ts';
+import { stackProblem } from '../controls/loraStack.ts';
 
 /** Seed value meaning "pick a fresh random seed for every run" (Forge / ComfyUI convention). */
 export const RANDOM_SEED = '-1';
@@ -51,11 +52,17 @@ function bounds(min: unknown, max: unknown): string {
 }
 
 /**
- * Why `value` cannot be submitted for `control`, or null when it can. Only int
+ * Why `value` cannot be submitted for `control`, or null when it can. A LoRA
+ * stack must be readable with every enabled LoRA installed. Otherwise only int
  * and float controls edited as numbers are checked: ExactInt syntax with exact
  * bounds (BigInt, never rounded through Number), and finite floats within min/max.
  */
 export function validateValue(control: ControlDescriptor, value: EditValue): string | null {
+	if (control.component === 'lora_stack')
+		return stackProblem(
+			String(value),
+			(control.options ?? []).map((o) => String(o.value))
+		);
 	const type = control.logical_type;
 	if (type !== 'int' && type !== 'float') return null;
 	if (control.component === 'select' || control.component === 'readonly') return null;

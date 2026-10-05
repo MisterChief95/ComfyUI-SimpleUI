@@ -28,6 +28,8 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   is detected from the cached catalog (`SimpleUI*` classes) and its `/simpleui/pack` route;
   `GET /api/catalog/pack` and Settings report it as missing, present or outdated. The app
   works the same without it.
+  A workflow using its `SimpleUILoraStack` node gets a LoRA stack control (add, remove,
+  reorder, enable, strengths, thumbnails, trigger words) instead of the raw JSON payload.
 - **Workflows.** ComfyUI API JSON is imported with a derived control schema. Topology,
   literal types, and exact large seeds are preserved, and an ambiguous mapping is reported,
   never silently rewritten. A workflow can be renamed, or its graph replaced by a newer
