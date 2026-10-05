@@ -16,7 +16,8 @@ from pathlib import Path
 from app.catalog import normalize
 from app.contracts import ControlDescriptor
 from app.mapping import build_control_schema
-from app.mapping.input_adapters import InputAdapterError, bind_upload
+from app.mapping.input_adapters import InputAdapterError, bind_media, bind_upload
+from app.media.service import LocatedMedia
 
 from .support import VIDEO_BYTES, UploadTestCase, png_bytes
 
@@ -141,6 +142,68 @@ class DiagnosticsTest(UploadTestCase):
         with self.assertRaises(InputAdapterError) as ctx:
             await bind_upload(control, self.uploads, OWNER, row["id"])
         self.assertEqual(ctx.exception.detail.code, "upload_kind_mismatch")
+
+
+class MediaBindingTest(UploadTestCase):
+    class Media:
+        def __init__(self, item):
+            self.item = item
+
+        def locate(self, owner_id, media_id):
+            return self.item if owner_id == OWNER and media_id == "media-1" else None
+
+    def media(self, kind="image", version=None):
+        path = self.root / "captured.png"
+        path.write_bytes(png_bytes())
+        stat = path.stat()
+        version = (
+            version or f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+        )
+        return self.Media(
+            LocatedMedia(
+                {"id": "media-1", "media_kind": kind, "file_version": version}, path
+            )
+        )
+
+    async def test_media_is_copied_into_managed_upload_storage_and_staged(self):
+        control = _image_control()
+        staged, located = await bind_media(
+            control, self.uploads, self.media(), OWNER, "media-1"
+        )
+        row = self.db.query_one(
+            "SELECT staged_name, storage_path FROM uploads WHERE owner_id = ?", (OWNER,)
+        )
+        self.assertEqual(row["staged_name"], staged)
+        self.assertEqual(
+            (self.uploads.private_root / row["storage_path"]).read_bytes(), png_bytes()
+        )
+        self.assertTrue(located.row["file_version"])
+
+    async def test_foreign_and_missing_media_have_the_same_diagnostic(self):
+        control = _image_control()
+        messages = []
+        for owner, media_id in ((OWNER, "missing"), ("other-profile", "media-1")):
+            with self.assertRaises(InputAdapterError) as ctx:
+                await bind_media(control, self.uploads, self.media(), owner, media_id)
+            messages.append((ctx.exception.detail.code, ctx.exception.detail.message))
+        self.assertEqual(messages[0], messages[1])
+
+    async def test_media_kind_and_version_are_checked(self):
+        control = _image_control()
+        with self.assertRaises(InputAdapterError) as ctx:
+            await bind_media(
+                control, self.uploads, self.media(kind="video"), OWNER, "media-1"
+            )
+        self.assertEqual(ctx.exception.detail.code, "media_kind_mismatch")
+        with self.assertRaises(InputAdapterError) as ctx:
+            await bind_media(
+                control,
+                self.uploads,
+                self.media(version="stale"),
+                OWNER,
+                "media-1",
+            )
+        self.assertEqual(ctx.exception.detail.code, "media_missing")
 
     async def test_staging_failure_surfaces_the_upload_error_code(self) -> None:
         control = _hand_built()

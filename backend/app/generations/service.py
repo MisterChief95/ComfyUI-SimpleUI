@@ -81,6 +81,7 @@ class GenerationService:
         workflow_revision: int | None = None,
         mapping_revision: int | None = None,
         store_history: bool = True,
+        input_records: list[tuple[str, str, str, str | None, str]] | None = None,
     ) -> dict[str, Any]:
         accepted = self.store.accept(
             owner_id,
@@ -90,6 +91,7 @@ class GenerationService:
             workflow_id=workflow_id,
             workflow_revision=workflow_revision,
             mapping_revision=mapping_revision,
+            input_records=input_records or [],
             global_pending_cap=self.global_pending_cap,
             profile_pending_cap=self.profile_pending_cap,
         )

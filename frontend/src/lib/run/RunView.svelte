@@ -177,6 +177,21 @@
 	{:else}
 		<div class="body" bind:this={body} style:--result-w={resultW ? `${resultW}px` : '40%'}>
 			<div class="controls" style:--toolbar-h={`${toolbarH}px`}>
+				{#if run.mediaInput}
+					<div class="notice row">
+						<img
+							class="media-input-preview"
+							src={`/api/media/${run.mediaInput.id}/thumbnail`}
+							alt="Selected workflow input"
+						/>
+						<span class="grow"
+							>Selected for {run.schema?.controls.find(
+								(c) => c.binding_id === run.mediaInput?.binding_id
+							)?.label}</span
+						>
+						<button class="btn" type="button" onclick={() => (run.mediaInput = null)}>Clear</button>
+					</div>
+				{/if}
 				{#if blocking.length > 0}
 					<div class="notice err-box" role="alert">
 						<strong>This workflow cannot be submitted yet</strong>

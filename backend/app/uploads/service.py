@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import mimetypes
 import os
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -270,6 +271,56 @@ class UploadService:
         staged_name = f"{returned_subfolder}/{returned_name}"
         await in_thread(self._save_staged_name, owner_id, row["id"], staged_name)
         return staged_name
+
+    async def ensure_staged_path(
+        self,
+        owner_id: str,
+        source: Path,
+        expected_kind: str,
+        file_version: str,
+    ) -> str:
+        """Restage a validated private media copy as a fresh ComfyUI input."""
+        if expected_kind not in STAGEABLE_KINDS:
+            raise UploadError(
+                "unsupported_loader_adapter",
+                f"No ComfyUI upload route is established for {expected_kind} inputs yet.",
+            )
+        ext = source.suffix.lower()
+        if ext not in _KIND_EXTENSIONS.get(expected_kind, ()) and not (
+            expected_kind == "audio" and ext in VIDEO_EXTENSIONS
+        ):
+            raise UploadError(
+                "upload_kind_mismatch", f"This control needs a {expected_kind} file."
+            )
+        stat = source.stat()
+        version = f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+        if version != file_version:
+            raise UploadError(
+                "media_missing", "The media file changed; choose it again."
+            )
+        upload_id, temp = self.temp_path(owner_id, ext)
+        try:
+            shutil.copyfile(source, temp)
+            stat = source.stat()
+            if (
+                f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+                != version
+            ):
+                raise UploadError(
+                    "media_missing", "The media file changed; choose it again."
+                )
+            kind = (
+                "image"
+                if ext in IMAGE_EXTENSIONS
+                else "video"
+                if ext in VIDEO_EXTENSIONS
+                else "audio"
+            )
+            self.finalize(owner_id, upload_id, ext, kind, temp, temp.stat().st_size)
+        except BaseException:
+            temp.unlink(missing_ok=True)
+            raise
+        return await self.ensure_staged(owner_id, upload_id, expected_kind)
 
     def _save_staged_name(
         self, owner_id: str, upload_id: str, staged_name: str

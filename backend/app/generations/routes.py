@@ -27,7 +27,7 @@ from ..auth.routes import CurrentPrincipal, Mutation
 from ..comfy_client import ComfyUnavailable
 from ..contracts import Id, Model, Page
 from ..mapping import SeedPolicy, SubmissionError, build_submission_graph, resolve_seed
-from ..mapping.input_adapters import InputAdapterError, bind_upload
+from ..mapping.input_adapters import InputAdapterError, bind_media, bind_upload
 from ..mapping.submission import DEFAULT_SEED_MAX
 from ..storage.db import in_thread
 from ..styles import apply_styles
@@ -49,6 +49,7 @@ class SubmitRequest(Model):
     #: integer is accepted too), a string for the rest. Smart-mode unions keep
     #: ``true`` a bool and ``5`` an int rather than coercing either to a string.
     edits: dict[str, str | bool | int | float] = Field(default_factory=dict)
+    inputs: dict[str, dict[str, str]] = Field(default_factory=dict)
     seed_policy: SeedPolicy | None = None
     #: Saved prompt styles (app/styles.py) applied in order to the traced
     #: positive/negative prompt controls; the effective text is what is stored.
@@ -68,6 +69,7 @@ class GenerationInfo(Model):
 
 class GenerationDetail(GenerationInfo):
     effective_values: dict[str, Any] | None = None
+    inputs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RecentPrompt(Model):
@@ -105,9 +107,13 @@ def _can_retry(row: dict[str, Any]) -> bool:
     ) and bool(row.get("graph_json") or row.get("graph"))
 
 
-def _detail(row: dict[str, Any]) -> GenerationDetail:
+def _detail(
+    row: dict[str, Any], inputs: list[dict[str, Any]] | None = None
+) -> GenerationDetail:
     return GenerationDetail(
-        **_public(row).model_dump(), effective_values=row.get("effective_values")
+        **_public(row).model_dump(),
+        effective_values=row.get("effective_values"),
+        inputs=inputs or [],
     )
 
 
@@ -124,6 +130,9 @@ async def submit_generation(
     )
     if schema is None:
         raise HTTPException(404, "Workflow was not found.")
+    file_bindings = {c.binding_id for c in schema.controls if c.component == "file"}
+    if body.inputs.keys() - file_bindings:
+        raise HTTPException(422, "Choose a file input from this workflow.")
     workflow = await in_thread(
         state.repository.get_workflow, principal.owner_id, body.workflow_id
     )
@@ -141,6 +150,7 @@ async def submit_generation(
     # Upload before reserving the idempotency key, keeping upstream I/O outside
     # the generation transaction.
     staged_edits: dict[str, Any] = dict(body.edits)
+    input_records = []
     for control in schema.controls:
         # Stored effective values keep the ControlDescriptor.value encoding.
         edit = staged_edits.get(control.binding_id)
@@ -148,15 +158,50 @@ async def submit_generation(
             staged_edits[control.binding_id] = str(edit)
         elif control.logical_type == "boolean" and edit in ("true", "false"):
             staged_edits[control.binding_id] = edit == "true"
-        if control.component != "file" or control.binding_id not in staged_edits:
+        selected = body.inputs.get(control.binding_id)
+        if control.component != "file" or (
+            control.binding_id not in staged_edits and selected is None
+        ):
             continue
         try:
-            staged_edits[control.binding_id] = await bind_upload(
-                control,
-                state.uploads,
-                principal.owner_id,
-                staged_edits[control.binding_id],
-            )
+            if selected is not None:
+                if selected.get("source") != "media" or not selected.get("id"):
+                    raise InputAdapterError(
+                        "media_missing",
+                        "That media item was not found; choose a replacement.",
+                        control.binding_id,
+                    )
+                staged, located = await bind_media(
+                    control,
+                    state.uploads,
+                    state.media,
+                    principal.owner_id,
+                    selected["id"],
+                )
+                staged_edits[control.binding_id] = staged
+                input_records.append(
+                    (
+                        control.binding_id,
+                        "media",
+                        selected["id"],
+                        located.row["file_version"],
+                        staged,
+                    )
+                )
+            else:
+                upload_id = staged_edits[control.binding_id]
+                staged_edits[control.binding_id] = await bind_upload(
+                    control, state.uploads, principal.owner_id, upload_id
+                )
+                input_records.append(
+                    (
+                        control.binding_id,
+                        "upload",
+                        upload_id,
+                        None,
+                        staged_edits[control.binding_id],
+                    )
+                )
         except InputAdapterError as exc:
             status = 503 if exc.detail.code.startswith("upstream_") else 422
             raise HTTPException(status, str(exc)) from exc
@@ -200,6 +245,7 @@ async def submit_generation(
             request_payload={
                 "workflow_id": body.workflow_id,
                 "edits": body.edits,
+                "inputs": body.inputs,
                 "seed_policy": seed_policy,
                 **({"style_ids": body.style_ids} if body.style_ids else {}),
             },
@@ -208,6 +254,7 @@ async def submit_generation(
             workflow_revision=revision,
             mapping_revision=schema.revision,
             store_history=profile_settings["store_history"],
+            input_records=input_records,
         )
     except GenerationConflict as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -215,7 +262,10 @@ async def submit_generation(
         raise HTTPException(429, str(exc)) from exc
     except SubmissionError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return _detail(row)
+    return _detail(
+        row,
+        await in_thread(state.generations.store.inputs, principal.owner_id, row["id"]),
+    )
 
 
 @router.get("", response_model=Page[GenerationInfo])
@@ -271,6 +321,12 @@ async def retry_generation(
             "Retry requires a finished generation with a retained execution snapshot. Uncertain executions must be reconciled first.",
         )
     settings = await in_thread(state.settings.profile, principal.owner_id)
+    source_inputs = await in_thread(
+        state.generations.store.inputs,
+        principal.owner_id,
+        generation_id,
+        True,
+    )
     try:
         row = await state.generations.submit(
             principal.owner_id,
@@ -281,12 +337,25 @@ async def retry_generation(
             workflow_revision=source["workflow_revision"],
             mapping_revision=source["mapping_revision"],
             store_history=settings["store_history"],
+            input_records=[
+                (
+                    item["binding_id"],
+                    item["source"],
+                    item["source_id"],
+                    item["file_version"],
+                    item["staged_reference"],
+                )
+                for item in source_inputs
+            ],
         )
     except GenerationConflict as exc:
         raise HTTPException(409, str(exc)) from exc
     except GenerationBusy as exc:
         raise HTTPException(429, str(exc)) from exc
-    return _detail(row)
+    return _detail(
+        row,
+        await in_thread(state.generations.store.inputs, principal.owner_id, row["id"]),
+    )
 
 
 @router.get("/recent-prompts", response_model=Page[RecentPrompt])
@@ -344,7 +413,9 @@ async def get_generation(
     row = await in_thread(generations.store.get, principal.owner_id, generation_id)
     if row is None:
         raise HTTPException(404, "Generation was not found.")
-    return _detail(row)
+    return _detail(
+        row, await in_thread(generations.store.inputs, principal.owner_id, row["id"])
+    )
 
 
 @router.get("/{generation_id}/graph")

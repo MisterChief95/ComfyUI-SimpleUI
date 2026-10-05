@@ -129,6 +129,34 @@ class GenerationTestCase(unittest.IsolatedAsyncioTestCase):
 
 
 class SubmissionTests(GenerationTestCase):
+    async def test_media_input_provenance_survives_history_snapshot_purge(self):
+        provenance = (
+            "1:image",
+            "media",
+            "media-id",
+            "1:2:3:4",
+            "simpleui/default/staged.png",
+        )
+        row = await self.submit(input_records=[provenance])
+        self.store.update(
+            "default", row["id"], status="succeeded", output_state="ready"
+        )
+        self.store.purge_snapshot("default", row["id"])
+
+        self.assertIsNone(self.store.get("default", row["id"])["graph"])
+        self.assertEqual(
+            self.store.inputs("default", row["id"], True),
+            [
+                {
+                    "binding_id": "1:image",
+                    "source": "media",
+                    "source_id": "media-id",
+                    "file_version": "1:2:3:4",
+                    "staged_reference": "simpleui/default/staged.png",
+                }
+            ],
+        )
+
     async def test_request_key_is_reserved_before_one_seed_resolution(self) -> None:
         first = await self.submit()
         second = await self.submit(resolve=self.resolve(999))

@@ -5,10 +5,12 @@
 	// and (opt-in, per device) vertical swipe: up = next, down = previous.
 	import { onMount } from 'svelte';
 	import { api, describeApiError } from '$lib/api';
+	import { goto } from '$app/navigation';
 	import { startSlideshow } from './viewerPlayback';
 	import { on } from 'svelte/events';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import type { MediaInfo } from '$lib/contracts';
+	import type { ControlSchema, Page, WorkflowInfo } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Thumbnail from '$lib/media/Thumbnail.svelte';
 	import ResizeHandle from '$lib/ui/ResizeHandle.svelte';
@@ -47,6 +49,31 @@
 	let duplicates = $state<DuplicateResult | null>(null);
 	let duplicatesLoading = $state(false);
 	let duplicatesError = $state<string | null>(null);
+	let sendWorkflows = $state<WorkflowInfo[]>([]);
+	let sendWorkflow = $state('');
+	let sendControls = $state<ControlSchema['controls']>([]);
+	let sendBinding = $state('');
+	let sendError = $state<string | null>(null);
+	async function loadSendWorkflows(): Promise<void> {
+		try {
+			sendWorkflows = (await api<Page<WorkflowInfo>>('/workflows?limit=200')).items;
+		} catch (cause) {
+			sendError = describeApiError(cause);
+		}
+	}
+	async function chooseSendWorkflow(id: string): Promise<void> {
+		sendWorkflow = id;
+		sendBinding = '';
+		sendControls = [];
+		if (!id) return;
+		try {
+			const schema = await api<ControlSchema>(`/workflows/${id}/controls`);
+			sendControls = schema.controls.filter((c) => c.component === 'file');
+			if (sendControls.length === 1) sendBinding = sendControls[0].binding_id;
+		} catch (cause) {
+			sendError = describeApiError(cause);
+		}
+	}
 
 	async function toggleFullscreen(): Promise<void> {
 		playbackError = null;
@@ -670,6 +697,47 @@
 						{#key detail.id}
 							<GraphJson generationId={detail.id} />
 						{/key}
+					{/if}
+					<hr />
+					<h3>Send to workflow</h3>
+					<button class="btn" type="button" onclick={loadSendWorkflows}>Choose workflow</button>
+					{#if sendError}<p class="error" role="alert">{sendError}</p>{/if}
+					{#if sendWorkflows.length}
+						<label
+							>Workflow
+							<select
+								value={sendWorkflow}
+								onchange={(event) => void chooseSendWorkflow(event.currentTarget.value)}
+							>
+								<option value="">Select a workflow</option>
+								{#each sendWorkflows as workflow (workflow.id)}<option value={workflow.id}
+										>{workflow.name}</option
+									>{/each}
+							</select>
+						</label>
+					{/if}
+					{#if sendControls.length > 1}
+						<label
+							>Target input
+							<select bind:value={sendBinding}
+								><option value="">Select an input</option
+								>{#each sendControls as control (control.binding_id)}<option
+										value={control.binding_id}>{control.label}</option
+									>{/each}</select
+							>
+						</label>
+					{/if}
+					{#if sendBinding}
+						<button
+							class="btn btn-primary"
+							type="button"
+							onclick={() =>
+								void goto(
+									`/generation/${sendWorkflow}?send_media=${encodeURIComponent(item.id)}&binding=${encodeURIComponent(sendBinding)}`
+								)}>Open workflow</button
+						>
+					{:else if sendWorkflow && !sendControls.length}
+						<p class="muted">This workflow has no supported file inputs.</p>
 					{/if}
 				</aside>
 			{/if}

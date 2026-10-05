@@ -275,6 +275,12 @@ export interface GenerationInfo {
 
 export interface GenerationDetail extends GenerationInfo {
 	effective_values: Record<string, unknown> | null;
+	inputs: {
+		binding_id: Id;
+		source: 'upload' | 'media';
+		source_id: Id;
+		file_version: string | null;
+	}[];
 }
 
 // --- media/routes.py --------------------------------------------------------
