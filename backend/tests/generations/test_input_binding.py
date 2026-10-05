@@ -14,6 +14,7 @@ from pathlib import Path
 
 from app.catalog import normalize
 from app.catalog.contracts import CatalogFreshness, CatalogSnapshot
+
 from tests.auth.support import AuthTestCase
 from tests.uploads.support import png_bytes
 

@@ -7,11 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from PIL import Image
-
 from app.settings.service import SettingsStore
 from app.storage import Database
 from app.uploads.service import UploadService
+from PIL import Image
 
 
 #: A tiny valid PNG, built in-process so the test never depends on a fixture file.
