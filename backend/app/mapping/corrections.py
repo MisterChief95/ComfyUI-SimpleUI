@@ -45,7 +45,7 @@ CorrectionScope = Literal["workflow", "node_class"]
 #: presentation only: it cannot turn a model socket into a dropdown, invent
 #: options, or change a value.
 ALLOWED_COMPONENTS: dict[str, frozenset[str]] = {
-    "string": frozenset({"text", "textarea", "readonly"}),
+    "string": frozenset({"text", "textarea", "readonly", "lora_stack"}),
     "int": frozenset({"number", "slider", "seed", "readonly"}),
     "float": frozenset({"number", "slider", "readonly"}),
     "boolean": frozenset({"checkbox", "readonly"}),

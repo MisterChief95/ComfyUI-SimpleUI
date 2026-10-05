@@ -35,8 +35,9 @@ from ..comfy_client import ComfyClient, ComfyUnavailable
 from ..contracts import ErrorDetail
 from ..storage.db import in_thread
 from ..storage.repository import now_ms
-from .contracts import CatalogFreshness, CatalogSnapshot
+from .contracts import CatalogFreshness, CatalogSnapshot, PackStatus
 from .normalize import NormalizeError, normalize
+from .pack import PACK_ROUTE, pack_status, probe_record
 from .store import CatalogStore
 
 LOGGER = logging.getLogger("simpleui.catalog")
@@ -170,6 +171,7 @@ class CatalogService:
             )
 
         capabilities = await self._capability_record(normalized.node_packs)
+        pack_probe = await self._probe_pack()
         document = {
             "nodes": normalized.nodes,
             "withheld": normalized.withheld,
@@ -178,6 +180,7 @@ class CatalogService:
             "catalog_revision": normalized.revision,
             "node_packs": normalized.node_packs,
             "capabilities": capabilities,
+            "pack_probe": pack_probe,
         }
         await in_thread(
             _save,
@@ -318,6 +321,24 @@ class CatalogService:
             while len(self._previews) > 64:
                 self._previews.pop(next(iter(self._previews)))
         return self._previews[key]
+
+    async def pack_status(self) -> PackStatus:
+        """The optional node pack's status, from the cache only (no upstream call)."""
+        snapshot = await self.snapshot()
+        document = (self._cache or {}).get("normalized") or {}
+        return pack_status(
+            snapshot.nodes,
+            document.get("pack_probe"),
+            catalog_state=snapshot.freshness.state,
+        )
+
+    async def _probe_pack(self) -> dict[str, Any] | None:
+        """Best effort: an absent route (older pack, no pack) is not a failure."""
+        try:
+            body = await self._client.get_json(PACK_ROUTE)
+        except ComfyUnavailable:
+            return None
+        return probe_record(body)
 
     async def free_memory(self) -> None:
         await self._client.free_memory()

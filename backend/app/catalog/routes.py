@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from ..auth.routes import CurrentPrincipal, Mutation
 from ..comfy_client import ComfyUnavailable
-from .contracts import CatalogSnapshot, VramInfo
+from .contracts import CatalogSnapshot, PackStatus, VramInfo
 
 router = APIRouter(prefix="/api/catalog")
 
@@ -22,6 +22,12 @@ async def refresh_catalog(
 ) -> CatalogSnapshot:
     # Even a local browser uses the global cooldown; no client can force it.
     return await request.app.state.catalog.refresh()
+
+
+@router.get("/pack", response_model=PackStatus)
+async def read_pack_status(request: Request, principal: CurrentPrincipal) -> PackStatus:
+    # Derived from the cached catalog; reading it never calls ComfyUI.
+    return await request.app.state.catalog.pack_status()
 
 
 @router.get("/completions")

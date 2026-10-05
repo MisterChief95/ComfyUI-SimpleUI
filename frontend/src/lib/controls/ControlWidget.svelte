@@ -16,6 +16,7 @@
 	import SearchableSelect from '$lib/ui/SearchableSelect.svelte';
 	import RecentPrompts from './RecentPrompts.svelte';
 	import ModelInfo from './ModelInfo.svelte';
+	import LoraStack from './LoraStack.svelte';
 	import { registerPrompt } from './promptTarget';
 	import { adjustWeight, completionAt, completionText, insertText, suggest } from './prompt';
 
@@ -321,6 +322,16 @@
 				oninsert={insertPrompt}
 			/>
 		{/if}
+	{:else if component === 'lora_stack'}
+		<LoraStack
+			{id}
+			value={text}
+			options={control.options ?? []}
+			{disabled}
+			{preview}
+			describedby={described}
+			onchange={(next) => onchange(next)}
+		/>
 	{:else if component === 'checkbox'}
 		<label class="toggle">
 			<input
