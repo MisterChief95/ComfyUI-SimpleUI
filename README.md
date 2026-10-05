@@ -24,6 +24,10 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   server-enforced cooldown. Startup and every request work with ComfyUI
   unavailable — the snapshot then reports `unavailable` and refuses submission
   rather than guessing defaults.
+- **Optional node pack.** [ComfyUI-SimpleUI-Nodes](https://github.com/MisterChief95/ComfyUI-SimpleUI-Nodes)
+  is detected from the cached catalog (`SimpleUI*` classes) and its `/simpleui/pack` route;
+  `GET /api/catalog/pack` and Settings report it as missing, present or outdated. The app
+  works the same without it.
 - **Workflows.** ComfyUI API JSON is imported with a derived control schema. Topology,
   literal types, and exact large seeds are preserved, and an ambiguous mapping is reported,
   never silently rewritten. A workflow can be renamed, or its graph replaced by a newer
