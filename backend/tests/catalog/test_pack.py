@@ -20,14 +20,8 @@ from .test_catalog import CatalogTestCase
 PACK_CLASSES: dict[str, Any] = {
     "SimpleUILoraStack": {
         "input": {
-            "required": {
-                "model": ["MODEL"],
-                "clip": ["CLIP"],
-                "loras": [
-                    "STRING",
-                    {"multiline": True, "default": '{"schema":1,"loras":[]}'},
-                ],
-            }
+            "required": {"model": ["MODEL"], "clip": ["CLIP"]},
+            "optional": {"loras": ["STRING", {"forceInput": True}]},
         },
         "output": ["MODEL", "CLIP", "STRING"],
         "output_node": False,
@@ -77,13 +71,13 @@ class PackDetectionTest(CatalogTestCase):
         self.install_pack()
         self.route = {
             "pack": "comfyui-simpleui-nodes",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "contract": SUPPORTED_CONTRACT,
         }
         status = await self.status()
         self.assertEqual(status.state, "present")
         self.assertEqual(status.detected_by, "route")
-        self.assertEqual(status.version, "1.0.0")
+        self.assertEqual(status.version, "2.0.0")
         self.assertEqual(status.contract, SUPPORTED_CONTRACT)
         self.assertEqual(
             status.node_classes, ["SimpleUIChainOutput", "SimpleUILoraStack"]
@@ -99,11 +93,11 @@ class PackDetectionTest(CatalogTestCase):
 
     async def test_an_unsupported_contract_is_outdated(self) -> None:
         self.install_pack()
-        for contract in (SUPPORTED_CONTRACT + 1, 0, "1", None):
+        for contract in (SUPPORTED_CONTRACT + 1, 1, 0, "2", None):
             with self.subTest(contract=contract):
                 self.route = {
                     "pack": "comfyui-simpleui-nodes",
-                    "version": "2.0.0",
+                    "version": "9.0.0",
                     "contract": contract,
                 }
                 status = await self.status()
@@ -143,8 +137,8 @@ class PackDetectionTest(CatalogTestCase):
         self.install_pack()
         self.route = {
             "pack": "comfyui-simpleui-nodes",
-            "version": "1.0.0",
-            "contract": 1,
+            "version": "2.0.0",
+            "contract": SUPPORTED_CONTRACT,
             "path": "C:\\Users\\someone\\ComfyUI\\custom_nodes",
         }
         status = await self.status()
@@ -155,8 +149,8 @@ class PackDetectionTest(CatalogTestCase):
         self.install_pack()
         self.route = {
             "pack": "comfyui-simpleui-nodes",
-            "version": "1.0.0",
-            "contract": 1,
+            "version": "2.0.0",
+            "contract": SUPPORTED_CONTRACT,
         }
         await self.status()
 
@@ -168,7 +162,7 @@ class PackDetectionTest(CatalogTestCase):
 
         self.assertEqual(len(self.requests), before)
         self.assertEqual(status.state, "present")
-        self.assertEqual(status.version, "1.0.0")
+        self.assertEqual(status.version, "2.0.0")
 
     async def test_no_catalog_reports_missing_with_the_catalog_state(self) -> None:
         self.online = False

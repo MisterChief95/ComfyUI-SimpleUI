@@ -168,6 +168,26 @@ def build_control_schema(
                 else c
                 for c in node_controls
             ]
+            if lora_stack.INPUT_NAME not in node.get("inputs", {}):
+                # Contract 2: `loras` has no canvas widget, so an export omits
+                # it. The one control built from an absent value: it starts
+                # empty and an edit adds the key at submission.
+                control = _literal_control(
+                    node_id,
+                    class_type,
+                    lora_stack.INPUT_NAME,
+                    lora_stack.EMPTY_PAYLOAD,
+                    spec.get("inputs", {}).get(lora_stack.INPUT_NAME)
+                    or {"logical_type": "STRING"},
+                    spec,
+                    _title(node),
+                    consumers,
+                    reachable,
+                    warnings,
+                )
+                node_controls.append(
+                    lora_stack.adapt(control, lora_names, warnings, injected=True)
+                )
         controls.extend(node_controls)
         _check_required(node_id, node, spec, blocking)
 

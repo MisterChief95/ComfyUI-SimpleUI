@@ -23,7 +23,7 @@ PACK_NAME = "comfyui-simpleui-nodes"
 PACK_REPO_URL = "https://github.com/MisterChief95/ComfyUI-SimpleUI-Nodes"
 PACK_ROUTE = "/simpleui/pack"
 CLASS_PREFIX = "SimpleUI"
-SUPPORTED_CONTRACT = 1
+SUPPORTED_CONTRACT = 2
 
 _MAX_VERSION = 40
 
