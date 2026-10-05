@@ -14,7 +14,7 @@ import type {
 	WorkflowInfo,
 	WorkflowLayout
 } from '$lib/contracts';
-import { resolveLayout, type ResolvedControl } from '$lib/layout/model';
+import { WIDE, resolveLayout, type ResolvedControl } from '$lib/layout/model';
 import { session } from '$lib/session.svelte';
 import { settingsState } from '$lib/settings.svelte';
 import { lastWorkflow } from '$lib/ui/lastWorkflow.svelte';
@@ -152,7 +152,7 @@ export class RunState {
 				defaultOpen: false,
 				entries: resolved.unplaced
 					.filter(keep)
-					.map((control) => ({ control, span: control.component === 'textarea' ? 'full' : 'auto' }))
+					.map((control) => ({ control, span: WIDE.has(control.component) ? 'full' : 'auto' }))
 			});
 		}
 		return out.filter(

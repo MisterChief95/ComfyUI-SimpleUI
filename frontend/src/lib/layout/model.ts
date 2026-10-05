@@ -7,6 +7,7 @@
 // object when it is a no-op) and never touches its input. A binding appears at
 // most once across all sections plus `hidden`; the operations preserve that.
 import type {
+	Component,
 	ControlDescriptor,
 	Group,
 	LayoutDoc,
@@ -30,6 +31,8 @@ export const GROUP_ORDER: readonly Group[] = [
 ];
 
 const COLLAPSED_GROUPS: ReadonlySet<string> = new Set(['advanced', 'output', 'inactive']);
+/** Components placed full width by default: they need the room. */
+export const WIDE: ReadonlySet<Component> = new Set(['textarea', 'lora_stack']);
 
 export const MAX_SECTIONS = 40;
 export const MAX_ITEMS = 1000;
@@ -176,7 +179,7 @@ export function defaultLayout(schema: SchemaLike): LayoutDoc {
 			items: controls.map((c) => ({
 				kind: 'control',
 				binding_id: c.binding_id,
-				span: c.component === 'textarea' ? 'full' : 'auto'
+				span: WIDE.has(c.component) ? 'full' : 'auto'
 			}))
 		});
 	}

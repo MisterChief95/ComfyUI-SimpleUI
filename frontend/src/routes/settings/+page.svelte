@@ -8,8 +8,11 @@
 	import SettingField from '$lib/settings/SettingField.svelte';
 	import SettingRow from '$lib/settings/SettingRow.svelte';
 
+	const PACK_REPO_URL = 'https://github.com/MisterChief95/ComfyUI-SimpleUI-Nodes';
+
 	onMount(() => {
 		if (!settingsState.data) settingsState.load();
+		void loadPack();
 	});
 
 	let savingKey = $state<string | null>(null);
@@ -54,10 +57,31 @@
 		try {
 			catalog = (await api<{ freshness: CatalogFreshness }>('/catalog/refresh', { method: 'POST' }))
 				.freshness;
+			void loadPack();
 		} catch (cause) {
 			catalogError = describeApiError(cause);
 		} finally {
 			refreshing = false;
+		}
+	}
+
+	// Optional SimpleUI node pack (PACK-001). Derived from the cached catalog,
+	// so it updates when the catalog is refreshed above.
+	type PackStatus = {
+		state: 'missing' | 'present' | 'outdated';
+		detected_by: 'route' | 'class_types' | null;
+		version: string | null;
+		contract: number | null;
+		supported_contract: number;
+		repo_url: string;
+		catalog_state: 'fresh' | 'stale' | 'unavailable';
+	};
+	let pack = $state<PackStatus | null>(null);
+	async function loadPack(): Promise<void> {
+		try {
+			pack = await api<PackStatus>('/catalog/pack');
+		} catch {
+			pack = null; // optional: the card simply shows nothing to report
 		}
 	}
 </script>
@@ -138,6 +162,38 @@
 					<button type="button" class="btn" onclick={refreshCatalog} disabled={refreshing}>
 						{refreshing ? 'Refreshing…' : 'Refresh'}
 					</button>
+				</SettingRow>
+			</section>
+
+			<section class="card">
+				<h2>SimpleUI node pack</h2>
+				<SettingRow label="Status" inline>
+					{#snippet help()}
+						Optional ComfyUI nodes that unlock richer controls, such as a LoRA stack. Everything
+						else works without them.
+						{#if pack?.state === 'outdated'}
+							This app supports pack contract {pack.supported_contract}, but the installed pack
+							reports {pack.contract ?? 'no valid contract'}. Install a matching release.
+						{:else if pack?.state === 'missing' && pack.catalog_state === 'unavailable'}
+							ComfyUI has not been reached yet, so the pack could not be checked.
+						{:else if pack?.state === 'present' && pack.detected_by === 'class_types'}
+							Detected by its nodes; this pack version does not report its version.
+						{/if}
+						<a href={pack?.repo_url ?? PACK_REPO_URL} target="_blank" rel="noopener noreferrer"
+							>Get the node pack</a
+						>
+					{/snippet}
+					{#if pack?.state === 'present'}
+						<span class="badge badge-success"
+							>Installed{pack.version ? ` ${pack.version}` : ''}</span
+						>
+					{:else if pack?.state === 'outdated'}
+						<span class="badge badge-warning"
+							>Unsupported{pack.version ? ` ${pack.version}` : ''}</span
+						>
+					{:else if pack}
+						<span class="badge">Not installed</span>
+					{/if}
 				</SettingRow>
 			</section>
 

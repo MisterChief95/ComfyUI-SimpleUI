@@ -106,6 +106,8 @@ Component = Literal[
     "seed",
     "file",
     "readonly",
+    #: The node pack's SimpleUILoraStack payload (a STRING literal).
+    "lora_stack",
 ]
 
 Group = Literal[

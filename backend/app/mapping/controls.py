@@ -37,6 +37,7 @@ from ..contracts import (
     LogicalType,
     NumberConstraints,
 )
+from . import lora_stack
 from .importer import classify_input, looks_like_link
 
 #: Group order follows generation use (docs/WORKFLOW_MAPPING.md "Grouping").
@@ -127,6 +128,7 @@ def build_control_schema(
         )
 
     controls: list[ControlDescriptor] = []
+    lora_names: list[str] | None = None
     for node_id in _ordered_ids(graph):
         node = graph[node_id]
         class_type = node["class_type"]
@@ -147,18 +149,26 @@ def build_control_schema(
             controls.extend(_unknown_class_controls(node_id, node, graph, reachable))
             continue
 
-        controls.extend(
-            _node_controls(
-                node_id,
-                node,
-                spec,
-                graph,
-                links,
-                consumers,
-                reachable,
-                warnings,
-            )
+        node_controls = _node_controls(
+            node_id,
+            node,
+            spec,
+            graph,
+            links,
+            consumers,
+            reachable,
+            warnings,
         )
+        if class_type == lora_stack.CLASS_TYPE:
+            if lora_names is None:
+                lora_names = lora_stack.catalog_lora_names(catalog_nodes)
+            node_controls = [
+                lora_stack.adapt(c, lora_names, warnings)
+                if c.input_name == lora_stack.INPUT_NAME
+                else c
+                for c in node_controls
+            ]
+        controls.extend(node_controls)
         _check_required(node_id, node, spec, blocking)
 
     controls.extend(_branch_controls(graph, catalog_nodes, output_nodes))

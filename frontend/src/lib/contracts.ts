@@ -61,7 +61,17 @@ export interface Revisioned {
 export type LogicalType = 'string' | 'int' | 'float' | 'boolean' | 'enum' | 'file' | 'unknown';
 
 export type Component =
-	'text' | 'textarea' | 'number' | 'slider' | 'checkbox' | 'select' | 'seed' | 'file' | 'readonly';
+	| 'text'
+	| 'textarea'
+	| 'number'
+	| 'slider'
+	| 'checkbox'
+	| 'select'
+	| 'seed'
+	| 'file'
+	| 'readonly'
+	/** The node pack's SimpleUILoraStack payload (a string literal). */
+	| 'lora_stack';
 
 export type Group =
 	| 'prompts'
@@ -222,7 +232,11 @@ export interface Correction {
 	stale: boolean;
 }
 
-/** Components a correction may choose, per logical type (mirrors ALLOWED_COMPONENTS). */
+/**
+ * Components a correction may choose, per logical type (mirrors ALLOWED_COMPONENTS).
+ * The backend also accepts 'lora_stack' for strings; it is offered only where the
+ * mapping chose it, never as a widget for an arbitrary string.
+ */
 export const ALLOWED_COMPONENTS: Record<LogicalType, Component[]> = {
 	string: ['text', 'textarea', 'readonly'],
 	int: ['number', 'slider', 'seed', 'readonly'],

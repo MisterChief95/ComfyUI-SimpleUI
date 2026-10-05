@@ -65,6 +65,27 @@ class CatalogSnapshot(Model):
     capabilities: dict[str, Any] = Field(default_factory=dict)
 
 
+class PackStatus(Model):
+    """The optional SimpleUI node pack as seen by the last catalog refresh.
+
+    ``missing``  - no ``SimpleUI*`` class types and no pack route.
+    ``present``  - detected by its route with the supported contract, or by
+                   its class types when the route is absent (version unknown).
+    ``outdated`` - the route reports a contract this app does not support.
+    """
+
+    state: Literal["missing", "present", "outdated"]
+    #: ``route`` when ``/simpleui/pack`` answered; ``class_types`` on fallback.
+    detected_by: Literal["route", "class_types"] | None = None
+    version: str | None = None
+    contract: int | None = None
+    supported_contract: int
+    node_classes: list[str] = Field(default_factory=list)
+    repo_url: str
+    #: The catalog freshness state the status was derived from.
+    catalog_state: CatalogState
+
+
 class SelectionIssue(Model):
     """One saved control that a catalog change has put in doubt.
 
