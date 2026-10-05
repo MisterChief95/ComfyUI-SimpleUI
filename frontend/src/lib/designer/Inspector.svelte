@@ -117,6 +117,33 @@
 			</fieldset>
 		{/if}
 
+		{#if draft.component === 'lora_stack'}
+			<fieldset class="range">
+				<legend>LoRA stack</legend>
+				<label class="check">
+					<input
+						type="checkbox"
+						checked={draft.show_thumbnails}
+						onchange={(e) =>
+							editor.setDraft(control.binding_id, { show_thumbnails: e.currentTarget.checked })}
+					/>
+					Show thumbnails
+				</label>
+				<label class="check">
+					<input
+						type="checkbox"
+						checked={draft.show_clip}
+						onchange={(e) =>
+							editor.setDraft(control.binding_id, { show_clip: e.currentTarget.checked })}
+					/>
+					Show CLIP strength
+				</label>
+				<p class="muted small">
+					With CLIP hidden, each LoRA's CLIP strength follows its model strength.
+				</p>
+			</fieldset>
+		{/if}
+
 		<div class="field">
 			<label for="insp-help">Help text</label>
 			<textarea

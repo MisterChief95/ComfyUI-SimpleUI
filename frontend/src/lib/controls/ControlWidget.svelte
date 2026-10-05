@@ -325,6 +325,8 @@
 	{:else if component === 'lora_stack'}
 		<LoraStack
 			{id}
+			showThumbnails={control.show_thumbnails ?? true}
+			showClip={control.show_clip ?? true}
 			value={text}
 			options={control.options ?? []}
 			{disabled}

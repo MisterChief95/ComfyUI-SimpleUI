@@ -1,5 +1,5 @@
 // Pure helpers for the per-control presentation drafts of the designer (label,
-// widget, display range, help text). No Svelte, no DOM: node runs it
+// widget, display range, help text, LoRA stack display options). No Svelte, no DOM: node runs it
 // (`npm test`), so keep to erasable TypeScript and `import type`.
 //
 // A draft is *sparse*: a patch holding only the fields the user changed from
@@ -15,6 +15,9 @@ export interface Draft {
 	display_max: string;
 	display_step: string;
 	display_default: string;
+	/** LoRA stack display options. */
+	show_thumbnails: boolean;
+	show_clip: boolean;
 }
 
 export type DraftPatch = Partial<Draft>;
@@ -51,7 +54,9 @@ export function baselineDraft(control: ControlDescriptor): Draft {
 		display_min: ranged ? text(c?.min) : '',
 		display_max: ranged ? text(c?.max) : '',
 		display_step: ranged ? text(c?.step) : '',
-		display_default: ranged ? text(control.value) : ''
+		display_default: ranged ? text(control.value) : '',
+		show_thumbnails: control.show_thumbnails ?? true,
+		show_clip: control.show_clip ?? true
 	};
 }
 
@@ -62,11 +67,13 @@ export function effectiveDraft(control: ControlDescriptor, patch: DraftPatch | u
 /** `patch` without the fields that equal the baseline, so "dirty" means a real change. */
 export function normalizePatch(control: ControlDescriptor, patch: DraftPatch): DraftPatch {
 	const base = baselineDraft(control);
-	const out: Record<string, string> = {};
-	for (const [key, value] of Object.entries(patch) as [keyof Draft, string][]) {
+	const out: Record<string, string | boolean> = {};
+	for (const [key, value] of Object.entries(patch) as [keyof Draft, string | boolean][]) {
 		const baseValue = base[key];
 		const same =
-			key === 'label' || key === 'help_text'
+			(key === 'label' || key === 'help_text') &&
+			typeof value === 'string' &&
+			typeof baseValue === 'string'
 				? value.trim() === baseValue.trim()
 				: value === baseValue;
 		if (!same) out[key] = value;
@@ -91,6 +98,8 @@ export function applyDraft(
 	if (patch.label !== undefined && patch.label.trim()) next.label = patch.label.trim();
 	if (patch.help_text !== undefined) next.help_text = patch.help_text.trim() || null;
 	if (patch.component !== undefined) next.component = patch.component;
+	if (patch.show_thumbnails !== undefined) next.show_thumbnails = patch.show_thumbnails;
+	if (patch.show_clip !== undefined) next.show_clip = patch.show_clip;
 	if (isRangedNumber(control) && control.constraints) {
 		next.constraints = {
 			...control.constraints,
@@ -126,6 +135,8 @@ export function buildPresentation(saved: Presentation | null, patch: DraftPatch)
 	if (patch.label !== undefined && patch.label.trim()) out.label = patch.label.trim();
 	if (patch.component !== undefined) out.component = patch.component;
 	if (patch.help_text !== undefined) out.help_text = patch.help_text.trim() || null;
+	if (patch.show_thumbnails !== undefined) out.show_thumbnails = patch.show_thumbnails;
+	if (patch.show_clip !== undefined) out.show_clip = patch.show_clip;
 	for (const key of DISPLAY_KEYS) {
 		if (patch[key] !== undefined) out[key] = parseNumber(patch[key]);
 	}

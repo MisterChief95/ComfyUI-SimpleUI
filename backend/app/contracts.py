@@ -169,6 +169,11 @@ class ControlDescriptor(Model):
     unresolved: list[ErrorDetail] = Field(default_factory=list)
     #: Preserved upstream metadata, shown as diagnostics. Never executed.
     raw_metadata: dict[str, Any] | None = None
+    #: LoRA stack display options (designer properties; ignored elsewhere).
+    #: With ``show_clip`` off, each entry's clip strength follows its model
+    #: strength, in the browser and again at submission.
+    show_thumbnails: bool = True
+    show_clip: bool = True
 
 
 class ControlSchema(Owned, Revisioned):

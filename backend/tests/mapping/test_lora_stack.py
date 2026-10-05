@@ -207,3 +207,67 @@ class AbsentPayloadTest(unittest.TestCase):
         )
         control = next(c for c in schema.controls if c.binding_id == "20:loras")
         self.assertEqual(control.group, "inactive")
+
+
+class DisplayOptionsTest(unittest.TestCase):
+    """Designer properties: Show thumbnails and Show CLIP."""
+
+    def test_presentation_sets_the_display_options(self) -> None:
+        from app.mapping.corrections import Presentation, _apply
+
+        _, _, control = build(ABSENT)
+        self.assertTrue(control.show_thumbnails)
+        self.assertTrue(control.show_clip)
+        shown = _apply(
+            control,
+            Presentation(show_thumbnails=False, show_clip=False),
+            "workflow",
+            [],
+        )
+        self.assertFalse(shown.show_thumbnails)
+        self.assertFalse(shown.show_clip)
+
+    def test_hidden_clip_follows_model_strength_at_submission(self) -> None:
+        graph, schema, control = build(
+            payload(entry("placeholder-style.safetensors", note="kept"))
+        )
+        hidden = schema.model_copy(
+            update={
+                "controls": [
+                    c.model_copy(update={"show_clip": False})
+                    if c.binding_id == control.binding_id
+                    else c
+                    for c in schema.controls
+                ]
+            }
+        )
+        # Untouched literal and an edit are both synced.
+        for edits in ({}, {"20:loras": payload(entry("x.safetensors"))}):
+            with self.subTest(edits=edits):
+                sent = json.loads(
+                    build_submission_graph(graph, hidden, edits)["20"]["inputs"][
+                        "loras"
+                    ]
+                )
+                for item in sent["loras"]:
+                    self.assertEqual(item["strength_clip"], item["strength_model"])
+        sent = json.loads(
+            build_submission_graph(graph, hidden)["20"]["inputs"]["loras"]
+        )
+        self.assertEqual(sent["loras"][0]["note"], "kept")
+        # Shown CLIP: submitted verbatim.
+        self.assertEqual(
+            build_submission_graph(graph, schema)["20"]["inputs"]["loras"],
+            control.value,
+        )
+
+    def test_hidden_clip_leaves_an_absent_payload_absent(self) -> None:
+        graph, schema, _ = build(ABSENT)
+        hidden = schema.model_copy(
+            update={
+                "controls": [
+                    c.model_copy(update={"show_clip": False}) for c in schema.controls
+                ]
+            }
+        )
+        self.assertNotIn("loras", build_submission_graph(graph, hidden)["20"]["inputs"])

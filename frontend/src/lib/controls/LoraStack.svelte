@@ -1,6 +1,8 @@
 <script lang="ts">
 	// Editor for the node pack's SimpleUILoraStack `loras` payload (PACK-002).
-	// Emits the whole payload as one string; unknown fields are preserved
+	// Trigger words are seeded from model metadata and shown read-only, with an
+	// edit button for overrides; the payload is their only store. Emits the
+	// whole payload as one string; unknown fields are preserved
 	// (loraStack.ts). An unreadable payload shows why and stays editable as raw
 	// text. A LoRA the catalog does not list is flagged, never dropped.
 	import { api } from '$lib/api';
@@ -24,7 +26,9 @@
 		onchange,
 		disabled = false,
 		preview = false,
-		describedby
+		describedby,
+		showThumbnails = true,
+		showClip = true
 	}: {
 		id: string;
 		value: string;
@@ -35,7 +39,16 @@
 		/** Designer preview: no metadata or thumbnail requests. */
 		preview?: boolean;
 		describedby?: string;
+		/** Designer property: show entry thumbnails. */
+		showThumbnails?: boolean;
+		/** Designer property: off makes clip strength follow model strength. */
+		showClip?: boolean;
 	} = $props();
+
+	/** Slider travel; typed values may go past it. */
+	const STRENGTH = { min: -2, max: 2, step: 0.05 };
+	/** Entries whose trigger words are being edited, by index. */
+	let editing = $state<Record<number, boolean>>({});
 
 	type Info = { base_model: string | null; trigger_words: string[] };
 
@@ -75,6 +88,7 @@
 	}
 
 	function move(index: number, by: number): void {
+		editing = {};
 		update((doc) => {
 			const [entry] = doc.loras.splice(index, 1);
 			doc.loras.splice(index + by, 0, entry);
@@ -104,7 +118,9 @@
 
 	function strength(index: number, key: 'strength_model' | 'strength_clip', el: HTMLInputElement) {
 		const n = el.valueAsNumber;
-		if (Number.isFinite(n)) patch(index, { [key]: n });
+		if (!Number.isFinite(n)) return;
+		// With CLIP hidden, clip strength follows model strength.
+		patch(index, showClip ? { [key]: n } : { strength_model: n, strength_clip: n });
 	}
 </script>
 
@@ -133,15 +149,17 @@
 					.slice(0, 6)}
 				<li class="entry" class:off={!entry.enabled}>
 					<div class="head">
-						{#if catalogName && !preview && !broken[catalogName]}
-							<img
-								src={`/api/catalog/models/loras/preview?filename=${encodeURIComponent(catalogName)}`}
-								alt=""
-								loading="lazy"
-								onerror={() => (broken[catalogName] = true)}
-							/>
-						{:else}
-							<div class="thumb" aria-hidden="true"></div>
+						{#if showThumbnails}
+							{#if catalogName && !preview && !broken[catalogName]}
+								<img
+									src={`/api/catalog/models/loras/preview?filename=${encodeURIComponent(catalogName)}`}
+									alt=""
+									loading="lazy"
+									onerror={() => (broken[catalogName] = true)}
+								/>
+							{:else}
+								<div class="thumb" aria-hidden="true"></div>
+							{/if}
 						{/if}
 						<div class="title">
 							<span class="name" title={entry.name}>{entry.name}</span>
@@ -151,39 +169,6 @@
 								<span class="muted">{info.base_model}</span>
 							{/if}
 						</div>
-						<label class="toggle" title={entry.enabled ? 'Enabled' : 'Disabled'}>
-							<input
-								type="checkbox"
-								class="switch"
-								role="switch"
-								aria-label={`Enable ${entry.name}`}
-								checked={entry.enabled}
-								{disabled}
-								onchange={(e) => patch(i, { enabled: e.currentTarget.checked })}
-							/>
-						</label>
-					</div>
-					<div class="strengths">
-						<label>
-							<span class="muted">Model</span>
-							<input
-								type="number"
-								step="0.05"
-								value={entry.strength_model}
-								{disabled}
-								oninput={(e) => strength(i, 'strength_model', e.currentTarget)}
-							/>
-						</label>
-						<label>
-							<span class="muted">CLIP</span>
-							<input
-								type="number"
-								step="0.05"
-								value={entry.strength_clip}
-								{disabled}
-								oninput={(e) => strength(i, 'strength_clip', e.currentTarget)}
-							/>
-						</label>
 						<div class="order">
 							<button
 								type="button"
@@ -204,20 +189,77 @@
 								class="btn btn-ghost btn-icon"
 								aria-label={`Remove ${entry.name}`}
 								{disabled}
-								onclick={() => update((doc) => doc.loras.splice(i, 1))}
-								><Icon name="trash" /></button
+								onclick={() => {
+									editing = {};
+									update((doc) => doc.loras.splice(i, 1));
+								}}><Icon name="trash" /></button
 							>
 						</div>
+						<label class="toggle" title={entry.enabled ? 'Enabled' : 'Disabled'}>
+							<input
+								type="checkbox"
+								class="switch"
+								role="switch"
+								aria-label={`Enable ${entry.name}`}
+								checked={entry.enabled}
+								{disabled}
+								onchange={(e) => patch(i, { enabled: e.currentTarget.checked })}
+							/>
+						</label>
+					</div>
+					{#snippet slider(key: 'strength_model' | 'strength_clip', label: string)}
+						<div class="strength">
+							<span class="muted">{label}</span>
+							<input
+								type="range"
+								min={STRENGTH.min}
+								max={STRENGTH.max}
+								step={STRENGTH.step}
+								aria-label={`${label} strength for ${entry.name}`}
+								value={entry[key]}
+								{disabled}
+								oninput={(e) => strength(i, key, e.currentTarget)}
+							/>
+							<input
+								class="strength-number"
+								type="number"
+								step={STRENGTH.step}
+								aria-label={`${label} strength value for ${entry.name}`}
+								value={entry[key]}
+								{disabled}
+								oninput={(e) => strength(i, key, e.currentTarget)}
+							/>
+						</div>
+					{/snippet}
+					<div class="strengths">
+						{@render slider('strength_model', showClip ? 'Model' : 'Strength')}
+						{#if showClip}{@render slider('strength_clip', 'CLIP')}{/if}
 					</div>
 					<div class="triggers">
-						<input
-							type="text"
-							placeholder="Trigger words"
-							aria-label={`Trigger words for ${entry.name}`}
-							value={entry.trigger_words}
-							{disabled}
-							oninput={(e) => patch(i, { trigger_words: e.currentTarget.value })}
-						/>
+						{#if editing[i]}
+							<input
+								type="text"
+								placeholder="Trigger words"
+								aria-label={`Trigger words for ${entry.name}`}
+								value={entry.trigger_words}
+								{disabled}
+								oninput={(e) => patch(i, { trigger_words: e.currentTarget.value })}
+								onkeydown={(e) => e.key === 'Enter' && (editing[i] = false)}
+							/>
+							<button type="button" class="btn" onclick={() => (editing[i] = false)}>Done</button>
+						{:else}
+							<p class="words" class:muted={!entry.trigger_words.trim()}>
+								{entry.trigger_words.trim() || 'No trigger words'}
+							</p>
+							<button
+								type="button"
+								class="btn btn-ghost btn-icon"
+								aria-label={`Edit trigger words for ${entry.name}`}
+								title="Override trigger words"
+								{disabled}
+								onclick={() => (editing[i] = true)}><Icon name="edit" /></button
+							>
+						{/if}
 						<button
 							type="button"
 							class="btn"
@@ -226,7 +268,7 @@
 							onclick={() => insertIntoPrompt(`${entry.trigger_words.trim()}, `)}>Insert</button
 						>
 					</div>
-					{#if suggestions.length && !disabled}
+					{#if editing[i] && suggestions.length && !disabled}
 						<ul class="suggest" aria-label={`Suggested trigger words for ${entry.name}`}>
 							{#each suggestions as word (word)}
 								<li>
@@ -289,7 +331,7 @@
 		background: var(--color-surface-2);
 	}
 	.entry.off .head,
-	.entry.off .strengths label {
+	.entry.off .strengths {
 		opacity: 0.6;
 	}
 	.head {
@@ -325,26 +367,30 @@
 		cursor: pointer;
 	}
 	.strengths {
-		display: flex;
-		flex-wrap: wrap;
+		display: grid;
+		gap: var(--space-1);
+	}
+	.strength {
+		display: grid;
+		grid-template-columns: 4.5rem minmax(0, 1fr) 5rem;
 		align-items: center;
 		gap: var(--space-2);
-	}
-	.strengths label {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
 		font-size: var(--text-sm);
-	}
-	.strengths input {
-		width: 5rem;
 	}
 	.order {
 		display: flex;
-		margin-left: auto;
+		flex: none;
+	}
+	.words {
+		flex: 1 1 auto;
+		min-width: 0;
+		margin: 0;
+		font-size: var(--text-sm);
+		overflow-wrap: anywhere;
 	}
 	.triggers {
 		display: flex;
+		align-items: center;
 		gap: var(--space-2);
 	}
 	.triggers input {

@@ -122,6 +122,9 @@ export interface ControlDescriptor {
 	inference_reason: string;
 	unresolved: ErrorDetail[];
 	raw_metadata: Record<string, unknown> | null;
+	/** LoRA stack display options (designer properties). Absent means true. */
+	show_thumbnails?: boolean;
+	show_clip?: boolean;
 }
 
 export interface ControlSchema extends Owned, Revisioned {
@@ -221,6 +224,9 @@ export interface Presentation {
 	display_max: number | null;
 	display_default: number | null;
 	display_step: number | null;
+	/** LoRA stack only. */
+	show_thumbnails?: boolean | null;
+	show_clip?: boolean | null;
 }
 
 export interface Correction {
