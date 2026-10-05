@@ -5,7 +5,7 @@
 // A draft is *sparse*: a patch holding only the fields the user changed from
 // the control's effective descriptor (the schema already has saved corrections
 // replayed over it). Saving sends the saved presentation plus that patch.
-import type { Component, ControlDescriptor, Presentation } from '../contracts.ts';
+import type { Component, ControlDescriptor, LoraColumns, Presentation } from '../contracts.ts';
 
 export interface Draft {
 	label: string;
@@ -18,6 +18,7 @@ export interface Draft {
 	/** LoRA stack display options. */
 	show_thumbnails: boolean;
 	show_clip: boolean;
+	lora_columns: LoraColumns;
 }
 
 export type DraftPatch = Partial<Draft>;
@@ -56,7 +57,8 @@ export function baselineDraft(control: ControlDescriptor): Draft {
 		display_step: ranged ? text(c?.step) : '',
 		display_default: ranged ? text(control.value) : '',
 		show_thumbnails: control.show_thumbnails ?? true,
-		show_clip: control.show_clip ?? true
+		show_clip: control.show_clip ?? true,
+		lora_columns: control.lora_columns ?? 1
 	};
 }
 
@@ -67,8 +69,8 @@ export function effectiveDraft(control: ControlDescriptor, patch: DraftPatch | u
 /** `patch` without the fields that equal the baseline, so "dirty" means a real change. */
 export function normalizePatch(control: ControlDescriptor, patch: DraftPatch): DraftPatch {
 	const base = baselineDraft(control);
-	const out: Record<string, string | boolean> = {};
-	for (const [key, value] of Object.entries(patch) as [keyof Draft, string | boolean][]) {
+	const out: Record<string, string | boolean | number> = {};
+	for (const [key, value] of Object.entries(patch) as [keyof Draft, string | boolean | number][]) {
 		const baseValue = base[key];
 		const same =
 			(key === 'label' || key === 'help_text') &&
@@ -100,6 +102,7 @@ export function applyDraft(
 	if (patch.component !== undefined) next.component = patch.component;
 	if (patch.show_thumbnails !== undefined) next.show_thumbnails = patch.show_thumbnails;
 	if (patch.show_clip !== undefined) next.show_clip = patch.show_clip;
+	if (patch.lora_columns !== undefined) next.lora_columns = patch.lora_columns;
 	if (isRangedNumber(control) && control.constraints) {
 		next.constraints = {
 			...control.constraints,
@@ -137,6 +140,7 @@ export function buildPresentation(saved: Presentation | null, patch: DraftPatch)
 	if (patch.help_text !== undefined) out.help_text = patch.help_text.trim() || null;
 	if (patch.show_thumbnails !== undefined) out.show_thumbnails = patch.show_thumbnails;
 	if (patch.show_clip !== undefined) out.show_clip = patch.show_clip;
+	if (patch.lora_columns !== undefined) out.lora_columns = patch.lora_columns;
 	for (const key of DISPLAY_KEYS) {
 		if (patch[key] !== undefined) out[key] = parseNumber(patch[key]);
 	}

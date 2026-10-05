@@ -127,3 +127,13 @@ test('LoRA stack display options draft, preview and save as booleans', () => {
 	assert.equal(out.show_clip, false);
 	assert.equal(out.show_thumbnails, undefined);
 });
+
+test('LoRAs per row defaults to one and saves only when changed', () => {
+	const stack = control({ component: 'lora_stack', logical_type: 'string', constraints: null });
+	assert.equal(baselineDraft(stack).lora_columns, 1);
+	assert.deepEqual(normalizePatch(stack, { lora_columns: 1 }), {});
+	assert.deepEqual(normalizePatch(stack, { lora_columns: 3 }), { lora_columns: 3 });
+	assert.equal(applyDraft(stack, { lora_columns: 2 }).lora_columns, 2);
+	assert.equal(buildPresentation(null, { lora_columns: 2 }).lora_columns, 2);
+	assert.equal(buildPresentation(null, {}).lora_columns, undefined);
+});

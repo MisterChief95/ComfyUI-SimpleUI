@@ -89,6 +89,8 @@ class Presentation(Model):
     #: LoRA stack only: show entry thumbnails / the CLIP strength.
     show_thumbnails: bool | None = None
     show_clip: bool | None = None
+    #: LoRA stack only: LoRAs per row on desktop (1-3).
+    lora_columns: int | None = Field(default=None, ge=1, le=3)
 
 
 class Correction(Model):
@@ -287,6 +289,8 @@ def _apply(
         update["show_thumbnails"] = presentation.show_thumbnails
     if presentation.show_clip is not None:
         update["show_clip"] = presentation.show_clip
+    if presentation.lora_columns is not None:
+        update["lora_columns"] = presentation.lora_columns
 
     if presentation.component is not None:
         if presentation.component in ALLOWED_COMPONENTS.get(
