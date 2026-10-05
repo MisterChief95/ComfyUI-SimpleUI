@@ -393,3 +393,26 @@ export interface SaveLayout {
 	layout: LayoutDoc;
 	expected_revision: number;
 }
+
+// --- chains (backend/app/chains) -------------------------------------------
+
+export interface ChainLink {
+	binding_id: string;
+	from_output_node: string;
+	ordinal: number;
+}
+
+export interface ChainInfo {
+	id: Id;
+	name: string;
+	stages: { workflow_id: Id; links: ChainLink[] }[];
+}
+
+export interface ChainRun {
+	id: Id;
+	chain_id: Id;
+	status: 'running' | 'paused' | 'succeeded' | 'cancelled';
+	stage_index: number;
+	error: { message: string } | null;
+	generations: { generation_id: Id; stage_index: number; status: string; output_state: string }[];
+}

@@ -123,10 +123,16 @@ def _detail(
 async def submit_generation(
     request: Request, principal: CurrentPrincipal, body: SubmitRequest
 ) -> GenerationDetail:
-    state = request.app.state
+    return await submit_for_owner(request.app.state, principal.owner_id, body)
+
+
+async def submit_for_owner(
+    state: Any, owner_id: str, body: SubmitRequest
+) -> GenerationDetail:
+    """Validate, stage inputs and submit ``body`` as ``owner_id`` (also used by chains)."""
     snapshot = await state.catalog.snapshot()
     schema = await in_thread(
-        state.workflows.control_schema, principal.owner_id, body.workflow_id, snapshot
+        state.workflows.control_schema, owner_id, body.workflow_id, snapshot
     )
     if schema is None:
         raise HTTPException(404, "Workflow was not found.")
@@ -134,17 +140,17 @@ async def submit_generation(
     if body.inputs.keys() - file_bindings:
         raise HTTPException(422, "Choose a file input from this workflow.")
     workflow = await in_thread(
-        state.repository.get_workflow, principal.owner_id, body.workflow_id
+        state.repository.get_workflow, owner_id, body.workflow_id
     )
     revision = int(workflow["current_revision"])
     graph = await in_thread(
         state.repository.get_workflow_graph,
-        principal.owner_id,
+        owner_id,
         body.workflow_id,
         revision,
     )
 
-    profile_settings = await in_thread(state.settings.profile, principal.owner_id)
+    profile_settings = await in_thread(state.settings.profile, owner_id)
     seed_policy: SeedPolicy = body.seed_policy or profile_settings["seed_policy"]
 
     # Upload before reserving the idempotency key, keeping upstream I/O outside
@@ -175,7 +181,7 @@ async def submit_generation(
                     control,
                     state.uploads,
                     state.media,
-                    principal.owner_id,
+                    owner_id,
                     selected["id"],
                 )
                 staged_edits[control.binding_id] = staged
@@ -191,7 +197,7 @@ async def submit_generation(
             else:
                 upload_id = staged_edits[control.binding_id]
                 staged_edits[control.binding_id] = await bind_upload(
-                    control, state.uploads, principal.owner_id, upload_id
+                    control, state.uploads, owner_id, upload_id
                 )
                 input_records.append(
                     (
@@ -206,7 +212,7 @@ async def submit_generation(
             status = 503 if exc.detail.code.startswith("upstream_") else 422
             raise HTTPException(status, str(exc)) from exc
 
-    styles = await in_thread(state.styles.get_many, principal.owner_id, body.style_ids)
+    styles = await in_thread(state.styles.get_many, owner_id, body.style_ids)
     if styles is None:
         raise HTTPException(404, "Style was not found.")
 
@@ -222,7 +228,7 @@ async def submit_generation(
                 # Advance from what this profile last submitted for this
                 # binding (the imported value only seeds the first run).
                 last = generations.store.last_effective_value(
-                    principal.owner_id, body.workflow_id, control.binding_id
+                    owner_id, body.workflow_id, control.binding_id
                 )
                 if last not in (None, ""):
                     current = int(last)
@@ -240,7 +246,7 @@ async def submit_generation(
 
     try:
         row = await generations.submit(
-            principal.owner_id,
+            owner_id,
             request_key=body.request_key,
             request_payload={
                 "workflow_id": body.workflow_id,
@@ -264,7 +270,7 @@ async def submit_generation(
         raise HTTPException(422, str(exc)) from exc
     return _detail(
         row,
-        await in_thread(state.generations.store.inputs, principal.owner_id, row["id"]),
+        await in_thread(state.generations.store.inputs, owner_id, row["id"]),
     )
 
 

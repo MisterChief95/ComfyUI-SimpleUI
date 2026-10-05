@@ -46,6 +46,12 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   a result panel with recent outputs, and "reuse settings". Live-verified end to end for
   both an image and a video generation. Loader inputs upload through ComfyUI for
   LoadImage, LoadVideo and LoadAudio; LoadAudio accepts audio tracks from MP4 files.
+- **Chains.** `/chains` runs saved workflows in sequence. Each stage pins a workflow
+  revision; a link feeds a previous stage's captured output (node + ordinal) into a file
+  input of the next. A stage starts only after the previous one succeeded with its output
+  captured; failure, cancellation, an uncertain submission or a missing output pauses the
+  run (Resume retries the stage under a new attempt key, so a restart can never duplicate
+  one). Not yet live-verified.
 - **Media.** Owner-scoped image, video and audio gallery, with thumbnails, audio/video
   playback, range-capable streaming and original-filename download, plus the one-time
   local baseline import required before multi-user mode can be enabled.

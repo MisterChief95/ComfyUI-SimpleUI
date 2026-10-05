@@ -8,10 +8,12 @@ Vite dev server proxies /api to this process (see frontend/vite.config.ts).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -23,12 +25,15 @@ from .auth.service import AuthError, AuthService
 from .catalog.routes import router as catalog_router
 from .catalog.service import CatalogService
 from .catalog.store import CatalogStore
+from .chains import ChainService
+from .chains import router as chains_router
 from .comfy_client import ComfyClient
 from .config import Config
 from .contracts import ApiError, ErrorCode, ErrorDetail, ErrorEnvelope, Health
 from .events import EventBroker
 from .events.routes import router as events_router
 from .generations.listener import ComfyListener
+from .generations.routes import SubmitRequest, submit_for_owner
 from .generations.routes import router as generations_router
 from .generations.service import GenerationService, version_supports_targeted_interrupt
 from .generations.store import GenerationStore
@@ -121,6 +126,21 @@ def create_app(config: Config | None = None) -> FastAPI:
         targeted_interrupt_supported=targeted_interrupt_supported,
     )
 
+    async def submit_stage(owner_id: str, **request: Any) -> Any:
+        return await submit_for_owner(app.state, owner_id, SubmitRequest(**request))
+
+    chains = ChainService(database, repository, generations, submit_stage)
+
+    async def drive_chains() -> None:
+        """Advance running chains; restart-safe because stage keys are deterministic."""
+        while True:
+            for owner_id, run_id in await in_thread(chains.active_runs):
+                with contextlib.suppress(
+                    Exception
+                ):  # one bad run must not stop the loop
+                    await chains.advance(owner_id, run_id)
+            await asyncio.sleep(2)
+
     def retention() -> dict[str, bool]:
         return {
             profile["id"]: bool(settings.profile(profile["id"])["store_history"])
@@ -151,13 +171,15 @@ def create_app(config: Config | None = None) -> FastAPI:
             generations.reconcile_if_due(history_retention=retention())
         )
         listener.start()
+        driver = asyncio.create_task(drive_chains())
         try:
             yield
         finally:
             await listener.stop()
             startup.cancel()
             reconciled.cancel()
-            await asyncio.gather(startup, reconciled, return_exceptions=True)
+            driver.cancel()
+            await asyncio.gather(startup, reconciled, driver, return_exceptions=True)
             await catalog.aclose()
             await comfy.aclose()
             media.close()
@@ -175,6 +197,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.state.media = media
     app.state.uploads = uploads
     app.state.generations = generations
+    app.state.chains = chains
     app.state.generation_events = generation_events
     # Kept in a file rather than the settings tables so no API response can
     # ever contain it.
@@ -232,6 +255,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(media_router)
     app.include_router(uploads_router)
     app.include_router(generations_router)
+    app.include_router(chains_router)
     app.include_router(events_router)
     # Everything above is registered before the catch-all on purpose: FastAPI
     # matches in registration order, so a router added after it never runs.

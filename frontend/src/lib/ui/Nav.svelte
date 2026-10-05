@@ -17,6 +17,7 @@
 	const items = $derived<{ match: string; href: string; label: string; icon: IconName }[]>([
 		{ match: '/generation', href: lastWorkflow.href, label: 'Generate', icon: 'generate' },
 		{ match: '/workflows', href: '/workflows', label: 'Workflows', icon: 'workflows' },
+		{ match: '/chains', href: '/chains', label: 'Chains', icon: 'workflows' },
 		{ match: '/gallery', href: '/gallery', label: 'Gallery', icon: 'gallery' },
 		{ match: '/history', href: '/history', label: 'History', icon: 'history' },
 		{ match: '/settings', href: '/settings', label: 'Settings', icon: 'settings' }
