@@ -18,9 +18,6 @@ SAM_PASSWORD = "sam-password"
 class UploadApiTestCase(AuthTestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.input_dir = self.app.state.config.data_dir.parent / "comfy_input"
-        self.input_dir.mkdir(parents=True, exist_ok=True)
-        self.app.state.settings.set_host("comfy_input_dir", str(self.input_dir))
         self.enable_multi_user(ALEX_PASSWORD)  # also names Default's own password
         self.auth.create_profile("Alex", ALEX_PASSWORD)
         self.auth.create_profile("Sam", SAM_PASSWORD)

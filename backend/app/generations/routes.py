@@ -138,11 +138,8 @@ async def submit_generation(
     profile_settings = await in_thread(state.settings.profile, principal.owner_id)
     seed_policy: SeedPolicy = body.seed_policy or profile_settings["seed_policy"]
 
-    # Staging an upload is real filesystem I/O, so it happens here -- before
-    # the idempotency key is reserved and before resolve() runs inside the
-    # store's short write transaction (app/storage/db.py: "Do no blocking I/O
-    # inside this block"). ensure_staged is idempotent, so a retry restaging
-    # the same upload is harmless.
+    # Upload before reserving the idempotency key, keeping upstream I/O outside
+    # the generation transaction.
     staged_edits: dict[str, Any] = dict(body.edits)
     for control in schema.controls:
         # Stored effective values keep the ControlDescriptor.value encoding.
@@ -154,15 +151,15 @@ async def submit_generation(
         if control.component != "file" or control.binding_id not in staged_edits:
             continue
         try:
-            staged_edits[control.binding_id] = await in_thread(
-                bind_upload,
+            staged_edits[control.binding_id] = await bind_upload(
                 control,
                 state.uploads,
                 principal.owner_id,
                 staged_edits[control.binding_id],
             )
         except InputAdapterError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            status = 503 if exc.detail.code.startswith("upstream_") else 422
+            raise HTTPException(status, str(exc)) from exc
 
     styles = await in_thread(state.styles.get_many, principal.owner_id, body.style_ids)
     if styles is None:

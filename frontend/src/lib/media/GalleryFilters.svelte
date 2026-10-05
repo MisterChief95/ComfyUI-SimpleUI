@@ -12,6 +12,7 @@
 			<option value="">All media</option>
 			<option value="image">Images</option>
 			<option value="video">Videos</option>
+			<option value="audio">Audio</option>
 			<option value="other">Other</option>
 		</select>
 	</label>

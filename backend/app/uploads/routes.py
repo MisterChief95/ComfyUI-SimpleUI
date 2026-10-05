@@ -2,7 +2,7 @@
 
 Wiring (app/main.py)::
 
-    uploads = UploadService(database, settings, config.data_dir)
+    uploads = UploadService(database, settings, config.data_dir, comfy)
     app.state.uploads = uploads
     app.include_router(uploads_router)   # BEFORE the /api/{path} catch-all
 """
@@ -27,6 +27,7 @@ _STATUS = {
     "invalid_image": 415,
     "too_large": 413,
     "input_dir_unavailable": 409,
+    "invalid_upload_response": 502,
     "unsupported_loader_adapter": 409,
     "upload_missing": 404,
 }

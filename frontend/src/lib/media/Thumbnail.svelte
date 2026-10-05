@@ -15,12 +15,15 @@
 	} = $props();
 </script>
 
-{#if item.media_kind !== 'other' && item.state !== 'unavailable' && !missing}
+{#if (item.media_kind === 'image' || item.media_kind === 'video') && item.state !== 'unavailable' && !missing}
 	<img src={`/api/media/${item.id}/thumbnail`} alt="" loading="lazy" {onerror} />
 {:else if fallback}
 	{@render fallback()}
 {:else}
-	<Icon name={item.media_kind === 'video' ? 'video' : 'image'} size={24} />
+	<Icon
+		name={item.media_kind === 'video' ? 'video' : item.media_kind === 'audio' ? 'audio' : 'image'}
+		size={24}
+	/>
 {/if}
 
 <style>

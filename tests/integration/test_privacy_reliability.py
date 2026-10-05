@@ -94,11 +94,8 @@ class AssembledAppTestCase(AuthTestCase):
         super().setUp()
         root = Path(self._tmp.name)
         self.output = root / "output"
-        self.input = root / "input"
         self.output.mkdir()
-        self.input.mkdir()
         self.app.state.settings.set_host("comfy_output_dir", str(self.output))
-        self.app.state.settings.set_host("comfy_input_dir", str(self.input))
 
         async def fixed_snapshot():
             return SNAPSHOT
@@ -106,6 +103,7 @@ class AssembledAppTestCase(AuthTestCase):
         self.app.state.catalog.snapshot = fixed_snapshot
         self.upstream = FakeUpstream()
         self.app.state.generations.upstream = self.upstream
+        self.app.state.uploads.comfy = self.upstream
 
     def sign_in(self, name: str, password: str = PASSWORD):
         client = self.local_client()

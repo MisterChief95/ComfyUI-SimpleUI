@@ -949,6 +949,8 @@ class Repository:
             return "AND favorite = 1", ()
         if path == "Videos":
             return "AND media_kind = 'video'", ()
+        if path == "Audio":
+            return "AND media_kind = 'audio'", ()
         if path == "Collections" or re.fullmatch(r"Collections/[a-zA-Z0-9_-]+", path):
             sql = "AND EXISTS (SELECT 1 FROM collection_media cm WHERE cm.media_id = media.id AND cm.owner_id = media.owner_id"
             return (
@@ -1007,6 +1009,7 @@ class Repository:
                 "Workflow",
                 "Favorites",
                 "Videos",
+                "Audio",
                 "Unsorted",
                 "Collections",
             ):

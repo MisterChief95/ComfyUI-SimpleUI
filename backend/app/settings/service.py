@@ -41,7 +41,6 @@ class Spec:
 HOST_SETTINGS: dict[str, Spec] = {
     MULTI_USER_ENABLED: Spec(bool, False, writable=False),
     "comfy_url": Spec(str, "http://127.0.0.1:8188"),
-    "comfy_input_dir": Spec(str, ""),
     "comfy_output_dir": Spec(str, ""),
     "upload_max_bytes": Spec(int, 268_435_456),
     "pending_cap": Spec(int, 8),

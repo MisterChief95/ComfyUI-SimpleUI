@@ -34,6 +34,7 @@ IMAGE_EXTENSIONS = frozenset(
     {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 )
 VIDEO_EXTENSIONS = frozenset({".avi", ".mkv", ".mov", ".mp4", ".webm"})
+AUDIO_EXTENSIONS = frozenset({".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"})
 ZIP_MAX_ITEMS = 200
 ZIP_MAX_BYTES = 2 * 1024**3
 ZIP_CHUNK_BYTES = 64 * 1024
@@ -104,6 +105,8 @@ def _kind(path: Path) -> str:
         return "image"
     if suffix in VIDEO_EXTENSIONS:
         return "video"
+    if suffix in AUDIO_EXTENSIONS:
+        return "audio"
     return "other"
 
 

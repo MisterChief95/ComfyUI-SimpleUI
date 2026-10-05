@@ -69,8 +69,8 @@
           "media_kind": "image",
           "choices": [],
           "choices_withheld": true,
-          "loader_adapter": "comfy_input_dir_filename",
-          "_note": "The raw list contained shared ComfyUI input-directory filenames. It is withheld; the client picks from its own uploads and the backend stages the file and substitutes the real filename at submission."
+          "loader_adapter": "comfy_input_filename_image",
+          "_note": "The raw list contained shared ComfyUI input filenames. It is withheld; the client picks from its own uploads and the backend uploads the file and substitutes ComfyUI's returned filename at submission."
         }
       },
       "outputs": ["IMAGE", "MASK"],

@@ -96,6 +96,47 @@ class ForeignKeyTest(StorageTestCase):
 
 
 class MigrationTest(StorageTestCase):
+    def test_audio_kind_upgrade_keeps_existing_media_and_membership(self) -> None:
+        migrations = self.root / "audio-migrations"
+        migrations.mkdir()
+        for script in MIGRATIONS_DIR.glob("*.sql"):
+            if int(script.name[:3]) < 10:
+                shutil.copy(script, migrations / script.name)
+        path = self.root / "audio-upgrade.sqlite3"
+        old = Database(path, migrations_dir=migrations)
+        repo = Repository(old)
+        media_id = repo.record_media(
+            OWNER,
+            storage_path="existing.png",
+            file_version="existing",
+            media_kind="image",
+            media_type="image/png",
+        )
+        collection_id = repo.save_collection(OWNER, "Existing")["id"]
+        self.assertEqual(repo.collection_members(OWNER, collection_id, [media_id]), 1)
+        old.close()
+
+        upgraded = Database(path)
+        try:
+            repo = Repository(upgraded)
+            self.assertEqual(
+                repo.get_media(OWNER, media_id)["storage_path"], "existing.png"
+            )
+            self.assertEqual(
+                repo.list_media(OWNER).items[0]["collections"][0]["id"], collection_id
+            )
+            audio_id = repo.record_media(
+                OWNER,
+                storage_path="voice.wav",
+                file_version="audio",
+                media_kind="audio",
+                media_type="audio/wav",
+            )
+            self.assertEqual(repo.get_media(OWNER, audio_id)["media_kind"], "audio")
+            self.assertEqual(upgraded.query("PRAGMA foreign_key_check"), [])
+        finally:
+            upgraded.close()
+
     def test_collections_upgrade_preserves_existing_media_and_restarts(self) -> None:
         migrations = self.root / "collections-migrations"
         migrations.mkdir()

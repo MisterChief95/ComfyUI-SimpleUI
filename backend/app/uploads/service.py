@@ -1,4 +1,4 @@
-"""Private, streamed uploads staged for ComfyUI loader inputs.
+"""Private uploads forwarded to ComfyUI loader inputs.
 
 Distinct from ``app/media/service.py``'s owned output gallery, but the same
 approach carries over directly: opaque per-profile IDs, validated paths,
@@ -7,13 +7,8 @@ streamed I/O, never a client-supplied path or filename trusted as a location.
 * An upload is validated and written to our own private store first (the
   canonical copy), streamed in bounded chunks so a large video is never fully
   buffered in memory.
-* A supported (image/mask) upload is then staged as a derived copy into the
-  configured ComfyUI input directory, under a per-profile subfolder --
-  "scoped ComfyUI input staging" -- so one profile's filename can never
-  collide with or be substituted for another's. Video has no established
-  ComfyUI upload route (docs/ARCHITECTURE.md), so it is stored but never
-  staged; ``app/mapping/input_adapters.py`` turns that into an actionable
-  diagnostic rather than a silent failure.
+* A supported upload is then forwarded through ComfyUI's upload API into a
+  per-profile subfolder. The private copy remains canonical.
 * Abandoned uploads (past a grace period, not referenced by any retained
   generation snapshot) are swept lazily on next access -- no scheduler exists
   in this codebase and this task does not add one.
@@ -24,7 +19,6 @@ from __future__ import annotations
 import base64
 import mimetypes
 import os
-import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +26,9 @@ from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
-from ..media.service import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from ..media.service import AUDIO_EXTENSIONS, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from ..settings.service import SettingsStore
-from ..storage.db import Database
+from ..storage.db import Database, in_thread
 from ..storage.repository import PageResult, new_id, now_ms
 
 #: Masks are uploaded files bound to the same LoadImage-style loader as a
@@ -46,6 +40,7 @@ _KIND_EXTENSIONS: dict[str, frozenset[str]] = {
     "image": IMAGE_EXTENSIONS,
     "mask": MASK_EXTENSIONS,
     "video": VIDEO_EXTENSIONS,
+    "audio": AUDIO_EXTENSIONS | VIDEO_EXTENSIONS,
 }
 
 #: Bounded read size: memory use for even a multi-GB video stays flat.
@@ -53,14 +48,8 @@ CHUNK_BYTES = 1024 * 1024
 DEFAULT_GRACE_MS = 24 * 60 * 60 * 1000
 _SWEEP_INTERVAL_S = 300.0
 
-#: Only a bare filename under the ComfyUI input directory is an established
-#: upload contract today (LoadImage's ``image`` input). Anything else --
-#: notably video -- has no adapter and is refused with a diagnostic instead
-#: of a guess (docs/ARCHITECTURE.md "Uploads are stored privately...").
-#: ``classify()`` never returns "mask" (a mask is just a PNG, classified
-#: "image"); it is bound through this very same adapter, per the LoadImage
-#: MASK-output convention module docstrings above describe.
-STAGEABLE_KINDS = frozenset({"image"})
+#: Kinds supported by ComfyUI's /upload/image byte-stream endpoint.
+STAGEABLE_KINDS = frozenset({"image", "video", "audio"})
 
 
 class UploadError(ValueError):
@@ -80,12 +69,15 @@ class _Cursor:
 class UploadService:
     """Blocking service; routes run every public operation in a worker thread."""
 
-    def __init__(self, db: Database, settings: SettingsStore, data_dir: Path) -> None:
+    def __init__(
+        self, db: Database, settings: SettingsStore, data_dir: Path, comfy: Any
+    ) -> None:
         self.db = db
         self.settings = settings
         self.private_root = (data_dir / "uploads").resolve()
         self.private_root.mkdir(parents=True, exist_ok=True)
         self._last_sweep = 0.0
+        self.comfy = comfy
 
     # --- validation ---------------------------------------------------------
 
@@ -161,12 +153,14 @@ class UploadService:
         return dict(row) if row else None
 
     def classify(self, row: dict[str, Any]) -> str:
-        """image/video/other, derived from the stored extension (no extra column)."""
+        """image/video/audio/other, derived from the stored extension."""
         suffix = Path(row["storage_path"]).suffix.lower()
         if suffix in IMAGE_EXTENSIONS:
             return "image"
         if suffix in VIDEO_EXTENSIONS:
             return "video"
+        if suffix in AUDIO_EXTENSIONS:
+            return "audio"
         return "other"
 
     def list_uploads(
@@ -208,86 +202,83 @@ class UploadService:
         )
         return PageResult(items=page, next_cursor=next_cursor)
 
-    # --- staging into ComfyUI's input directory -------------------------------
+    # --- staging through ComfyUI's upload API ----------------------------------
 
-    def ensure_staged(self, owner_id: str, upload_id: str) -> str:
-        """Idempotently stage the upload; return the filename ComfyUI expects.
+    async def ensure_staged(
+        self, owner_id: str, upload_id: str, expected_kind: str
+    ) -> str:
+        """Upload the private copy once; return the path ComfyUI expects.
 
         Never trusts anything but our own id -> path lookups: a foreign or
         unknown ``upload_id`` raises the same ``upload_missing`` diagnostic a
         deleted one would, so an attacker (or a stale UI) cannot distinguish
         "not yours" from "does not exist".
         """
-        row = self.get(owner_id, upload_id)
+        row = await in_thread(self.get, owner_id, upload_id)
         if row is None:
             raise UploadError(
                 "upload_missing", "That upload was not found; choose a replacement."
             )
         kind = self.classify(row)
-        if kind not in STAGEABLE_KINDS:
+        if expected_kind not in STAGEABLE_KINDS or kind not in STAGEABLE_KINDS:
             raise UploadError(
                 "unsupported_loader_adapter",
                 f"No ComfyUI upload route is established for {kind} inputs yet.",
             )
+        if kind != expected_kind and not (expected_kind == "audio" and kind == "video"):
+            raise UploadError(
+                "upload_kind_mismatch", f"This control needs a {expected_kind} file."
+            )
         if row["staged_name"]:
-            staged = self._safe_join(self._input_root(), row["staged_name"])
-            if staged is not None and staged.is_file():
-                return row["staged_name"]
-            # The staged copy is gone (input folder cleared, moved, ...); restage.
+            return row["staged_name"]
         source = self.private_root / row["storage_path"]
         if not source.is_file():
             raise UploadError(
                 "upload_missing",
                 "The uploaded file is no longer available; choose a replacement.",
             )
-        input_root = self._input_root()
-        staged_relative = (
-            f"simpleui/{owner_id}/{row['id']}{Path(row['storage_path']).suffix}"
+        ext = Path(row["storage_path"]).suffix.lower()
+        subfolder = f"simpleui/{owner_id}"
+        name = f"{row['id']}{ext}"
+        result = await self.comfy.upload_image(
+            source, filename=name, subfolder=subfolder
         )
-        target = self._safe_join(input_root, staged_relative)
-        if target is None:
+        if not isinstance(result, dict):
             raise UploadError(
-                "input_dir_unavailable",
-                "The configured ComfyUI input folder is unusable.",
+                "invalid_upload_response",
+                "ComfyUI returned an invalid upload response.",
             )
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temp = target.with_suffix(target.suffix + ".part")
-        try:
-            shutil.copyfile(source, temp)
-            os.replace(temp, target)
-        except OSError as exc:
-            temp.unlink(missing_ok=True)
+        returned_name, returned_subfolder, returned_type = (
+            result.get("name"),
+            result.get("subfolder"),
+            result.get("type"),
+        )
+        if (
+            not isinstance(returned_name, str)
+            or Path(returned_name).name != returned_name
+            or "\\" in returned_name
+            or ":" in returned_name
+            or any(ord(char) < 32 for char in returned_name)
+            or not returned_name.lower().endswith(ext)
+            or returned_subfolder != subfolder
+            or returned_type != "input"
+        ):
             raise UploadError(
-                "input_dir_unavailable",
-                "Could not stage the upload into the ComfyUI input folder.",
-            ) from exc
+                "invalid_upload_response",
+                "ComfyUI returned an unexpected upload location.",
+            )
+        staged_name = f"{returned_subfolder}/{returned_name}"
+        await in_thread(self._save_staged_name, owner_id, row["id"], staged_name)
+        return staged_name
+
+    def _save_staged_name(
+        self, owner_id: str, upload_id: str, staged_name: str
+    ) -> None:
         with self.db.write() as conn:
             conn.execute(
                 "UPDATE uploads SET staged_name = ? WHERE id = ? AND owner_id = ?",
-                (staged_relative, row["id"], owner_id),
+                (staged_name, upload_id, owner_id),
             )
-        return staged_relative
-
-    def _input_root(self) -> Path:
-        raw = self.settings.host_value("comfy_input_dir")
-        if not raw:
-            raise UploadError(
-                "input_dir_unavailable",
-                "Choose a ComfyUI input folder in local settings before using uploaded inputs.",
-            )
-        try:
-            root = Path(raw).resolve(strict=True)
-        except OSError as exc:
-            raise UploadError(
-                "input_dir_unavailable",
-                "The configured ComfyUI input folder is unavailable.",
-            ) from exc
-        if not root.is_dir():
-            raise UploadError(
-                "input_dir_unavailable",
-                "The configured ComfyUI input folder is not a directory.",
-            )
-        return root
 
     # --- deletion and grace-period cleanup ------------------------------------
 
@@ -304,13 +295,7 @@ class UploadService:
         # retried by the next sweep or delete), never an orphan file with no
         # record of it.
         (self.private_root / row["storage_path"]).unlink(missing_ok=True)
-        if row["staged_name"]:
-            try:
-                staged = self._safe_join(self._input_root(), row["staged_name"])
-            except UploadError:
-                staged = None
-            if staged is not None:
-                staged.unlink(missing_ok=True)
+        # ComfyUI owns its uploaded copy; no filesystem path is available here.
         with self.db.write() as conn:
             conn.execute("DELETE FROM uploads WHERE id = ?", (row["id"],))
 
@@ -364,27 +349,6 @@ class UploadService:
             (pattern, pattern),
         )
         return hit is not None
-
-    # --- path safety (mirrors media/service.py's junction/symlink guard) -----
-
-    def _safe_under(self, root: Path, path: Path) -> bool:
-        try:
-            parts = path.relative_to(root).parts
-        except ValueError:
-            return False
-        current = root
-        for part in parts:
-            current = current / part
-            if current.is_symlink() or current.is_junction():
-                return False
-        return True
-
-    def _safe_join(self, root: Path, relative: str) -> Path | None:
-        candidate = Path(relative)
-        if candidate.is_absolute() or ".." in candidate.parts:
-            return None
-        path = root / candidate
-        return path if self._safe_under(root, path) else None
 
 
 def _encode_cursor(row: dict[str, Any]) -> str:

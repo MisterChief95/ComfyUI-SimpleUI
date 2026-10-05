@@ -150,10 +150,38 @@ class Database:
             for version, script in _migration_files(self._migrations_dir):
                 if version in applied:
                     continue
+                source = script.read_text(encoding="utf-8")
+                if source.startswith("-- requires_foreign_keys_off\n"):
+                    # A table rebuild can preserve child rows only while FK
+                    # enforcement is disabled outside the transaction.
+                    conn.commit()
+                    conn.autocommit = True
+                    conn.execute("PRAGMA foreign_keys = OFF")
+                    try:
+                        conn.executescript(
+                            "BEGIN IMMEDIATE;\n"
+                            + source.split("\n", 1)[1]
+                            + "\nCOMMIT;"
+                        )
+                    except BaseException:
+                        if conn.in_transaction:
+                            conn.rollback()
+                        raise
+                    finally:
+                        conn.execute("PRAGMA foreign_keys = ON")
+                        conn.autocommit = False
+                    conn.execute(
+                        "INSERT INTO schema_migrations (version, name, applied_ms)"
+                        " VALUES (?, ?, unixepoch() * 1000)",
+                        (version, script.name),
+                    )
+                    conn.commit()
+                    done.append(version)
+                    continue
                 # One transaction per migration: a failure leaves the schema at
                 # the previous version rather than half-upgraded.
                 try:
-                    conn.executescript(script.read_text(encoding="utf-8"))
+                    conn.executescript(source)
                     conn.execute(
                         "INSERT INTO schema_migrations (version, name, applied_ms)"
                         " VALUES (?, ?, unixepoch() * 1000)",

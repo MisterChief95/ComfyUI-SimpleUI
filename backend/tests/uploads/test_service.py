@@ -14,7 +14,7 @@ OTHER = "other-profile"
 class ValidationTest(UploadTestCase):
     def test_unknown_kind_is_rejected(self) -> None:
         with self.assertRaises(UploadError) as ctx:
-            self.uploads.validate("audio", "x.wav")
+            self.uploads.validate("document", "x.txt")
         self.assertEqual(ctx.exception.code, "unsupported_kind")
 
     def test_extension_must_match_kind(self) -> None:
@@ -68,49 +68,64 @@ class StorageAndOwnershipTest(UploadTestCase):
 
 
 class StagingTest(UploadTestCase):
-    def test_image_is_staged_under_a_per_owner_subfolder(self) -> None:
+    async def test_image_is_uploaded_under_a_per_owner_subfolder(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        staged_name = self.uploads.ensure_staged(OWNER, row["id"])
-        self.assertTrue(staged_name.startswith(f"simpleui/{OWNER}/"))
-        staged_path = self.comfy_input / staged_name
-        self.assertTrue(staged_path.is_file())
+        staged_name = await self.uploads.ensure_staged(OWNER, row["id"], "image")
+        self.assertEqual(staged_name, f"simpleui/{OWNER}/{row['id']}.png")
+        self.assertEqual(self.comfy.calls[0][2], f"simpleui/{OWNER}")
 
-    def test_staging_is_idempotent(self) -> None:
+    async def test_staging_is_idempotent(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        first = self.uploads.ensure_staged(OWNER, row["id"])
-        second = self.uploads.ensure_staged(OWNER, row["id"])
+        first = await self.uploads.ensure_staged(OWNER, row["id"], "image")
+        second = await self.uploads.ensure_staged(OWNER, row["id"], "image")
         self.assertEqual(first, second)
+        self.assertEqual(len(self.comfy.calls), 1)
 
-    def test_restages_if_the_staged_copy_goes_missing(self) -> None:
+    async def test_returned_collision_filename_is_used(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        staged_name = self.uploads.ensure_staged(OWNER, row["id"])
-        (self.comfy_input / staged_name).unlink()
-        again = self.uploads.ensure_staged(OWNER, row["id"])
-        self.assertEqual(again, staged_name)
-        self.assertTrue((self.comfy_input / staged_name).is_file())
+        self.comfy.response = {
+            "name": f"{row['id']}_1.png",
+            "subfolder": f"simpleui/{OWNER}",
+            "type": "input",
+        }
+        staged_name = await self.uploads.ensure_staged(OWNER, row["id"], "image")
+        self.assertEqual(staged_name, f"simpleui/{OWNER}/{row['id']}_1.png")
 
-    def test_video_has_no_established_staging_route(self) -> None:
+    async def test_video_is_uploaded(self) -> None:
         row = self.store(OWNER, "video", "clip.mp4", VIDEO_BYTES)
-        with self.assertRaises(UploadError) as ctx:
-            self.uploads.ensure_staged(OWNER, row["id"])
-        self.assertEqual(ctx.exception.code, "unsupported_loader_adapter")
+        self.assertTrue(
+            (await self.uploads.ensure_staged(OWNER, row["id"], "video")).endswith(
+                ".mp4"
+            )
+        )
 
-    def test_foreign_upload_id_is_reported_as_missing_not_forbidden(self) -> None:
+    async def test_foreign_upload_id_is_reported_as_missing_not_forbidden(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
         with self.assertRaises(UploadError) as ctx:
-            self.uploads.ensure_staged(OTHER, row["id"])
+            await self.uploads.ensure_staged(OTHER, row["id"], "image")
         self.assertEqual(ctx.exception.code, "upload_missing")
 
-    def test_unconfigured_input_dir_is_an_actionable_diagnostic(self) -> None:
-        self.settings.set_host("comfy_input_dir", "")
+    async def test_foreign_upload_response_location_is_rejected(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
+        self.comfy.response = {
+            "name": "other.png",
+            "subfolder": "other",
+            "type": "input",
+        }
         with self.assertRaises(UploadError) as ctx:
-            self.uploads.ensure_staged(OWNER, row["id"])
-        self.assertEqual(ctx.exception.code, "input_dir_unavailable")
+            await self.uploads.ensure_staged(OWNER, row["id"], "image")
+        self.assertEqual(ctx.exception.code, "invalid_upload_response")
 
-    def test_staged_path_cannot_escape_the_input_root(self) -> None:
-        self.assertIsNone(self.uploads._safe_join(self.comfy_input, "../outside/x.png"))
-        self.assertIsNone(self.uploads._safe_join(self.comfy_input, "/etc/passwd"))
+    async def test_upload_response_filename_cannot_escape_its_subfolder(self) -> None:
+        row = self.store(OWNER, "image", "ref.png", png_bytes())
+        self.comfy.response = {
+            "name": "../outside.png",
+            "subfolder": f"simpleui/{OWNER}",
+            "type": "input",
+        }
+        with self.assertRaises(UploadError) as ctx:
+            await self.uploads.ensure_staged(OWNER, row["id"], "image")
+        self.assertEqual(ctx.exception.code, "invalid_upload_response")
 
 
 class SweepTest(UploadTestCase):
@@ -131,7 +146,8 @@ class SweepTest(UploadTestCase):
 
     def test_upload_referenced_by_a_retained_generation_is_kept(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        staged_name = self.uploads.ensure_staged(OWNER, row["id"])
+        staged_name = f"simpleui/{OWNER}/{row['id']}.png"
+        self.uploads._save_staged_name(OWNER, row["id"], staged_name)
         with self.db.write() as conn:
             conn.execute(
                 "INSERT INTO generations (id, owner_id, client_request_key, request_fingerprint,"
@@ -150,7 +166,9 @@ class SweepTest(UploadTestCase):
 
     def test_upload_no_longer_referenced_once_the_snapshot_is_purged(self) -> None:
         row = self.store(OWNER, "image", "ref.png", png_bytes())
-        self.uploads.ensure_staged(OWNER, row["id"])
+        self.uploads._save_staged_name(
+            OWNER, row["id"], f"simpleui/{OWNER}/{row['id']}.png"
+        )
         with self.db.write() as conn:
             conn.execute(
                 "INSERT INTO generations (id, owner_id, client_request_key, request_fingerprint,"

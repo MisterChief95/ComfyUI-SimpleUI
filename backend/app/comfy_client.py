@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any, Self
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -221,6 +222,36 @@ class ComfyClient:
         if extra_data:
             payload["extra_data"] = extra_data
         return await self.post_json("/prompt", payload)
+
+    async def upload_image(self, path: Path, *, filename: str, subfolder: str) -> Any:
+        """Upload one private input to ComfyUI without retrying the side effect."""
+        try:
+            with path.open("rb") as image:
+                response = await self._client.post(
+                    "/upload/image",
+                    data={"subfolder": subfolder, "type": "input", "overwrite": "true"},
+                    files={"image": (filename, image)},
+                )
+        except httpx.TimeoutException:
+            raise ComfyUnavailable(
+                "upstream_timeout", "ComfyUI did not respond"
+            ) from None
+        except (httpx.HTTPError, OSError):
+            raise ComfyUnavailable(
+                "upstream_unreachable", f"ComfyUI is not reachable at {self.safe_url}"
+            ) from None
+        if response.status_code >= 400:
+            raise ComfyUnavailable(
+                "upstream_error",
+                f"ComfyUI returned HTTP {response.status_code} for /upload/image",
+            )
+        try:
+            return response.json()
+        except ValueError:
+            raise ComfyUnavailable(
+                "upstream_malformed",
+                "ComfyUI returned a non-JSON response for /upload/image",
+            ) from None
 
     async def get_queue(self) -> Any:
         return await self.get_json("/queue")

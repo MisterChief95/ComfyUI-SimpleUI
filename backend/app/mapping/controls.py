@@ -476,8 +476,8 @@ def _literal_control(
             kind, component, options = "unknown", "readonly", None
 
     elif logical == "OWNED_INPUT_REF":
-        # Shared ComfyUI input-directory filenames are withheld by the catalog
-        # projection and are never re-offered here as a generic dropdown.
+        # Shared ComfyUI filenames are withheld and never re-offered as a
+        # generic dropdown; private uploads bind through the upload adapter.
         kind = "file"
         if input_spec.get("loader_adapter"):
             component = "file"
@@ -489,8 +489,7 @@ def _literal_control(
                     field=f"{node_id}.inputs.{name}",
                     code="adapter_required",
                     message=(
-                        f"{class_type}.{name} takes a {input_spec.get('media_kind', 'file')} from "
-                        "the shared ComfyUI input directory and no supported upload adapter "
+                        f"{class_type}.{name} takes a {input_spec.get('media_kind', 'file')} but no supported upload adapter "
                         "exists for it. The imported value is preserved and submittable."
                     ),
                 )

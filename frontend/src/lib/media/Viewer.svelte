@@ -503,13 +503,20 @@
 								>
 									<track kind="captions" />
 								</video>
+							{:else if entry.media_kind === 'audio'}
+								<audio
+									controls
+									preload="metadata"
+									src={`/api/media/${entry.id}/file`}
+									onerror={() => gallery.markUnavailable(entry.id)}
+								></audio>
 							{:else}
 								<p class="muted">Preview is not available for this file type.</p>
 							{/if}
 						</div>
 					{/each}
 					{#if item.id !== shownItem?.id}
-						<p class="image-loading" role="status">Loading image…</p>
+						<p class="image-loading" role="status">Loading media…</p>
 					{/if}
 					{#if hasNext && !full}
 						<button

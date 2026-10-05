@@ -30,6 +30,7 @@
 		alert: 'M12 3l10 18H2zM12 10v5M12 18h.01',
 		image: 'M4 4h16v16H4zM8.5 9.5a1 1 0 1 0 0-.01M4 17l5-5 4 4 3-3 4 4',
 		video: 'M3 6h12v12H3zM15 10l6-3v10l-6-3',
+		audio: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM21 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3z',
 		reset: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
 		menu: 'M4 6h16M4 12h16M4 18h16',
 		external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',

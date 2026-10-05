@@ -51,6 +51,9 @@ class FakeUpstream:
     async def cancel_pending(self, prompt_id):
         pass
 
+    async def upload_image(self, path, *, filename, subfolder):
+        return {"name": filename, "subfolder": subfolder, "type": "input"}
+
 
 class UploadBindingTest(AuthTestCase):
     def setUp(self) -> None:
@@ -62,10 +65,7 @@ class UploadBindingTest(AuthTestCase):
         self.app.state.catalog.snapshot = fixed_snapshot
         self.upstream = FakeUpstream()
         self.app.state.generations.upstream = self.upstream
-
-        comfy_input = Path(self._tmp.name) / "comfy_input"
-        comfy_input.mkdir()
-        self.app.state.settings.set_host("comfy_input_dir", str(comfy_input))
+        self.app.state.uploads.comfy = self.upstream
 
     def import_graph(self, client):
         body = (FIXTURES / "graphs" / "image_loader_input.api.json").read_bytes()
@@ -97,7 +97,7 @@ class UploadBindingTest(AuthTestCase):
             },
         )
 
-    def test_a_file_edit_is_staged_and_bound_before_submission(self) -> None:
+    def test_a_file_edit_is_uploaded_and_bound_before_submission(self) -> None:
         client = self.local_client()
         workflow_id = self.import_graph(client)
         upload_id = self.upload(client, "image", "ref.png", png_bytes())
