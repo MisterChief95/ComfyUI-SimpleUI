@@ -327,6 +327,7 @@
 			{id}
 			showThumbnails={control.show_thumbnails ?? true}
 			showClip={control.show_clip ?? true}
+			columns={control.lora_columns ?? 1}
 			value={text}
 			options={control.options ?? []}
 			{disabled}

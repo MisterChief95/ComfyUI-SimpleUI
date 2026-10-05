@@ -227,6 +227,18 @@ class DisplayOptionsTest(unittest.TestCase):
         self.assertFalse(shown.show_thumbnails)
         self.assertFalse(shown.show_clip)
 
+    def test_presentation_sets_loras_per_row(self) -> None:
+        from app.mapping.corrections import Presentation, _apply
+        from pydantic import ValidationError
+
+        _, _, control = build(ABSENT)
+        self.assertEqual(control.lora_columns, 1)
+        shown = _apply(control, Presentation(lora_columns=3), "workflow", [])
+        self.assertEqual(shown.lora_columns, 3)
+        for bad in (0, 4):
+            with self.assertRaises(ValidationError):
+                Presentation(lora_columns=bad)
+
     def test_hidden_clip_follows_model_strength_at_submission(self) -> None:
         graph, schema, control = build(
             payload(entry("placeholder-style.safetensors", note="kept"))

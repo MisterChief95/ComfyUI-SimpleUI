@@ -125,7 +125,11 @@ export interface ControlDescriptor {
 	/** LoRA stack display options (designer properties). Absent means true. */
 	show_thumbnails?: boolean;
 	show_clip?: boolean;
+	/** LoRAs per row: a desktop hint like a section's columns. Absent means 1. */
+	lora_columns?: LoraColumns;
 }
+
+export type LoraColumns = 1 | 2 | 3;
 
 export interface ControlSchema extends Owned, Revisioned {
 	workflow_id: Id;
@@ -227,6 +231,7 @@ export interface Presentation {
 	/** LoRA stack only. */
 	show_thumbnails?: boolean | null;
 	show_clip?: boolean | null;
+	lora_columns?: LoraColumns | null;
 }
 
 export interface Correction {

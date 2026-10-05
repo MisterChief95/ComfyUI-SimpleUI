@@ -174,6 +174,9 @@ class ControlDescriptor(Model):
     #: strength, in the browser and again at submission.
     show_thumbnails: bool = True
     show_clip: bool = True
+    #: LoRAs per row on desktop, like a section's column hint; narrower
+    #: widths show fewer and phones always show one.
+    lora_columns: int = Field(default=1, ge=1, le=3)
 
 
 class ControlSchema(Owned, Revisioned):

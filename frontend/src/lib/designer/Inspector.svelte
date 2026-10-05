@@ -141,6 +141,24 @@
 				<p class="muted small">
 					With CLIP hidden, each LoRA's CLIP strength follows its model strength.
 				</p>
+				<div class="field">
+					<span class="label" id="insp-lora-cols">LoRAs per row</span>
+					<div class="seg" role="group" aria-labelledby="insp-lora-cols">
+						{#each [1, 2, 3] as const as n (n)}
+							<button
+								type="button"
+								aria-pressed={draft.lora_columns === n}
+								onclick={() => editor.setDraft(control.binding_id, { lora_columns: n })}
+							>
+								{n}
+							</button>
+						{/each}
+					</div>
+					<p class="muted small">
+						A desktop hint, like section columns. Phones always show one per row, narrower widths
+						fewer.
+					</p>
+				</div>
 			</fieldset>
 		{/if}
 

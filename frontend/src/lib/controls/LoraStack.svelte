@@ -6,7 +6,7 @@
 	// (loraStack.ts). An unreadable payload shows why and stays editable as raw
 	// text. A LoRA the catalog does not list is flagged, never dropped.
 	import { api } from '$lib/api';
-	import type { EnumOption } from '$lib/contracts';
+	import type { EnumOption, LoraColumns } from '$lib/contracts';
 	import Icon from '$lib/ui/Icon.svelte';
 	import SearchableSelect from '$lib/ui/SearchableSelect.svelte';
 	import { insertIntoPrompt } from './promptTarget';
@@ -28,7 +28,8 @@
 		preview = false,
 		describedby,
 		showThumbnails = true,
-		showClip = true
+		showClip = true,
+		columns = 1
 	}: {
 		id: string;
 		value: string;
@@ -43,6 +44,11 @@
 		showThumbnails?: boolean;
 		/** Designer property: off makes clip strength follow model strength. */
 		showClip?: boolean;
+		/**
+		 * Designer property: LoRAs per row, a desktop hint like a section's
+		 * columns. The stack's own width decides how many fit; phones show one.
+		 */
+		columns?: LoraColumns;
 	} = $props();
 
 	/** Slider travel; typed values may go past it. */
@@ -140,7 +146,8 @@
 		{#if parsed.doc.loras.length === 0}
 			<p class="muted empty">No LoRAs. Add one below.</p>
 		{/if}
-		<ol>
+		<!-- Reading order: entries fill each row left to right. -->
+		<ol data-cols={columns}>
 			{#each parsed.doc.loras as entry, i (i)}
 				{@const catalogName = known.get(entry.name)}
 				{@const info = catalogName ? infos[catalogName] : null}
@@ -312,6 +319,9 @@
 		display: grid;
 		gap: var(--space-2);
 	}
+	.lora-stack {
+		container: lora-stack / inline-size;
+	}
 	ol,
 	ul {
 		margin: 0;
@@ -320,7 +330,24 @@
 	}
 	ol {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-items: start;
 		gap: var(--space-2);
+	}
+	/* Same breakpoints model as sections (SectionCard): one per row on phones,
+	   then as many as the stack's own width fits, up to the designer's hint. */
+	@media (min-width: 768px) {
+		@container lora-stack (min-width: 34rem) {
+			ol[data-cols='2'],
+			ol[data-cols='3'] {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+		}
+		@container lora-stack (min-width: 52rem) {
+			ol[data-cols='3'] {
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+			}
+		}
 	}
 	.entry {
 		display: grid;
