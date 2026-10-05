@@ -1,5 +1,8 @@
 """PACK-002: the node pack's SimpleUILoraStack payload as a dedicated control.
 
+Contract 2 exports omit ``loras`` (no canvas widget); a literal ``loras`` is
+still read, and a linked one is left alone.
+
 The pack's nodes are added to the synthetic catalog here (contract 1 shapes);
 the COMPAT-001 fixture set itself stays read-only.
 Run from backend/:  python -m unittest discover -s tests -v
@@ -42,16 +45,11 @@ OBJECT_INFO.update(
             "python_module": "nodes",
             "category": "loaders",
         },
+        # Contract 2: `loras` is an optional socket with no canvas widget.
         "SimpleUILoraStack": {
             "input": {
-                "required": {
-                    "model": ["MODEL"],
-                    "clip": ["CLIP"],
-                    "loras": [
-                        "STRING",
-                        {"multiline": True, "default": '{"schema":1,"loras":[]}'},
-                    ],
-                }
+                "required": {"model": ["MODEL"], "clip": ["CLIP"]},
+                "optional": {"loras": ["STRING", {"forceInput": True}]},
             },
             "output": ["MODEL", "CLIP", "STRING"],
             "output_node": False,
@@ -81,11 +79,17 @@ def entry(name: str, enabled: bool = True, **extra: Any) -> dict[str, Any]:
     }
 
 
+ABSENT = object()
+
+
 def graph_with(loras: Any) -> dict[str, Any]:
     graph = copy.deepcopy(BASE_GRAPH)
+    inputs: dict[str, Any] = {"model": ["1", 0], "clip": ["1", 1]}
+    if loras is not ABSENT:
+        inputs["loras"] = loras
     graph["20"] = {
         "class_type": "SimpleUILoraStack",
-        "inputs": {"model": ["1", 0], "clip": ["1", 1], "loras": loras},
+        "inputs": inputs,
         "_meta": {"title": "LoRA Stack"},
     }
     graph["5"]["inputs"]["model"] = ["20", 0]
@@ -165,3 +169,41 @@ class LoraStackControlTest(unittest.TestCase):
             graph, NODES, owner_id="default", workflow_id="wf", revision=1
         )
         self.assertNotIn("20:loras", {c.binding_id for c in schema.controls})
+
+
+class AbsentPayloadTest(unittest.TestCase):
+    """A contract-2 export: the node has no `loras` key at all."""
+
+    def test_a_control_starts_from_the_empty_payload(self) -> None:
+        _, schema, control = build(ABSENT)
+        self.assertEqual(control.component, "lora_stack")
+        self.assertEqual(control.value, '{"schema":1,"loras":[]}')
+        self.assertEqual(control.group, "model")
+        self.assertIn("injected", control.inference_reason)
+        self.assertEqual(schema.blocking, [])
+
+    def test_an_untouched_stack_is_left_out(self) -> None:
+        graph, schema, _ = build(ABSENT)
+        self.assertNotIn("loras", build_submission_graph(graph, schema)["20"]["inputs"])
+
+    def test_an_edit_writes_the_payload_into_the_node(self) -> None:
+        graph, schema, _ = build(ABSENT)
+        edited = payload(entry("styles/placeholder-detail.safetensors"))
+        submitted = build_submission_graph(graph, schema, {"20:loras": edited})
+        self.assertEqual(submitted["20"]["inputs"]["loras"], edited)
+        self.assertEqual(submitted["20"]["inputs"]["model"], ["1", 0])
+        self.assertNotIn("loras", graph["20"]["inputs"])
+
+    def test_an_empty_payload_edit_also_passes_through(self) -> None:
+        graph, schema, _ = build(ABSENT)
+        submitted = build_submission_graph(graph, schema, {"20:loras": payload()})
+        self.assertEqual(submitted["20"]["inputs"]["loras"], payload())
+
+    def test_an_unreachable_node_still_gets_its_control_as_inactive(self) -> None:
+        graph = graph_with(ABSENT)
+        graph["5"]["inputs"]["model"] = ["1", 0]
+        schema = build_control_schema(
+            graph, NODES, owner_id="default", workflow_id="wf", revision=1
+        )
+        control = next(c for c in schema.controls if c.binding_id == "20:loras")
+        self.assertEqual(control.group, "inactive")

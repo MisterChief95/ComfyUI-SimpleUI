@@ -29,7 +29,9 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   `GET /api/catalog/pack` and Settings report it as missing, present or outdated. The app
   works the same without it.
   A workflow using its `SimpleUILoraStack` node gets a LoRA stack control (add, remove,
-  reorder, enable, strengths, thumbnails, trigger words) instead of the raw JSON payload.
+  reorder, enable, strengths, thumbnails, trigger words). Since pack contract 2 the node has
+  no `loras` widget, so exports omit it; the app writes the payload into the node's
+  `inputs.loras` at submission. A literal `loras` is still read, and a linked one is left alone.
 - **Workflows.** ComfyUI API JSON is imported with a derived control schema. Topology,
   literal types, and exact large seeds are preserved, and an ambiguous mapping is reported,
   never silently rewritten. A workflow can be renamed, or its graph replaced by a newer

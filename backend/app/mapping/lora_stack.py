@@ -1,12 +1,18 @@
 """The node pack's ``SimpleUILoraStack.loras`` payload as a dedicated control.
 
-Only presentation changes: the payload stays the same STRING literal in the
-graph and is submitted exactly as the browser serialized it. A payload this
+Since pack contract 2, ``loras`` is an optional socket with no canvas widget,
+so an exported graph usually has no ``loras`` key on the node. The mapping then
+builds the control from :data:`EMPTY_PAYLOAD` and the edited payload is written
+into ``inputs.loras`` at submission (an untouched empty stack is simply left
+out; the pack treats both the same). A ``loras`` literal already in the graph
+is read as before, and a linked ``loras`` stays a link with no control.
+
+The payload is submitted exactly as the browser serialized it. A payload this
 build cannot read (invalid JSON, an unknown ``schema``) keeps the plain
 textarea and gets a warning, so the raw value stays editable. LoRA names the
 catalog does not offer are flagged, never dropped.
 
-Contract (comfyui-simpleui-nodes, contract 1)::
+Payload (comfyui-simpleui-nodes contract 2, payload schema 1)::
 
     {"schema": 1, "loras": [{"name": "styles/foo.safetensors",
       "strength_model": 1.0, "strength_clip": 1.0, "enabled": true,
@@ -25,6 +31,7 @@ from ..contracts import ControlDescriptor, EnumOption, ErrorDetail
 CLASS_TYPE = "SimpleUILoraStack"
 INPUT_NAME = "loras"
 SUPPORTED_SCHEMA = 1
+EMPTY_PAYLOAD = '{"schema":1,"loras":[]}'
 
 
 def catalog_lora_names(catalog_nodes: dict[str, Any]) -> list[str]:
@@ -60,8 +67,13 @@ def adapt(
     control: ControlDescriptor,
     lora_names: list[str],
     warnings: list[ErrorDetail],
+    *,
+    injected: bool = False,
 ) -> ControlDescriptor:
-    """Present ``loras`` as a LoRA stack when its payload is readable."""
+    """Present ``loras`` as a LoRA stack when its payload is readable.
+
+    ``injected`` marks a control built for a node whose graph has no ``loras``.
+    """
     if control.component not in ("text", "textarea") or not isinstance(
         control.value, str
     ):
@@ -79,7 +91,8 @@ def adapt(
                 ),
             )
         )
-        return control
+        # The contract-2 socket declares no `multiline`; JSON still needs room.
+        return control.model_copy(update={"component": "textarea", "multiline": True})
 
     known = {name.replace("\\", "/") for name in lora_names}
     missing = [
@@ -103,6 +116,9 @@ def adapt(
             "component": "lora_stack",
             "group": "inactive" if control.group == "inactive" else "model",
             "options": [EnumOption(value=n, label=n) for n in lora_names],
-            "inference_reason": f"pack:lora_stack;{control.inference_reason}",
+            "inference_reason": (
+                f"pack:lora_stack{',injected' if injected else ''};"
+                f"{control.inference_reason}"
+            ),
         }
     )
