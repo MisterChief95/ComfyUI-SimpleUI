@@ -186,6 +186,17 @@ class CollectionsTest(MediaApiTestCase):
             bee.get("/api/media", params={"collection_id": collection}).json()["items"],
             [],
         )
+        self.members(collection, [self.ids[0]])
+        self.members(bee_collection, [foreign], client=bee)
+        own_page = self.client.get("/api/media").json()["items"]
+        self.assertEqual(
+            next(item for item in own_page if item["id"] == self.ids[0])["collections"],
+            [{"id": collection, "name": "Shared name"}],
+        )
+        self.assertEqual(
+            bee.get("/api/media").json()["items"][0]["collections"],
+            [{"id": bee_collection, "name": "Shared name"}],
+        )
         for owner, cid, mid in (
             ("default", collection, foreign),
             ("default", bee_collection, self.ids[0]),
@@ -194,6 +205,48 @@ class CollectionsTest(MediaApiTestCase):
                 conn.execute(
                     "INSERT INTO collection_media VALUES (?, ?, ?)", (owner, cid, mid)
                 )
+
+    def test_gallery_membership_names_follow_paging_and_collection_changes(self):
+        trips = self.create("Trips")
+        art = self.create("Art & café")
+        self.members(trips, self.ids[:2])
+        self.members(art, self.ids[:1])
+        expected = {
+            self.ids[0]: [
+                {"id": art, "name": "Art & café"},
+                {"id": trips, "name": "Trips"},
+            ],
+            self.ids[1]: [{"id": trips, "name": "Trips"}],
+            self.ids[2]: [],
+        }
+        for sort in ("newest", "oldest", "random"):
+            params = {"sort": sort, "limit": 1}
+            seen = {}
+            while True:
+                page = self.client.get("/api/media", params=params).json()
+                for item in page["items"]:
+                    seen[item["id"]] = item["collections"]
+                    self.assertNotIn("storage_path", item)
+                if not page["next_cursor"]:
+                    break
+                params["cursor"] = page["next_cursor"]
+            self.assertEqual(seen, expected)
+        self.put(
+            self.client, f"/api/media/collections/{trips}", json={"name": "Travel"}
+        )
+        self.members(art, self.ids[:1], remove=True)
+        page = self.client.get("/api/media").json()["items"]
+        self.assertEqual(
+            next(item for item in page if item["id"] == self.ids[0])["collections"],
+            [{"id": trips, "name": "Travel"}],
+        )
+        self.delete(self.client, f"/api/media/collections/{trips}")
+        self.assertTrue(
+            all(
+                not item["collections"]
+                for item in self.client.get("/api/media").json()["items"]
+            )
+        )
 
     def test_cascades_leave_media_intact_and_profile_delete_cleans_membership(self):
         collection = self.create()

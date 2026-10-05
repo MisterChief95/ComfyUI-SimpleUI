@@ -60,3 +60,41 @@ test('popover dismissal consumes the outside gesture even after native light-dis
 		else Reflect.deleteProperty(globalThis, 'document');
 	}
 });
+
+test('popover triggers preserve clicks and long-press release while the popup is open', async () => {
+	const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+	const document = new EventTarget();
+	Object.defineProperty(globalThis, 'document', { value: document, configurable: true });
+	let open = true;
+	const popup = Object.assign(new EventTarget(), {
+		matches: () => open,
+		hidePopover: () => {
+			open = false;
+		}
+	});
+	const trigger = Object.assign(new EventTarget(), { popoverTargetElement: popup });
+	const icon = new EventTarget();
+	const cleanup = isolatePopoverInput(popup as unknown as HTMLElement);
+	await Promise.resolve();
+	let clicks = 0;
+	document.addEventListener('click', () => clicks++);
+	try {
+		for (const longPress of [false, true]) {
+			open = !longPress;
+			for (const type of ['pointerdown', 'pointerup', 'click']) {
+				// A long press shows the popup after pointerdown, before its release/click.
+				if (longPress && type === 'pointerup') open = true;
+				const event = new Event(type, { bubbles: true, cancelable: true });
+				Object.defineProperty(event, 'composedPath', { value: () => [icon, trigger, document] });
+				document.dispatchEvent(event);
+				assert.equal(event.defaultPrevented, false, `${longPress}: ${type}`);
+			}
+			assert.equal(open, true);
+		}
+		assert.equal(clicks, 2);
+	} finally {
+		cleanup();
+		if (previous) Object.defineProperty(globalThis, 'document', previous);
+		else Reflect.deleteProperty(globalThis, 'document');
+	}
+});

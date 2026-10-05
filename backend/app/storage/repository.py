@@ -1178,6 +1178,20 @@ class Repository:
             (owner_id, *params, limit + 1),
         )
         page = [dict(row) for row in rows[:limit]]
+        memberships: dict[str, list[dict[str, str]]] = {item["id"]: [] for item in page}
+        if page:
+            for membership in self.db.query(
+                "SELECT cm.media_id, c.id, c.name FROM collection_media cm"
+                " JOIN collections c ON c.id = cm.collection_id AND c.owner_id = cm.owner_id"
+                " WHERE cm.owner_id = ? AND cm.media_id IN (SELECT value FROM json_each(?))"
+                " ORDER BY c.name COLLATE NOCASE, c.id",
+                (owner_id, json.dumps(list(memberships))),
+            ):
+                memberships[membership["media_id"]].append(
+                    {"id": membership["id"], "name": membership["name"]}
+                )
+        for item in page:
+            item["collections"] = memberships[item["id"]]
         next_cursor = None
         if len(rows) > limit and page:
             last = page[-1]

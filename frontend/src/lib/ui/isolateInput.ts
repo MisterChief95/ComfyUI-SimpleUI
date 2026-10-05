@@ -33,7 +33,13 @@ export function isolatePopoverInput(element: HTMLElement): () => void {
 	const cleanup = isolateInput(element);
 	let dismissing = false;
 	const outside = (event: Event): boolean =>
-		element.matches(':popover-open') && !event.composedPath().includes(element);
+		element.matches(':popover-open') &&
+		!event
+			.composedPath()
+			.some(
+				(target) =>
+					target === element || (target as HTMLButtonElement).popoverTargetElement === element
+			);
 	const down = (event: Event): void => {
 		dismissing = outside(event);
 		if (dismissing) {
