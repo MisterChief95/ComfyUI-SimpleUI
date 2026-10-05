@@ -57,6 +57,8 @@ PROFILE_SETTINGS: dict[str, Spec] = {
     "live_previews": Spec(bool, True),
     "video_enabled": Spec(bool, True),
     "completion_sound": Spec(bool, False),
+    "clear_generation_on_startup": Spec(bool, False),
+    "clear_generation_on_generate": Spec(bool, False),
     "thumbnail_size": Spec(("small", "medium", "large"), "medium"),
     "gallery_autoplay": Spec(bool, False),
     "gallery_page_size": Spec(int, 50),
