@@ -228,9 +228,8 @@ class DisplayOptionsTest(unittest.TestCase):
         self.assertFalse(shown.show_clip)
 
     def test_presentation_sets_loras_per_row(self) -> None:
-        from pydantic import ValidationError
-
         from app.mapping.corrections import Presentation, _apply
+        from pydantic import ValidationError
 
         _, _, control = build(ABSENT)
         self.assertEqual(control.lora_columns, 1)
