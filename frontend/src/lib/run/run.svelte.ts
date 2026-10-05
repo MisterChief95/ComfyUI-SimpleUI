@@ -176,7 +176,7 @@ export class RunState {
 	}
 
 	async load(): Promise<void> {
-		if (!settingsState.data && !settingsState.loading) void settingsState.load();
+		if (!settingsState.data) await settingsState.load();
 		this.loading = true;
 		this.loadError = null;
 		const [workflows, schema, layout] = await Promise.allSettled([
@@ -369,6 +369,7 @@ export class RunState {
 			return;
 		}
 		if (!schema || !this.canGenerate) return;
+		if (settingsState.data?.profile.clear_generation_on_generate) this.tracker.clearResults();
 		this.submitting = true;
 		this.submitError = null;
 		this.cancelError = null;

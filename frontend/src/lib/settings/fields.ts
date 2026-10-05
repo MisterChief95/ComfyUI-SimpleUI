@@ -95,6 +95,18 @@ export const PROFILE_GROUPS: { title: string; fields: Field[] }[] = [
 				label: 'Completion sound',
 				help: 'Play a sound when a generation finishes.',
 				type: 'checkbox'
+			},
+			{
+				key: 'clear_generation_on_startup',
+				label: 'Clear generation results on startup',
+				help: 'Start each app session with an empty generation result and gallery. Saved media stays in Gallery.',
+				type: 'checkbox'
+			},
+			{
+				key: 'clear_generation_on_generate',
+				label: 'Clear generation results on Generate',
+				help: 'Clear previous results when you generate. All outputs from the new batch remain available. Saved media stays in Gallery.',
+				type: 'checkbox'
 			}
 		]
 	},
