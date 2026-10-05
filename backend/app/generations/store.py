@@ -59,6 +59,7 @@ class GenerationStore:
         mapping_revision: int | None = None,
         global_pending_cap: int = 8,
         profile_pending_cap: int = 8,
+        input_records: list[tuple[str, str, str, str | None, str]] | None = None,
     ) -> AcceptedGeneration:
         """Reserve the key before calling ``resolve`` and commit its exact result.
 
@@ -106,6 +107,10 @@ class GenerationStore:
                     stamp,
                 ),
             )
+            conn.executemany(
+                "INSERT INTO generation_inputs (generation_id, binding_id, source, source_id, file_version, staged_reference) VALUES (?, ?, ?, ?, ?, ?)",
+                [(generation_id, *record) for record in (input_records or [])],
+            )
             graph, effective_values = resolve()  # key exists in this transaction first
             conn.execute(
                 "UPDATE generations SET graph_json = ?, effective_values_json = ? WHERE id = ?",
@@ -126,6 +131,21 @@ class GenerationStore:
             (generation_id, owner_id),
         )
         return _decode(row) if row else None
+
+    def inputs(
+        self, owner_id: str, generation_id: str, include_staged: bool = False
+    ) -> list[dict[str, Any]]:
+        columns = "binding_id, source, source_id, file_version"
+        if include_staged:
+            columns += ", staged_reference"
+        return [
+            dict(row)
+            for row in self.db.query(
+                f"SELECT {columns} FROM generation_inputs"
+                " WHERE generation_id = ? AND EXISTS (SELECT 1 FROM generations WHERE id = ? AND owner_id = ?)",
+                (generation_id, generation_id, owner_id),
+            )
+        ]
 
     def last_effective_value(
         self, owner_id: str, workflow_id: str | None, binding_id: str

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from ..comfy_client import ComfyUnavailable
 from ..contracts import ControlDescriptor, ErrorDetail
+from ..media.service import LocatedMedia, MediaService
+from ..storage.db import in_thread
 from ..uploads.service import UploadError, UploadService
 
 #: Loader adapter names this build actually knows how to stage and bind.
@@ -127,6 +129,53 @@ async def bind_upload(
         raise InputAdapterError(
             exc.code, f"{control.label}: {message}", control.binding_id
         ) from exc
+
+
+async def bind_media(
+    control: ControlDescriptor,
+    uploads: UploadService,
+    media: MediaService,
+    owner_id: str,
+    media_id: str,
+) -> tuple[str, LocatedMedia]:
+    if (
+        control.logical_type != "file"
+        or control.component != "file"
+        or _adapter_name(control) not in SUPPORTED_LOADER_ADAPTERS
+    ):
+        raise InputAdapterError(
+            "unsupported_loader_adapter",
+            f"{control.label} cannot accept gallery media.",
+            control.binding_id,
+        )
+    located = await in_thread(media.locate, owner_id, media_id)
+    if located is None:
+        raise InputAdapterError(
+            "media_missing",
+            f"{control.label}: that media item was not found; choose a replacement.",
+            control.binding_id,
+        )
+    expected = _ADAPTER_MEDIA_KIND[_adapter_name(control)]
+    if located.row["media_kind"] != expected and not (
+        expected == "audio" and located.row["media_kind"] == "video"
+    ):
+        raise InputAdapterError(
+            "media_kind_mismatch",
+            f"{control.label} needs a {expected} file; the selected media is {located.row['media_kind']}.",
+            control.binding_id,
+        )
+    try:
+        staged = await uploads.ensure_staged_path(
+            owner_id, located.path, expected, located.row["file_version"]
+        )
+    except (UploadError, ComfyUnavailable) as exc:
+        message = str(exc) if isinstance(exc, UploadError) else exc.message
+        raise InputAdapterError(
+            getattr(exc, "code", "upstream_unavailable"),
+            f"{control.label}: {message}",
+            control.binding_id,
+        ) from exc
+    return staged, located
 
 
 def _adapter_name(control: ControlDescriptor) -> str | None:

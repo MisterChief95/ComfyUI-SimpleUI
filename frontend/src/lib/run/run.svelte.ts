@@ -68,6 +68,7 @@ export class RunState {
 	notice = $state<string | null>(null);
 	/** Prompt styles applied at submit, in this order (ids of app/styles.py rows). */
 	styleIds = $state<string[]>([]);
+	mediaInput = $state<{ binding_id: string; id: string } | null>(null);
 	/** False once a draft write failed: the draft will not survive a reload. */
 	draftPersisted = $state(true);
 
@@ -208,6 +209,15 @@ export class RunState {
 		this.draft = this.restoreDraft(schema.value);
 		this.loading = false;
 		void this.tracker.start();
+		const params = new URLSearchParams(location.search);
+		const mediaId = params.get('send_media');
+		const bindingId = params.get('binding');
+		if (
+			mediaId &&
+			bindingId &&
+			schema.value.controls.some((c) => c.binding_id === bindingId && c.component === 'file')
+		)
+			this.mediaInput = { id: mediaId, binding_id: bindingId };
 
 		// Links from the gallery/history ("Reuse as draft") arrive as ?reuse=<generation>.
 		const reuse = new URLSearchParams(location.search).get('reuse');
@@ -250,6 +260,7 @@ export class RunState {
 	}
 
 	setValue(control: ControlDescriptor, value: EditValue): void {
+		if (this.mediaInput?.binding_id === control.binding_id) this.mediaInput = null;
 		const next = { ...this.draft };
 		if (sameValue(control, value, baseValue(control))) delete next[control.binding_id];
 		else next[control.binding_id] = value;
@@ -321,6 +332,7 @@ export class RunState {
 	/** Load a past generation's effective values into the draft (file inputs excluded). */
 	async reuse(generationId: string): Promise<void> {
 		this.notice = null;
+		this.mediaInput = null;
 		const schema = this.schema;
 		if (!schema) return;
 		try {
@@ -337,6 +349,18 @@ export class RunState {
 					continue;
 				const value = coerceValue(control, generation.effective_values[id]);
 				if (!sameValue(control, value, baseValue(control))) draft[id] = value;
+			}
+			for (const savedInput of generation.inputs ?? []) {
+				if (
+					!schema.controls.some(
+						(control) =>
+							control.binding_id === savedInput.binding_id && control.component === 'file'
+					)
+				)
+					continue;
+				if (savedInput.source === 'media')
+					this.mediaInput = { binding_id: savedInput.binding_id, id: savedInput.source_id };
+				else draft[savedInput.binding_id] = savedInput.source_id;
 			}
 			this.draft = draft;
 			this.schedulePersist();
@@ -379,6 +403,10 @@ export class RunState {
 			const edits: Record<string, EditValue> = Object.fromEntries(
 				Object.entries(this.draft).filter(([id]) => !hidden.has(id))
 			);
+			const inputs =
+				this.mediaInput && !hidden.has(this.mediaInput.binding_id)
+					? { [this.mediaInput.binding_id]: { source: 'media', id: this.mediaInput.id } }
+					: {};
 			// A seed left at -1 becomes a fresh random one; anything else stays fixed.
 			for (const control of schema.controls) {
 				if (control.component !== 'seed' || hidden.has(control.binding_id)) continue;
@@ -399,6 +427,7 @@ export class RunState {
 				workflow_id: this.workflowId,
 				request_key: requestKey,
 				edits,
+				inputs,
 				seed_policy: 'fixed',
 				style_ids: this.styleIds
 			});
