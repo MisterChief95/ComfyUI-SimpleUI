@@ -56,6 +56,7 @@
 	aria-label={`Collections: ${names}`}
 	aria-expanded={opened}
 	aria-controls={id}
+	popovertarget={id}
 	onpointerenter={(event) => {
 		if (event.pointerType === 'mouse') show();
 	}}
@@ -71,7 +72,11 @@
 	onpointerup={cancelHold}
 	onpointercancel={cancelHold}
 	oncontextmenu={(event) => event.preventDefault()}
-	onclick={toggle}
+	onclick={(event) => {
+		// Pinning and long-press release use our toggle, rather than the native toggle action.
+		event.preventDefault();
+		toggle();
+	}}
 >
 	<Icon name="bookmark" size={15} />
 	{#if collections.length > 1}<span>{collections.length}</span>{/if}
