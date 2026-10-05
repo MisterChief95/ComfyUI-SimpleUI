@@ -3,6 +3,7 @@
 // fallback, its output media, and the workflow's recent-outputs strip.
 // Event delivery is advisory (docs/ARCHITECTURE.md): the GET is the truth.
 import { api } from '$lib/api';
+import { settingsState } from '$lib/settings.svelte';
 import type { GenerationDetail, GenerationInfo, MediaInfo, Page } from '$lib/contracts';
 import { nodeProgress, parseFrame, previewUrl, type NodeProgress } from './events';
 import { isTerminal } from './status';
@@ -11,6 +12,9 @@ const POLL_MS = 3000;
 const THROTTLE_MS = 400;
 const MAX_BACKOFF_MS = 10_000;
 const OUTPUT_STATES = new Set(['ready', 'partial']);
+// Survives route changes, but resets when the app reloads.
+const sessionGenerations = new Set<string>();
+const clearedWorkflows = new Map<string, string | null>();
 
 export class GenerationTracker {
 	readonly workflowId: string;
@@ -45,13 +49,17 @@ export class GenerationTracker {
 	private again = false;
 	private outputsKey = '';
 	private pendingPolls = 0;
+	private resultsRevision = 0;
+	private currentRunOnly = false;
 
 	constructor(workflowId: string) {
 		this.workflowId = workflowId;
+		this.currentRunOnly = clearedWorkflows.has(workflowId);
 	}
 
 	/** Open the socket + poll timer, then pick up this workflow's newest generation. */
 	async start(): Promise<void> {
+		const revision = this.resultsRevision;
 		this.stopped = false;
 		this.connect();
 		this.pollTimer = setInterval(() => {
@@ -61,7 +69,17 @@ export class GenerationTracker {
 		try {
 			const page = await api<Page<GenerationInfo>>('/generations?limit=20');
 			const mine = page.items.find((item) => item.workflow_id === this.workflowId);
-			if (mine && !this.latest) await this.adopt(mine.id);
+			if (
+				mine &&
+				!this.latest &&
+				revision === this.resultsRevision &&
+				!this.stopped &&
+				(!this.currentRunOnly || clearedWorkflows.get(this.workflowId) === mine.id) &&
+				(!settingsState.data?.profile.clear_generation_on_startup ||
+					!isTerminal(mine.status) ||
+					sessionGenerations.has(mine.id))
+			)
+				await this.adopt(mine.id);
 		} catch {
 			// no history yet is fine; the strip below still shows older outputs
 		}
@@ -69,6 +87,7 @@ export class GenerationTracker {
 
 	stop(): void {
 		this.stopped = true;
+		this.resultsRevision += 1;
 		this.socket?.close();
 		this.socket = null;
 		clearTimeout(this.reconnectTimer);
@@ -78,6 +97,7 @@ export class GenerationTracker {
 
 	/** Start following a generation (just submitted, or the last one on page load). */
 	async adopt(generationOrId: GenerationDetail | string): Promise<void> {
+		const revision = ++this.resultsRevision;
 		this.clearLive();
 		this.outputs = [];
 		this.outputsKey = '';
@@ -85,14 +105,32 @@ export class GenerationTracker {
 		this.pendingPolls = 0;
 		if (typeof generationOrId === 'string') {
 			try {
-				this.latest = await api<GenerationDetail>(`/generations/${generationOrId}`);
+				const detail = await api<GenerationDetail>(`/generations/${generationOrId}`);
+				if (revision !== this.resultsRevision) return;
+				this.latest = detail;
 			} catch {
 				return;
 			}
 		} else {
 			this.latest = generationOrId;
 		}
+		sessionGenerations.add(this.latest.id);
+		if (this.currentRunOnly) clearedWorkflows.set(this.workflowId, this.latest.id);
 		await this.syncOutputs();
+	}
+
+	/** Hide results locally; saved media and generation records are untouched. */
+	clearResults(): void {
+		this.resultsRevision += 1;
+		this.currentRunOnly = true;
+		clearedWorkflows.set(this.workflowId, null);
+		this.latest = null;
+		this.outputs = [];
+		this.recent = [];
+		this.picked = null;
+		this.pickedOutputs = [];
+		this.outputsKey = '';
+		this.clearLive();
 	}
 
 	/** Re-GET the latest generation; calls coalesce so a burst of events costs one request. */
@@ -114,9 +152,16 @@ export class GenerationTracker {
 	}
 
 	async refreshRecent(): Promise<void> {
+		const revision = this.resultsRevision;
 		try {
 			const page = await api<Page<MediaInfo>>(`/media?workflow_id=${this.workflowId}&limit=12`);
-			this.recent = page.items;
+			if (revision !== this.resultsRevision) return;
+			this.recent = page.items.filter((item) =>
+				this.currentRunOnly
+					? item.generation_id === this.latest?.id
+					: !settingsState.data?.profile.clear_generation_on_startup ||
+						(item.generation_id !== null && sessionGenerations.has(item.generation_id))
+			);
 		} catch {
 			// advisory strip only
 		}

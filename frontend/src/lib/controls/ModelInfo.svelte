@@ -1,18 +1,15 @@
 <script lang="ts">
-	// Preview, base model and suggested trigger words for the selected model file.
-	// Everything degrades silently: ComfyUI's preview route is experimental.
+	// Base model and suggested trigger words for the selected model file.
 	import { api } from '$lib/api';
 	import { insertIntoPrompt } from './promptTarget';
 
 	let { folder, filename }: { folder: string; filename: string } = $props();
 
 	let info = $state<{ base_model: string | null; trigger_words: string[] } | null>(null);
-	let broken = $state(false);
 	const query = $derived(`filename=${encodeURIComponent(filename)}`);
 
 	$effect(() => {
 		const wanted = query;
-		broken = false;
 		info = null;
 		api<typeof info>(`/catalog/models/${folder}/info?${wanted}`)
 			.then((result) => {
@@ -22,17 +19,7 @@
 	});
 </script>
 
-<div class="model">
-	{#if !broken}
-		<img
-			src={`/api/catalog/models/${folder}/preview?${query}`}
-			alt=""
-			loading="lazy"
-			onerror={() => (broken = true)}
-		/>
-	{:else}
-		<div class="placeholder" aria-hidden="true"></div>
-	{/if}
+{#if info?.base_model || info?.trigger_words.length}
 	<div class="meta">
 		{#if info?.base_model}<span class="muted">Base: {info.base_model}</span>{/if}
 		{#if info?.trigger_words.length}
@@ -50,26 +37,12 @@
 			</ul>
 		{/if}
 	</div>
-</div>
+{/if}
 
 <style>
-	.model {
-		display: flex;
-		gap: var(--space-2);
-		margin-top: var(--space-2);
-		align-items: flex-start;
-	}
-	img,
-	.placeholder {
-		width: 4.5rem;
-		height: 4.5rem;
-		flex: none;
-		object-fit: cover;
-		border-radius: var(--radius-sm);
-		background: var(--color-surface-3);
-	}
 	.meta {
 		display: grid;
+		margin-top: var(--space-2);
 		gap: var(--space-1);
 		min-width: 0;
 		font-size: var(--text-sm);
