@@ -30,6 +30,7 @@ from typing import Any, Literal
 
 from ..catalog.normalize import same_choice
 from ..contracts import ControlDescriptor, ControlSchema, ErrorDetail
+from . import lora_stack
 
 SeedPolicy = Literal["fixed", "random", "increment"]
 
@@ -99,7 +100,17 @@ def build_submission_graph(
             field=unresolved[0].binding_id,
         )
 
-    return apply_edits(graph, schema, edits or {})
+    updated = apply_edits(graph, schema, edits or {})
+    for control in schema.controls:
+        # A LoRA stack that hides CLIP sends clip strength = model strength.
+        if control.component != "lora_stack" or control.show_clip:
+            continue
+        inputs = updated.get(control.node_id, {}).get("inputs", {})
+        if isinstance(inputs.get(control.input_name), str):
+            inputs[control.input_name] = lora_stack.sync_clip(
+                inputs[control.input_name]
+            )
+    return updated
 
 
 def apply_edits(

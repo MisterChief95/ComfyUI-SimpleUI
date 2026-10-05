@@ -86,6 +86,9 @@ class Presentation(Model):
     display_default: float | None = None
     #: Overrides the slider/number step; never applies to exact integers.
     display_step: float | None = Field(default=None, gt=0)
+    #: LoRA stack only: show entry thumbnails / the CLIP strength.
+    show_thumbnails: bool | None = None
+    show_clip: bool | None = None
 
 
 class Correction(Model):
@@ -280,6 +283,10 @@ def _apply(
         update["order"] = presentation.order
     if presentation.help_text is not None:
         update["help_text"] = presentation.help_text
+    if presentation.show_thumbnails is not None:
+        update["show_thumbnails"] = presentation.show_thumbnails
+    if presentation.show_clip is not None:
+        update["show_clip"] = presentation.show_clip
 
     if presentation.component is not None:
         if presentation.component in ALLOWED_COMPONENTS.get(

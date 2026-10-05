@@ -115,3 +115,15 @@ test('buildPresentation keeps the saved fields and only writes changed ones', ()
 	assert.equal(out.display_min, null);
 	assert.equal(out.display_max, 40);
 });
+
+test('LoRA stack display options draft, preview and save as booleans', () => {
+	const stack = control({ component: 'lora_stack', logical_type: 'string', constraints: null });
+	assert.deepEqual(normalizePatch(stack, { show_clip: true }), {});
+	assert.deepEqual(normalizePatch(stack, { show_clip: false }), { show_clip: false });
+	const preview = applyDraft(stack, { show_thumbnails: false, show_clip: false });
+	assert.equal(preview.show_thumbnails, false);
+	assert.equal(preview.show_clip, false);
+	const out = buildPresentation(null, { show_clip: false });
+	assert.equal(out.show_clip, false);
+	assert.equal(out.show_thumbnails, undefined);
+});

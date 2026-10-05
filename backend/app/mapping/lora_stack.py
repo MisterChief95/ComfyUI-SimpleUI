@@ -122,3 +122,18 @@ def adapt(
             ),
         }
     )
+
+
+def sync_clip(text: str) -> str:
+    """``text`` with every entry's ``strength_clip`` set to its ``strength_model``.
+
+    Used when the control hides CLIP. An unreadable payload is returned
+    unchanged (the pack reports it); unknown fields survive the round trip.
+    """
+    if payload_problem(text) is not None:
+        return text
+    data = json.loads(text)
+    for entry in data["loras"]:
+        if "strength_model" in entry:
+            entry["strength_clip"] = entry["strength_model"]
+    return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
