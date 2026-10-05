@@ -308,27 +308,6 @@
 							onchange={(e) => rename(e, section)}
 							onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
 						/>
-						<div class="seg" role="group" aria-label="Columns">
-							{#each [1, 2, 3] as n (n)}
-								<button
-									type="button"
-									aria-pressed={section.mode !== 'panels' && section.columns === n}
-									aria-label={`${n} column${n > 1 ? 's' : ''}, automatic flow`}
-									onclick={() => setColumns(section, n as 1 | 2 | 3)}
-								>
-									{n}
-								</button>
-							{/each}
-							<button
-								type="button"
-								aria-pressed={section.mode === 'panels'}
-								aria-label="Rows and columns"
-								title="Rows and columns: arrange controls in panels"
-								onclick={() => editor.setMode(section.id, 'panels')}
-							>
-								<Icon name="grid" size={16} />
-							</button>
-						</div>
 						{#if rs.toggle}
 							<span class="badge" title="On/off switch shown in this section's header"
 								>switch: {editor.preview(rs.toggle).label}</span
@@ -351,6 +330,27 @@
 							<span>Collapsed</span>
 						</label>
 						<span class="spacer"></span>
+						<div class="seg" role="group" aria-label="Columns">
+							{#each [1, 2, 3] as n (n)}
+								<button
+									type="button"
+									aria-pressed={section.mode !== 'panels' && section.columns === n}
+									aria-label={`${n} column${n > 1 ? 's' : ''}, automatic flow`}
+									onclick={() => setColumns(section, n as 1 | 2 | 3)}
+								>
+									{n}
+								</button>
+							{/each}
+							<button
+								type="button"
+								aria-pressed={section.mode === 'panels'}
+								aria-label="Rows and columns"
+								title="Rows and columns: arrange controls in panels"
+								onclick={() => editor.setMode(section.id, 'panels')}
+							>
+								<Icon name="grid" size={16} />
+							</button>
+						</div>
 						<button
 							type="button"
 							class="btn btn-ghost btn-icon"
