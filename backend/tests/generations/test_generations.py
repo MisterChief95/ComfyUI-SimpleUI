@@ -412,6 +412,20 @@ class ReconciliationTests(GenerationTestCase):
         self.assertIn("10", final["error"]["node_errors"])
         self.assertTrue(final["error"]["history_errors"])
 
+    async def test_a_text_only_preview_node_does_not_make_outputs_partial(
+        self,
+    ) -> None:
+        # PreviewAny (used by chain stages) reports {"text": [...]}, no file.
+        row = await self.submit()
+        self.upstream.history = history("history_image.json")
+        entry = self.upstream.history[PROMPTS["image"]]
+        entry["outputs"]["99"] = {"text": ["a red apple"]}
+        await self.service.reconcile()
+        final = self.store.get("default", row["id"])
+        self.assertEqual(
+            (final["status"], final["output_state"]), ("succeeded", "ready")
+        )
+
     async def test_duplicate_history_is_idempotent(self) -> None:
         row = await self.submit()
         self.upstream.history = history("history_image.json")

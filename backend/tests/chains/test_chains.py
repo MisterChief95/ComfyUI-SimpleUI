@@ -12,6 +12,7 @@ import json
 import time
 from pathlib import Path
 
+from app.chains.service import ChainDefinition
 from tests.auth.support import AuthTestCase
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
@@ -75,29 +76,25 @@ class ChainTest(AuthTestCase):
         return asyncio.run(self.chains.advance(self.owner, run_id))
 
     def chain(self, link_node="9"):
-        return self.chains.create(
-            self.owner,
-            __import__(
-                "app.chains.service", fromlist=["x"]
-            ).ChainDefinition.model_validate(
-                {
-                    "name": "T2I then upscale",
-                    "stages": [
-                        {"workflow_id": self.workflow_id},
-                        {
-                            "workflow_id": self.workflow_id,
-                            "links": [
-                                {
-                                    "binding_id": "2:image",
-                                    "from_output_node": link_node,
-                                    "ordinal": 0,
-                                }
-                            ],
-                        },
-                    ],
-                }
-            ),
+        definition = ChainDefinition.model_validate(
+            {
+                "name": "T2I then upscale",
+                "stages": [
+                    {"workflow_id": self.workflow_id},
+                    {
+                        "workflow_id": self.workflow_id,
+                        "links": [
+                            {
+                                "binding_id": "2:image",
+                                "from_output_node": link_node,
+                                "ordinal": 0,
+                            }
+                        ],
+                    },
+                ],
+            }
         )
+        return asyncio.run(self.chains.create(self.owner, definition))
 
     def test_advances_only_after_captured_output_and_binds_media(self) -> None:
         run = self.chains.start(self.owner, self.chain()["id"], "k1")

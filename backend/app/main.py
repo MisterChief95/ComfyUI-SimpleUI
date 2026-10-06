@@ -133,7 +133,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         await generations.reconcile_if_due(history_retention=await in_thread(retention))
 
     chains = ChainService(
-        database, repository, generations, submit_stage, reconcile_active
+        database, repository, generations, submit_stage, reconcile_active, catalog
     )
 
     async def drive_chains() -> None:
