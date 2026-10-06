@@ -22,6 +22,7 @@ from ..contracts import Id, Model
 from ..generations.store import ACTIVE
 from ..storage.db import Database, in_thread
 from ..storage.repository import new_id, now_ms
+from . import nodes as chain_nodes
 
 
 class ChainError(ValueError):
@@ -62,7 +63,9 @@ class ChainService:
         generations: Any,
         submit: SubmitStage,
         reconcile: Callable[[], Awaitable[None]] | None = None,
+        catalog: Any | None = None,
     ) -> None:
+        self.catalog = catalog
         self.db, self.repository, self.generations = db, repository, generations
         self._submit = submit
         # Pulls ComfyUI's history into active generations; without an open
@@ -78,7 +81,41 @@ class ChainService:
         item["stages"] = json.loads(item.pop("stages_json"))
         return item
 
-    def create(self, owner_id: str, definition: ChainDefinition) -> dict[str, Any]:
+    async def create(
+        self, owner_id: str, definition: ChainDefinition
+    ) -> dict[str, Any]:
+        stages = await in_thread(self._pinned_stages, owner_id, definition)
+        graphs = await in_thread(self._graphs, owner_id, stages)
+        catalog = await self._catalog_nodes()
+        try:
+            for index, stage in enumerate(stages):
+                chain_nodes.plan_stage(
+                    index,
+                    graphs,
+                    catalog,
+                    {link["binding_id"] for link in stage["links"]},
+                )
+        except chain_nodes.ChainNodeError as exc:
+            raise ChainError(str(exc)) from exc
+        return await in_thread(self._insert, owner_id, definition.name, stages)
+
+    async def _catalog_nodes(self) -> dict[str, Any]:
+        return (await self.catalog.snapshot()).nodes if self.catalog else {}
+
+    def _graphs(self, owner_id: str, stages: list[dict[str, Any]]) -> list[dict]:
+        graphs = []
+        for index, stage in enumerate(stages):
+            graph = self.repository.get_workflow_graph(
+                owner_id, stage["workflow_id"], stage["workflow_revision"]
+            )
+            if graph is None:
+                raise ChainError(f"Stage {index + 1}: workflow was not found.")
+            graphs.append(graph)
+        return graphs
+
+    def _pinned_stages(
+        self, owner_id: str, definition: ChainDefinition
+    ) -> list[dict[str, Any]]:
         stages = []
         for index, stage in enumerate(definition.stages):
             workflow = self.repository.get_workflow(owner_id, stage.workflow_id)
@@ -94,6 +131,11 @@ class ChainService:
                     update={"workflow_revision": int(workflow["current_revision"])}
                 ).model_dump()
             )
+        return stages
+
+    def _insert(
+        self, owner_id: str, name: str, stages: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         chain_id, stamp = new_id(), now_ms()
         with self.db.write() as conn:
             conn.execute(
@@ -102,7 +144,7 @@ class ChainService:
                 (
                     chain_id,
                     owner_id,
-                    definition.name,
+                    name,
                     json.dumps(stages, separators=(",", ":")),
                     stamp,
                     stamp,
@@ -250,14 +292,14 @@ class ChainService:
         )
         return dict(row) if row else None
 
-    def _previous_generation(
-        self, owner_id: str, run: dict[str, Any]
+    def _stage_generation(
+        self, owner_id: str, run: dict[str, Any], stage_index: int
     ) -> dict[str, Any] | None:
-        """The stage before the current one: its newest succeeded attempt."""
+        """An earlier stage's newest succeeded attempt."""
         row = self.db.query_one(
             "SELECT * FROM generations WHERE owner_id = ? AND client_request_key LIKE ?"
             " AND status = 'succeeded' ORDER BY created_ms DESC LIMIT 1",
-            (owner_id, f"chain-{run['id']}-{run['stage_index'] - 1}-%"),
+            (owner_id, f"chain-{run['id']}-{stage_index}-%"),
         )
         return dict(row) if row else None
 
@@ -328,6 +370,15 @@ class ChainService:
             await in_thread(lambda: self._set(run["id"], stage_index=index + 1))
         return True
 
+    async def _text_output(self, generation: dict[str, Any], node: str) -> str | None:
+        """Text a downstream preview node reported, read from ComfyUI's history."""
+        history = await self.generations.upstream.get_history()
+        entry = history.get(generation.get("upstream_prompt_id"))
+        values = ((entry or {}).get("outputs", {}).get(node) or {}).get("text")
+        if isinstance(values, list) and values and isinstance(values[0], str):
+            return values[0]
+        return None
+
     async def _submit_stage(
         self, owner_id: str, run: dict[str, Any], stage: dict[str, Any]
     ) -> bool:
@@ -344,32 +395,67 @@ class ChainService:
                 f"Stage {index + 1}: the workflow was changed or removed since the chain was saved.",
             )
         inputs: dict[str, dict[str, str]] = {}
-        if stage["links"]:
-            previous = await in_thread(self._previous_generation, owner_id, run)
-            if previous is None:
-                return await self._pause(run["id"], "The previous stage is missing.")
-            for link in stage["links"]:
-                media_id = await in_thread(
-                    self._output_media,
-                    owner_id,
-                    previous["id"],
-                    link["from_output_node"],
-                    link["ordinal"],
+        edits = dict(stage["edits"])
+        # (binding, kind, stage, output node, ordinal): explicit links first,
+        # then Chain Output name matches, which never override an explicit link.
+        sources = [
+            (
+                link["binding_id"],
+                "image",
+                index - 1,
+                link["from_output_node"],
+                link["ordinal"],
+            )
+            for link in stage["links"]
+        ]
+        try:
+            chain = await in_thread(self.get, owner_id, run["chain_id"])
+            graphs = await in_thread(
+                self._graphs, owner_id, chain["stages"][: index + 1]
+            )
+            for ref in chain_nodes.plan_stage(
+                index, graphs, await self._catalog_nodes(), {s[0] for s in sources}
+            ):
+                sources.append(
+                    (ref.binding_id, ref.kind, ref.stage, ref.output_node, 0)
                 )
-                if media_id is None:
+        except (chain_nodes.ChainNodeError, ChainError) as exc:
+            return await self._pause(run["id"], str(exc))
+        for binding_id, kind, source_stage, node, ordinal in sources:
+            previous = await in_thread(
+                self._stage_generation, owner_id, run, source_stage
+            )
+            if previous is None:
+                return await self._pause(
+                    run["id"], f"Stage {source_stage + 1} has no finished output yet."
+                )
+            if kind == "text":
+                text = await self._text_output(previous, node)
+                if text is None:
                     return await self._pause(
                         run["id"],
-                        f"Stage {index} produced no captured output at node "
-                        f"{link['from_output_node']} #{link['ordinal']}.",
+                        f"Stage {source_stage + 1} produced no text at node {node}.",
                         generation_id=previous["id"],
                     )
-                inputs[link["binding_id"]] = {"source": "media", "id": media_id}
+                edits[binding_id] = text
+                continue
+            media_id = await in_thread(
+                self._output_media, owner_id, previous["id"], node, ordinal
+            )
+            if media_id is None:
+                return await self._pause(
+                    run["id"],
+                    f"Stage {source_stage + 1} produced no captured output at node "
+                    f"{node} #{ordinal}.",
+                    generation_id=previous["id"],
+                )
+            inputs[binding_id] = {"source": "media", "id": media_id}
         try:
             await self._submit(
                 owner_id,
                 workflow_id=stage["workflow_id"],
                 request_key=self._key(run),
-                edits=stage["edits"],
+                edits=edits,
                 inputs=inputs,
             )
         except HTTPException as exc:

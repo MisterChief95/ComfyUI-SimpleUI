@@ -39,7 +39,7 @@ async def create_chain(
     request: Request, principal: CurrentPrincipal, body: ChainDefinition
 ) -> dict[str, Any]:
     try:
-        return await in_thread(_service(request).create, principal.owner_id, body)
+        return await _service(request).create(principal.owner_id, body)
     except ChainError as exc:
         raise HTTPException(422, str(exc)) from exc
 

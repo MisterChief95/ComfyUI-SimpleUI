@@ -52,6 +52,12 @@ group: `/api/session`, `/api/settings`, `/api/catalog`, `/api/workflows`, `/api/
   captured; failure, cancellation, an uncertain submission or a missing output pauses the
   run (Resume retries the stage under a new attempt key, so a restart can never duplicate
   one). Live-verified: a text-to-image then 2x scale chain ran end to end.
+  With the node pack, stages can use Chain Output / Chain Input nodes instead of node ids:
+  a named Chain Input takes the same-named Chain Output from the nearest earlier stage (an
+  explicit link wins; a missing, mismatched or ambiguous name is rejected when the chain is
+  saved and again before each stage runs). The output is whatever save/preview node sits
+  downstream of the Chain Output; text comes from that node's reported text. Live-verified
+  with an image and a text hand-off.
 - **Media.** Owner-scoped image, video and audio gallery, with thumbnails, audio/video
   playback, range-capable streaming and original-filename download, plus the one-time
   local baseline import required before multi-user mode can be enabled.

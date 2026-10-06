@@ -323,6 +323,12 @@ class GenerationService:
                 unknown += 1
                 continue
             recognized = False
+            text_only = all(
+                k == "text"
+                and isinstance(v, list)
+                and all(isinstance(t, str) for t in v)
+                for k, v in output.items()
+            )
             for key, descriptors in output.items():
                 if not isinstance(descriptors, list):
                     continue
@@ -373,7 +379,7 @@ class GenerationService:
                             row["id"],
                             error={"output_capture": {"message": str(exc)}},
                         )
-            if output and not recognized:
+            if output and not recognized and not text_only:
                 unknown += 1
 
         if saved and not failures and not unknown and execution == "succeeded":

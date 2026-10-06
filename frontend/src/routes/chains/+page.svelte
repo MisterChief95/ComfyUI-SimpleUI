@@ -99,7 +99,9 @@
 	<h1>Chains</h1>
 	<p class="muted">
 		Run workflows one after another. A stage starts only when the previous one succeeded and its
-		output was saved; the run pauses on anything else.
+		output was saved; the run pauses on anything else. Workflows that use the node pack's named
+		Chain Output / Chain Input nodes link automatically; the fields below are only for explicit
+		links.
 	</p>
 	{#if error}<p class="card notice" role="alert">{error}</p>{/if}
 
