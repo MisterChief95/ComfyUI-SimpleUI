@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dimensionPair } from '../controls/aspect.ts';
 import type { ControlDescriptor } from '../contracts.ts';
-import { baseValue, coerceValue, sameValue, validateValue } from './values.ts';
+import { baseValue, coerceValue, isSubmitted, sameValue, validateValue } from './values.ts';
 import { describeGenerationError, isTerminal, statusInfo } from './status.ts';
 import { runShortcut } from './shortcuts.ts';
 
@@ -167,4 +167,21 @@ test('validateValue checks float finiteness and range; other types pass', () => 
 	assert.equal(validateValue(open, -1e9), null);
 	assert.equal(validateValue(make('string', ''), ''), null);
 	assert.equal(validateValue(make('boolean', false), true), null);
+});
+
+test('hidden chain controls are still submitted; other hidden controls are not', () => {
+	const control = (binding_id: string, class_type: string) =>
+		({ binding_id, class_type }) as ControlDescriptor;
+	const hidden = new Set(['1:image', '2:text', '3:name', '4:seed']);
+	for (const id of ['1:image', '2:text', '3:name'])
+		assert.equal(
+			isSubmitted(
+				control(id, id === '2:text' ? 'SimpleUIChainInputText' : 'SimpleUIChainInputImage'),
+				hidden
+			),
+			true
+		);
+	assert.equal(isSubmitted(control('3:name', 'SimpleUIChainOutput'), hidden), true);
+	assert.equal(isSubmitted(control('4:seed', 'KSampler'), hidden), false);
+	assert.equal(isSubmitted(control('5:steps', 'KSampler'), hidden), true);
 });
