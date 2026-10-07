@@ -20,6 +20,7 @@
 	import SectionCard from './SectionCard.svelte';
 	import { RunState } from './run.svelte';
 	import { statusInfo } from './status';
+	import { groupWarnings } from './warnings';
 	import { runShortcut } from './shortcuts';
 	import { RANDOM_SEED } from './values';
 
@@ -42,7 +43,8 @@
 	let stylesOpen = $state(false);
 	let queueOpen = $state(false);
 	const blocking = $derived(run.schema?.blocking ?? []);
-	const warnings = $derived(run.schema?.warnings ?? []);
+	const groups = $derived(groupWarnings(run.schema?.warnings ?? []));
+	const warnings = $derived(groups.actionable);
 	let warningsOpen = $state(false);
 	const shortcutsId = $props.id();
 	const warningsId = `${shortcutsId}-warnings`;
@@ -200,7 +202,22 @@
 							</p>{/each}
 					</div>
 				{/if}
-				{#if warnings.length > 0}
+				{#if groups.stale.length > 0}
+					<div class="notice">
+						{groups.stale.length} old saved correction{groups.stale.length === 1 ? '' : 's'} for controls
+						that were removed or rewired {groups.stale.length === 1 ? 'is' : 'are'}
+						being ignored.
+						<button
+							type="button"
+							class="link"
+							onclick={() =>
+								void run.removeStaleCorrections(groups.stale.map((d) => d.field ?? ''))}
+							>Remove {groups.stale.length === 1 ? 'it' : 'them'}</button
+						>
+						(your other corrections are kept).
+					</div>
+				{/if}
+				{#if warnings.length > 0 || groups.info.length > 0}
 					<div class="notice">
 						<button
 							type="button"
@@ -212,7 +229,11 @@
 							<span class="warning-chevron" class:open={warningsOpen}
 								><Icon name="chevron-right" size={16} /></span
 							>
-							{warnings.length} mapping warning{warnings.length === 1 ? '' : 's'}
+							{#if warnings.length > 0}
+								{warnings.length} mapping warning{warnings.length === 1 ? '' : 's'}
+							{:else}
+								Mapping notes ({groups.info.length})
+							{/if}
 						</button>
 						{#if warningsOpen}
 							<div
@@ -223,6 +244,9 @@
 								}}
 							>
 								{#each warnings as detail (detail.code + (detail.field ?? ''))}<p>
+										{detail.message}
+									</p>{/each}
+								{#each groups.info as detail (detail.code + (detail.field ?? ''))}<p class="info">
 										{detail.message}
 									</p>{/each}
 							</div>
@@ -495,6 +519,18 @@
 	}
 	.warning-chevron.open {
 		rotate: 90deg;
+	}
+	.notice .info {
+		opacity: 0.75;
+	}
+	.link {
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--color-accent, inherit);
+		font: inherit;
+		text-decoration: underline;
+		cursor: pointer;
 	}
 	.err-box {
 		color: var(--color-danger);

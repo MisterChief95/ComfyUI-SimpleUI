@@ -176,6 +176,21 @@ export class RunState {
 		return `simpleui:draft:${session.info?.profile?.id ?? 'default'}:${this.workflowId}`;
 	}
 
+	/** Delete only the saved corrections that no longer apply, then refetch the controls. */
+	async removeStaleCorrections(selectors: readonly string[]): Promise<void> {
+		try {
+			for (const selector of new Set(selectors)) {
+				await api(
+					`/workflows/${this.workflowId}/corrections?scope=workflow&selector=${encodeURIComponent(selector)}`,
+					{ method: 'DELETE' }
+				);
+			}
+			this.schema = await api<ControlSchema>(`/workflows/${this.workflowId}/controls`);
+		} catch (cause) {
+			this.notice = describeApiError(cause);
+		}
+	}
+
 	async load(): Promise<void> {
 		if (!settingsState.data) await settingsState.load();
 		this.loading = true;
