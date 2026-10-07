@@ -418,10 +418,12 @@ export class RunState {
 			const edits: Record<string, EditValue> = Object.fromEntries(
 				Object.entries(this.draft).filter(([id]) => !hidden.has(id))
 			);
-			const inputs =
-				this.mediaInput && !hidden.has(this.mediaInput.binding_id)
-					? { [this.mediaInput.binding_id]: { source: 'media', id: this.mediaInput.id } }
-					: {};
+			// A gallery pick is explicit, so it is sent even when the layout hides its
+			// control; otherwise the "Selected for ..." notice would promise an input
+			// the run silently ignores.
+			const inputs = this.mediaInput
+				? { [this.mediaInput.binding_id]: { source: 'media', id: this.mediaInput.id } }
+				: {};
 			// A seed left at -1 becomes a fresh random one; anything else stays fixed.
 			for (const control of schema.controls) {
 				if (control.component !== 'seed' || hidden.has(control.binding_id)) continue;
