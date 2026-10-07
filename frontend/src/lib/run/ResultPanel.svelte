@@ -316,8 +316,8 @@
 		border-radius: var(--radius-lg);
 		color: var(--color-text-faint);
 	}
-	@media (max-width: 767px) {
-		/* Keep the empty placeholder from pushing the controls off a phone screen. */
+	@media (max-width: 1023px) {
+		/* Keep the empty placeholder from pushing the controls off the screen. */
 		.empty-state {
 			padding: var(--space-1) 0 var(--space-2);
 		}
@@ -449,9 +449,9 @@
 		border-color: var(--color-accent);
 	}
 
-	/* Tablet/desktop: the panel fills the aside's height with no scroll. The image fills the
+	/* Desktop: the panel fills the aside's height with no scroll. The image fills the
 	   width, bounded by the height left after the toolbars; the recent strip takes the rest. */
-	@media (min-width: 768px) {
+	@media (min-width: 1024px) {
 		.panel {
 			height: 100%;
 			min-height: 0;

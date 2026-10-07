@@ -1,7 +1,7 @@
 <script lang="ts">
 	// The run page for one workflow: header, user-designed sections, result
-	// panel, and the generate bar. Phone: one scroll area (result above the
-	// controls) and the bar pinned at the bottom; tablet/desktop: controls and
+	// panel, and the generate bar. Below 1024px: one scroll area (result above the
+	// controls) and the bar pinned at the bottom; desktop: controls and
 	// result as two self-scrolling columns.
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { fade, slide } from 'svelte/transition';
@@ -51,15 +51,15 @@
 	let shortcutsEnabled = $state(true);
 	const noticeCount = $derived(warnings.length + groups.info.length + groups.stale.length);
 
-	// Go-to-top: the phone scrolls .body, tablet/desktop scroll .controls. Shown
-	// once the user is roughly a screen away from the top.
+	// Go-to-top: below 1024px .body scrolls, on desktop .controls does. Shown
+	// once the user has scrolled about half a screen.
 	let scroller = $state<HTMLElement | null>(null);
 	let scrolledDown = $state(false);
 	function onscroll(event: Event): void {
 		const el = event.currentTarget as HTMLElement;
 		if (el.scrollHeight <= el.clientHeight) return;
 		scroller = el;
-		scrolledDown = el.scrollTop > Math.max(400, el.clientHeight * 0.75);
+		scrolledDown = el.scrollTop > Math.max(300, el.clientHeight * 0.5);
 	}
 	function toTop(): void {
 		scroller?.scrollTo({ top: 0, behavior: prefersReducedMotion.current ? 'auto' : 'smooth' });
@@ -345,8 +345,9 @@
 						{/if}
 					</p>
 				{/each}
-				{#if scrolledDown}
-					<div class="to-top-dock">
+				<!-- Always present: its height is the room below the last section. -->
+				<div class="to-top-dock">
+					{#if scrolledDown}
 						<button
 							type="button"
 							class="btn btn-icon to-top"
@@ -357,8 +358,8 @@
 						>
 							<Icon name="arrow-up" size={20} />
 						</button>
-					</div>
-				{/if}
+					{/if}
+				</div>
 			</div>
 
 			<ResizeHandle
@@ -385,10 +386,10 @@
 </div>
 
 <style>
-	/* Breakpoints: phone < 768px (one scroll area), tablet 768-1023px (two
-	   columns, flat sections), desktop >= 1024px (two columns, section cards).
-	   Below 1024px everything in the controls column is edge to edge: flat
-	   banners and stacked accordions separated by 1px rules, no card margins. */
+	/* Breakpoints: below 1024px (phones and portrait tablets) the page is one
+	   scroll area with the result on top and everything edge to edge: flat
+	   banners and stacked accordions separated by 1px rules, no card margins.
+	   From 1024px: controls and result as two columns, sections as cards. */
 	.run {
 		min-width: 0;
 		--space-3: 0.75rem;
@@ -504,7 +505,7 @@
 		color: var(--color-danger);
 	}
 
-	/* Phone: the body is the single scroll area, result first, edge to edge. */
+	/* Phone/tablet: the body is the single scroll area, result first, edge to edge. */
 	.body {
 		flex: 1 1 auto;
 		min-height: 0;
@@ -532,8 +533,6 @@
 		flex-direction: column;
 		gap: 0;
 		min-width: 0;
-		/* Room for the go-to-top button below the last section. */
-		padding-bottom: 4rem;
 	}
 
 	.toolbar {
@@ -635,13 +634,15 @@
 		padding: var(--space-3) var(--page-pad);
 	}
 
-	/* Go-to-top: a zero-height sticky dock at the end of the controls keeps the
-	   button pinned to the bottom of whichever element scrolls them. */
+	/* Go-to-top: a sticky dock at the end of the controls keeps the button
+	   pinned to the bottom of whichever element scrolls them; its height leaves
+	   room for the button below the last section. */
 	.to-top-dock {
 		position: sticky;
 		bottom: 0;
 		z-index: 3;
-		height: 0;
+		flex: none;
+		height: 4rem;
 		pointer-events: none;
 	}
 	.to-top {
@@ -665,7 +666,7 @@
 		opacity: 1;
 	}
 
-	@media (min-width: 768px) {
+	@media (min-width: 1024px) {
 		.body {
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) 0.75rem clamp(
@@ -721,7 +722,7 @@
 	@media (min-width: 1024px) {
 		.controls {
 			gap: var(--space-3);
-			padding: var(--space-3) var(--page-pad) 4rem;
+			padding: var(--space-3) var(--page-pad) 0;
 		}
 		.toolbar {
 			margin-inline: calc(-1 * var(--page-pad));
