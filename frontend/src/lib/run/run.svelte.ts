@@ -21,7 +21,14 @@ import { lastWorkflow } from '$lib/ui/lastWorkflow.svelte';
 import { PresetsState } from './presets.svelte';
 import { GenerationTracker } from './tracker.svelte';
 import { DEFAULT_SEED_MAX, randomExactInt } from '$lib/controls/exact';
-import { RANDOM_SEED, baseValue, coerceValue, sameValue, validateValue } from './values';
+import {
+	RANDOM_SEED,
+	baseValue,
+	coerceValue,
+	isSubmitted,
+	sameValue,
+	validateValue
+} from './values';
 
 export const MORE_ID = '__more';
 const PERSIST_MS = 300;
@@ -360,7 +367,11 @@ export class RunState {
 			const draft: Record<string, EditValue> = {};
 			for (const control of schema.controls) {
 				const id = control.binding_id;
-				if (control.component === 'file' || hidden.has(id) || !(id in generation.effective_values))
+				if (
+					control.component === 'file' ||
+					!isSubmitted(control, hidden) ||
+					!(id in generation.effective_values)
+				)
 					continue;
 				const value = coerceValue(control, generation.effective_values[id]);
 				if (!sameValue(control, value, baseValue(control))) draft[id] = value;
@@ -415,8 +426,12 @@ export class RunState {
 		this.notice = null;
 		try {
 			const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
+			const byId = new Map(schema.controls.map((control) => [control.binding_id, control]));
 			const edits: Record<string, EditValue> = Object.fromEntries(
-				Object.entries(this.draft).filter(([id]) => !hidden.has(id))
+				Object.entries(this.draft).filter(([id]) => {
+					const control = byId.get(id);
+					return control ? isSubmitted(control, hidden) : !hidden.has(id);
+				})
 			);
 			// A gallery pick is explicit, so it is sent even when the layout hides its
 			// control; otherwise the "Selected for ..." notice would promise an input

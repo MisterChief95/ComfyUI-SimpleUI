@@ -8,6 +8,20 @@ import { stackProblem } from '../controls/loraStack.ts';
 /** Seed value meaning "pick a fresh random seed for every run" (Forge / ComfyUI convention). */
 export const RANDOM_SEED = '-1';
 
+/**
+ * Chain Input/Output nodes (node pack `SimpleUIChain*`) are usually hidden because a
+ * chain fills them, but a hidden one must still reach the submission: a layout never
+ * decides whether a chain value is sent.
+ */
+export function isChainControl(control: ControlDescriptor): boolean {
+	return control.class_type.startsWith('SimpleUIChain');
+}
+
+/** Hidden controls keep their imported value, except chain controls, which always submit. */
+export function isSubmitted(control: ControlDescriptor, hidden: ReadonlySet<string>): boolean {
+	return isChainControl(control) || !hidden.has(control.binding_id);
+}
+
 /** The imported value of a control as an EditValue (null becomes false / ''); seeds default to random. */
 export function baseValue(control: ControlDescriptor): EditValue {
 	if (control.component === 'seed') return RANDOM_SEED;
