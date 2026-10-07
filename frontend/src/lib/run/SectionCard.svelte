@@ -190,6 +190,40 @@
 	.cell.full {
 		grid-column: 1 / -1;
 	}
+	/* Phone and tablet: flat, edge-to-edge accordions instead of cards. The
+	   header bar sticks under the toolbar while its section scrolls past. */
+	@media (max-width: 1023px) {
+		.section {
+			background: var(--color-surface-1);
+			border: 0;
+			border-bottom: 1px solid var(--color-border);
+			border-radius: 0;
+			scroll-margin-top: var(--toolbar-h, 3rem);
+		}
+		.headrow {
+			position: sticky;
+			top: var(--toolbar-h, 0px);
+			z-index: 1;
+			padding-right: max(var(--page-pad), env(safe-area-inset-right));
+			background: var(--color-surface-2);
+		}
+		.expanded .headrow {
+			border-bottom-color: var(--color-border);
+		}
+		.head {
+			padding-inline: var(--page-pad);
+			border-radius: 0;
+		}
+		.head:hover {
+			background: var(--color-surface-3);
+		}
+		.count {
+			background: var(--color-surface-3);
+		}
+		.grid {
+			padding: var(--space-2) var(--page-pad) var(--space-3);
+		}
+	}
 	@media (min-width: 768px) {
 		@container run (min-width: 21rem) {
 			.grid[data-cols='2'],

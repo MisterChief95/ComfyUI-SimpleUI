@@ -26,14 +26,24 @@
 
 	let { gallery }: { gallery: GalleryState } = $props();
 
-	const wide = new MediaQuery('min-width: 768px');
+	// Phones and tablets: icon toolbar at the bottom and details as an overlay
+	// sheet over the image. Desktop: actions in the header, details side panel.
+	const compact = new MediaQuery('max-width: 1023px');
+	const detailsKey = $derived(
+		compact.current ? 'simpleui.viewerDetailsOverlay' : 'simpleui.viewerDetails'
+	);
+	const canFullscreen = document.fullscreenEnabled;
 	let dialog = $state<HTMLDialogElement>();
-	// Details side panel (desktop) or bottom panel (phone). Closed on phone by default.
-	let showDetails = $state(readFlag('simpleui.viewerDetails', wide.current));
+	// The overlay starts closed; the desktop side panel starts open.
+	let showDetails = $state(
+		compact.current
+			? readFlag('simpleui.viewerDetailsOverlay', false)
+			: readFlag('simpleui.viewerDetails', true)
+	);
 	let showStrip = $state(readFlag('simpleui.viewerStrip', true));
 	let vertical = $state(readFlag('simpleui.viewerVertical', false));
 
-	// Desktop details width in px; null = 22rem. Per-device preference. Below 768px the panel is a bottom sheet and not resizable.
+	// Desktop details width in px; null = 22rem. Per-device preference. Below 1024px the details are an overlay and not resizable.
 	const WIDTH_KEY = 'simpleui.viewerDetailsWidth';
 	let body = $state<HTMLElement>();
 	let detailsW = $state<number | null>(readPanelWidth(WIDTH_KEY));
@@ -342,6 +352,230 @@
 	const titleId = $props.id();
 </script>
 
+{#snippet actions()}
+	{#if item}
+		<button
+			type="button"
+			class="btn btn-icon ctl"
+			class:fav={item.favorite}
+			aria-label={item.favorite ? 'Remove favorite' : 'Add favorite'}
+			title={item.favorite ? 'Remove favorite' : 'Add favorite'}
+			aria-pressed={!!item.favorite}
+			onclick={() => gallery.toggleFavorite(item)}
+		>
+			<Star filled={!!item.favorite} size={20} />
+		</button>
+		{#if gallery.detail?.workflow_id}
+			{@const d = gallery.detail}
+			{@const label = d.effective_values
+				? 'Reuse settings'
+				: 'Open workflow (saved values were cleared)'}
+			<a
+				class="btn btn-icon ctl"
+				href={`/generation/${d.workflow_id}${d.effective_values ? `?reuse=${d.id}` : ''}`}
+				aria-label={label}
+				title={label}
+			>
+				<Icon name="generate" />
+			</a>
+		{/if}
+		{#if !gallery.isUnavailable(item)}
+			<a
+				class="btn btn-icon ctl"
+				href={`/api/media/${item.id}/download`}
+				download
+				aria-label="Download"
+				title="Download"><Icon name="download" /></a
+			>
+		{/if}
+		{#if item.media_kind === 'image' && !gallery.isUnavailable(item)}
+			<button
+				type="button"
+				class="btn btn-icon ctl"
+				aria-pressed={full}
+				aria-label={full ? 'Fit to screen' : 'Full size'}
+				title={full ? 'Fit to screen' : 'Full size'}
+				onclick={() => (full = !full)}
+			>
+				<Icon name={full ? 'zoom-out' : 'zoom-in'} />
+			</button>
+		{/if}
+		{#if canFullscreen}
+			<button
+				type="button"
+				class="btn btn-icon ctl"
+				aria-pressed={fullscreen}
+				aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+				title={fullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+				onclick={toggleFullscreen}
+			>
+				<Icon name={fullscreen ? 'collapse' : 'expand'} />
+			</button>
+		{/if}
+		<button
+			type="button"
+			class="btn btn-icon ctl"
+			aria-pressed={playing}
+			aria-label={playing ? 'Pause slideshow' : 'Slideshow'}
+			title={playing ? 'Pause slideshow (Space)' : 'Slideshow (Space)'}
+			onclick={() => {
+				playing = !playing;
+			}}
+		>
+			<Icon name={playing ? 'pause' : 'slideshow'} />
+		</button>
+	{/if}
+{/snippet}
+
+{#snippet stripToggle()}
+	<button
+		type="button"
+		class="btn btn-icon ctl fold"
+		aria-label={showStrip ? 'Hide thumbnails' : 'Show thumbnails'}
+		title={showStrip ? 'Hide thumbnails' : 'Show thumbnails'}
+		aria-expanded={showStrip}
+		onclick={() => writeFlag('simpleui.viewerStrip', (showStrip = !showStrip))}
+	>
+		{#if compact.current}
+			<Icon name="gallery" />
+		{:else}
+			<Icon name={showStrip ? 'chevron-down' : 'chevron-up'} size={16} />
+		{/if}
+	</button>
+{/snippet}
+
+{#snippet detailsContent()}
+	{#if item}
+		<label class="row"
+			>Slideshow interval
+			<select
+				bind:value={seconds}
+				onchange={() => writeStored('simpleui.slideshowSeconds', String(seconds))}
+			>
+				{#each [2, 5, 10, 30] as interval (interval)}<option value={interval}
+						>{interval} seconds</option
+					>{/each}
+			</select>
+		</label>
+		<button type="button" class="btn" disabled={duplicatesLoading} onclick={findDuplicates}>
+			{duplicatesLoading ? 'Checking exact duplicates…' : 'Find exact duplicates'}
+		</button>
+		{#if duplicatesError}<p class="error" role="alert">{duplicatesError}</p>{/if}
+		{#if duplicates}
+			{#if !duplicates.groups.length}<p role="status">No exact duplicates found.</p>{/if}
+			{#if duplicates.unavailable}<p class="muted">
+					{duplicates.unavailable} unavailable or changed files were skipped.
+				</p>{/if}
+			{#each duplicates.groups as group (group.byte_size)}
+				<p>{group.count} identical files ({group.byte_size} bytes). Showing up to 200.</p>
+				{#each group.items.filter((entry) => entry.id !== item.id) as entry (entry.id)}
+					<div class="row duplicate">
+						<button type="button" class="btn btn-ghost" onclick={() => select(entry)}
+							>{entry.filename}</button
+						>
+						<button
+							type="button"
+							class="btn"
+							aria-label={`Delete duplicate ${entry.filename}`}
+							onclick={() => deleteDuplicate(entry)}>Delete</button
+						>
+					</div>
+				{/each}
+			{/each}
+		{/if}
+		<label class="row">
+			<input
+				type="checkbox"
+				bind:checked={vertical}
+				onchange={() => writeFlag('simpleui.viewerVertical', vertical)}
+			/>
+			Swipe up/down to browse
+		</label>
+		{#if gallery.detailLoading}
+			<p class="muted">Loading generation…</p>
+		{:else if gallery.detailError}
+			<p class="error" role="alert">{gallery.detailError}</p>
+		{:else if !item.generation_id && gallery.provenance}
+			<p>Imported provenance: {gallery.provenance.source}</p>
+			{#if Object.keys(gallery.provenance.values).length}
+				<MetaValues values={gallery.provenance.values} />
+			{/if}
+			{#each gallery.provenance.diagnostics as diagnostic (diagnostic)}
+				<p class="muted">{diagnostic}</p>
+			{/each}
+			<details>
+				<summary>Raw embedded metadata</summary>
+				<pre>{JSON.stringify(gallery.provenance.raw, null, 2)}</pre>
+			</details>
+		{:else if gallery.detail}
+			{@const detail = gallery.detail}
+			<GenerationSummary {detail} />
+			{#if detail.effective_values}
+				<details>
+					<summary>Saved prompt and input values</summary>
+					<MetaValues values={detail.effective_values} />
+				</details>
+				{#if detail.workflow_id}
+					<a class="btn btn-primary" href={`/generation/${detail.workflow_id}?reuse=${detail.id}`}
+						>Reuse as draft</a
+					>
+				{/if}
+			{:else}
+				<p class="muted">
+					Saved prompt and workflow inputs are unavailable. The media and generation status remain.
+				</p>
+				{#if detail.workflow_id}
+					<a class="btn" href={`/generation/${detail.workflow_id}`}>Open workflow</a>
+				{/if}
+			{/if}
+			{#key detail.id}
+				<GraphJson generationId={detail.id} />
+			{/key}
+		{/if}
+		<hr />
+		<h3>Send to workflow</h3>
+		<button class="btn" type="button" onclick={loadSendWorkflows}>Choose workflow</button>
+		{#if sendError}<p class="error" role="alert">{sendError}</p>{/if}
+		{#if sendWorkflows.length}
+			<label
+				>Workflow
+				<select
+					value={sendWorkflow}
+					onchange={(event) => void chooseSendWorkflow(event.currentTarget.value)}
+				>
+					<option value="">Select a workflow</option>
+					{#each sendWorkflows as workflow (workflow.id)}<option value={workflow.id}
+							>{workflow.name}</option
+						>{/each}
+				</select>
+			</label>
+		{/if}
+		{#if sendControls.length > 1}
+			<label
+				>Target input
+				<select bind:value={sendBinding}
+					><option value="">Select an input</option
+					>{#each sendControls as control (control.binding_id)}<option value={control.binding_id}
+							>{control.label}</option
+						>{/each}</select
+				>
+			</label>
+		{/if}
+		{#if sendBinding}
+			<button
+				class="btn btn-primary"
+				type="button"
+				onclick={() =>
+					void goto(
+						`/generation/${sendWorkflow}?send_media=${encodeURIComponent(item.id)}&binding=${encodeURIComponent(sendBinding)}`
+					)}>Open workflow</button
+			>
+		{:else if sendWorkflow && !sendControls.length}
+			<p class="muted">This workflow has no supported file inputs.</p>
+		{/if}
+	{/if}
+{/snippet}
+
 <svelte:document
 	onfullscreenchange={() => {
 		fullscreen = document.fullscreenElement === body;
@@ -369,83 +603,23 @@
 									: ''}{/if}
 						</p>
 					</div>
+					{#if !compact.current}{@render actions()}{/if}
 					<button
 						type="button"
-						class="btn btn-ghost btn-icon"
-						class:fav={item.favorite}
-						aria-label={item.favorite ? 'Remove favorite' : 'Add favorite'}
-						aria-pressed={!!item.favorite}
-						onclick={() => gallery.toggleFavorite(item)}
-					>
-						<Star filled={!!item.favorite} size={20} />
-					</button>
-					{#if gallery.detail?.workflow_id}
-						{@const d = gallery.detail}
-						{@const label = d.effective_values
-							? 'Reuse settings'
-							: 'Open workflow (saved values were cleared)'}
-						<a
-							class="btn btn-icon ctl"
-							href={`/generation/${d.workflow_id}${d.effective_values ? `?reuse=${d.id}` : ''}`}
-							aria-label={label}
-							title={label}
-						>
-							<Icon name="generate" />
-						</a>
-					{/if}
-					{#if !gallery.isUnavailable(item)}
-						<a
-							class="btn btn-icon ctl"
-							href={`/api/media/${item.id}/download`}
-							download
-							aria-label="Download"
-							title="Download"><Icon name="download" /></a
-						>
-					{/if}
-					{#if item.media_kind === 'image' && !gallery.isUnavailable(item)}
-						<button
-							type="button"
-							class="btn btn-icon ctl"
-							aria-pressed={full}
-							aria-label={full ? 'Fit to screen' : 'Full size'}
-							title={full ? 'Fit to screen' : 'Full size'}
-							onclick={() => (full = !full)}
-						>
-							<Icon name={full ? 'collapse' : 'expand'} />
-						</button>
-					{/if}
-					<button
-						type="button"
-						class="btn btn-ghost"
-						aria-pressed={fullscreen}
-						title="Fullscreen (F)"
-						onclick={toggleFullscreen}
-					>
-						{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-					</button>
-					<button
-						type="button"
-						class="btn btn-ghost"
-						aria-pressed={playing}
-						title="Slideshow (Space)"
-						onclick={() => {
-							playing = !playing;
-						}}
-					>
-						{playing ? 'Pause' : 'Slideshow'}
-					</button>
-					<button
-						type="button"
-						class="btn btn-ghost"
+						class="btn btn-icon ctl"
+						aria-label="Details"
+						title="Details"
 						aria-expanded={showDetails}
-						onclick={() => writeFlag('simpleui.viewerDetails', (showDetails = !showDetails))}
+						aria-pressed={showDetails}
+						onclick={() => writeFlag(detailsKey, (showDetails = !showDetails))}
 					>
-						Details
+						<Icon name="info" />
 					</button>
 					<button
 						type="button"
-						class="btn btn-ghost btn-icon"
+						class="btn btn-icon ctl"
 						aria-label="Close viewer"
+						title="Close"
 						onclick={() => dialog?.close()}
 					>
 						<Icon name="close" />
@@ -558,18 +732,10 @@
 					{/if}
 				</div>
 
-				{#if gallery.items.length > 1}
+				{#if gallery.items.length > 1 || compact.current}
 					<div class="strip-wrap">
-						<button
-							type="button"
-							class="btn btn-icon ctl fold"
-							aria-label={showStrip ? 'Hide thumbnails' : 'Show thumbnails'}
-							aria-expanded={showStrip}
-							onclick={() => writeFlag('simpleui.viewerStrip', (showStrip = !showStrip))}
-						>
-							<Icon name={showStrip ? 'chevron-down' : 'chevron-up'} size={16} />
-						</button>
-						{#if showStrip}
+						{#if gallery.items.length > 1 && !compact.current}{@render stripToggle()}{/if}
+						{#if showStrip && gallery.items.length > 1}
 							<div class="strip" role="group" aria-label="Items" bind:this={strip}>
 								{#each stripItems as entry (entry.id)}
 									<button
@@ -588,11 +754,34 @@
 								{/each}
 							</div>
 						{/if}
+						{#if compact.current}
+							<div class="actionbar" role="toolbar" aria-label="Media actions">
+								{@render actions()}
+								{#if gallery.items.length > 1}{@render stripToggle()}{/if}
+							</div>
+						{/if}
 					</div>
+				{/if}
+				{#if showDetails && compact.current}
+					<aside class="details sheet" aria-label="Generation details">
+						<div class="sheet-head">
+							<h3>Details</h3>
+							<button
+								type="button"
+								class="btn btn-icon ctl"
+								aria-label="Close details"
+								title="Close details"
+								onclick={() => writeFlag(detailsKey, (showDetails = false))}
+							>
+								<Icon name="close" />
+							</button>
+						</div>
+						{@render detailsContent()}
+					</aside>
 				{/if}
 			</div>
 
-			{#if showDetails}
+			{#if showDetails && !compact.current}
 				<ResizeHandle
 					class="divider"
 					bind:width={detailsW}
@@ -607,138 +796,10 @@
 				<aside
 					class="details"
 					aria-label="Generation details"
-					style:width={wide.current && detailsW ? `${detailsW}px` : undefined}
+					style:width={detailsW ? `${detailsW}px` : undefined}
 				>
 					<h3>Generation details</h3>
-					<label class="row"
-						>Slideshow interval
-						<select
-							bind:value={seconds}
-							onchange={() => writeStored('simpleui.slideshowSeconds', String(seconds))}
-						>
-							{#each [2, 5, 10, 30] as interval (interval)}<option value={interval}
-									>{interval} seconds</option
-								>{/each}
-						</select>
-					</label>
-					<button type="button" class="btn" disabled={duplicatesLoading} onclick={findDuplicates}>
-						{duplicatesLoading ? 'Checking exact duplicates…' : 'Find exact duplicates'}
-					</button>
-					{#if duplicatesError}<p class="error" role="alert">{duplicatesError}</p>{/if}
-					{#if duplicates}
-						{#if !duplicates.groups.length}<p role="status">No exact duplicates found.</p>{/if}
-						{#if duplicates.unavailable}<p class="muted">
-								{duplicates.unavailable} unavailable or changed files were skipped.
-							</p>{/if}
-						{#each duplicates.groups as group (group.byte_size)}
-							<p>{group.count} identical files ({group.byte_size} bytes). Showing up to 200.</p>
-							{#each group.items.filter((entry) => entry.id !== item.id) as entry (entry.id)}
-								<div class="row duplicate">
-									<button type="button" class="btn btn-ghost" onclick={() => select(entry)}
-										>{entry.filename}</button
-									>
-									<button
-										type="button"
-										class="btn"
-										aria-label={`Delete duplicate ${entry.filename}`}
-										onclick={() => deleteDuplicate(entry)}>Delete</button
-									>
-								</div>
-							{/each}
-						{/each}
-					{/if}
-					<label class="row">
-						<input
-							type="checkbox"
-							bind:checked={vertical}
-							onchange={() => writeFlag('simpleui.viewerVertical', vertical)}
-						/>
-						Swipe up/down to browse
-					</label>
-					{#if gallery.detailLoading}
-						<p class="muted">Loading generation…</p>
-					{:else if gallery.detailError}
-						<p class="error" role="alert">{gallery.detailError}</p>
-					{:else if !item.generation_id && gallery.provenance}
-						<p>Imported provenance: {gallery.provenance.source}</p>
-						{#if Object.keys(gallery.provenance.values).length}
-							<MetaValues values={gallery.provenance.values} />
-						{/if}
-						{#each gallery.provenance.diagnostics as diagnostic (diagnostic)}
-							<p class="muted">{diagnostic}</p>
-						{/each}
-						<details>
-							<summary>Raw embedded metadata</summary>
-							<pre>{JSON.stringify(gallery.provenance.raw, null, 2)}</pre>
-						</details>
-					{:else if gallery.detail}
-						{@const detail = gallery.detail}
-						<GenerationSummary {detail} />
-						{#if detail.effective_values}
-							<details>
-								<summary>Saved prompt and input values</summary>
-								<MetaValues values={detail.effective_values} />
-							</details>
-							{#if detail.workflow_id}
-								<a
-									class="btn btn-primary"
-									href={`/generation/${detail.workflow_id}?reuse=${detail.id}`}>Reuse as draft</a
-								>
-							{/if}
-						{:else}
-							<p class="muted">
-								Saved prompt and workflow inputs are unavailable. The media and generation status
-								remain.
-							</p>
-							{#if detail.workflow_id}
-								<a class="btn" href={`/generation/${detail.workflow_id}`}>Open workflow</a>
-							{/if}
-						{/if}
-						{#key detail.id}
-							<GraphJson generationId={detail.id} />
-						{/key}
-					{/if}
-					<hr />
-					<h3>Send to workflow</h3>
-					<button class="btn" type="button" onclick={loadSendWorkflows}>Choose workflow</button>
-					{#if sendError}<p class="error" role="alert">{sendError}</p>{/if}
-					{#if sendWorkflows.length}
-						<label
-							>Workflow
-							<select
-								value={sendWorkflow}
-								onchange={(event) => void chooseSendWorkflow(event.currentTarget.value)}
-							>
-								<option value="">Select a workflow</option>
-								{#each sendWorkflows as workflow (workflow.id)}<option value={workflow.id}
-										>{workflow.name}</option
-									>{/each}
-							</select>
-						</label>
-					{/if}
-					{#if sendControls.length > 1}
-						<label
-							>Target input
-							<select bind:value={sendBinding}
-								><option value="">Select an input</option
-								>{#each sendControls as control (control.binding_id)}<option
-										value={control.binding_id}>{control.label}</option
-									>{/each}</select
-							>
-						</label>
-					{/if}
-					{#if sendBinding}
-						<button
-							class="btn btn-primary"
-							type="button"
-							onclick={() =>
-								void goto(
-									`/generation/${sendWorkflow}?send_media=${encodeURIComponent(item.id)}&binding=${encodeURIComponent(sendBinding)}`
-								)}>Open workflow</button
-						>
-					{:else if sendWorkflow && !sendControls.length}
-						<p class="muted">This workflow has no supported file inputs.</p>
-					{/if}
+					{@render detailsContent()}
 				</aside>
 			{/if}
 		</div>
@@ -758,6 +819,22 @@
 		border: 0;
 		color: #fff;
 		color-scheme: dark;
+		/* The viewer is always dark: pin the dark tokens so fields and panels
+		   inside it never pick up the light theme. Values match tokens.css. */
+		--color-surface-1: #1b1d21;
+		--color-surface-2: #24272d;
+		--color-surface-3: #33373f;
+		--color-field: #17191d;
+		--color-border: #2e3239;
+		--color-border-strong: #515864;
+		--color-text: #edf0f4;
+		--color-text-muted: #a9b0bc;
+		--color-text-faint: #919ba9;
+		--color-accent: #dce1e9;
+		--color-accent-hover: #ffffff;
+		--color-accent-soft: #353a44;
+		--color-accent-text: #1b1d21;
+		--color-danger: #ff7b72;
 		background: rgb(0 0 0 / 0.9);
 		backdrop-filter: blur(8px);
 		overflow: hidden;
@@ -987,14 +1064,11 @@
 
 	.details {
 		overscroll-behavior: contain;
-		flex: none;
-		max-height: 45%;
 		overflow-y: auto;
 		scrollbar-gutter: stable;
 		padding: var(--space-3);
 		padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
-		background: var(--color-surface-1);
-		border-top: 1px solid var(--color-border);
+		color: var(--color-text);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
@@ -1020,7 +1094,97 @@
 		display: none;
 	}
 
-	@media (min-width: 768px) {
+	/* Phone and tablet: actions as an icon toolbar along the bottom, details as
+	   a translucent sheet over the lower part of the image. */
+	.actionbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-around;
+		gap: var(--space-1);
+		width: 100%;
+		padding: var(--space-1) max(var(--space-2), env(safe-area-inset-right))
+			max(var(--space-1), env(safe-area-inset-bottom))
+			max(var(--space-2), env(safe-area-inset-left));
+		background: linear-gradient(transparent, rgb(0 0 0 / 0.6) 30%);
+	}
+	.actionbar .ctl {
+		width: 2.75rem;
+		min-height: 2.75rem;
+		background: transparent;
+	}
+	.actionbar .ctl:hover,
+	.actionbar .ctl[aria-pressed='true'] {
+		background: rgb(255 255 255 / 0.18);
+	}
+	.actionbar .fold {
+		width: 2.75rem;
+		min-height: 2.75rem;
+		background: transparent;
+		backdrop-filter: none;
+	}
+	.actionbar .fav {
+		color: #ffd75e;
+	}
+	.sheet {
+		position: absolute;
+		inset: auto 0 0;
+		z-index: 4;
+		max-height: min(65%, 32rem);
+		padding-top: 0;
+		background: rgb(17 18 21 / 0.86);
+		backdrop-filter: blur(14px) saturate(140%);
+		border-top: 1px solid rgb(255 255 255 / 0.12);
+		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+		box-shadow: 0 -12px 32px rgb(0 0 0 / 0.4);
+	}
+	@supports not (backdrop-filter: blur(1px)) {
+		.sheet {
+			background: rgb(17 18 21 / 0.96);
+		}
+	}
+	.sheet-head {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-inline: calc(-1 * var(--space-3));
+		padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+		background: inherit;
+		border-bottom: 1px solid rgb(255 255 255 / 0.08);
+	}
+	.sheet-head h3 {
+		margin: 0;
+	}
+	@media (min-width: 640px) and (max-width: 1023px) {
+		/* Tablet: a narrower card under the top-right buttons keeps the image and
+		   the bottom toolbar visible. */
+		.sheet {
+			inset: calc(3.5rem + env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right))
+				auto auto;
+			width: min(26rem, calc(100% - 2 * var(--space-3)));
+			max-height: calc(100% - 12rem);
+			border: 1px solid rgb(255 255 255 / 0.12);
+			border-radius: var(--radius-lg);
+		}
+	}
+	@media (max-width: 767px) and (pointer: coarse) {
+		/* Swipe browses on a phone; the side arrows only cover the image. */
+		.nav {
+			display: none;
+		}
+	}
+	@media (max-width: 1023px) {
+		header {
+			gap: var(--space-2);
+		}
+		.strip {
+			padding-bottom: var(--space-2);
+		}
+	}
+
+	@media (min-width: 1024px) {
 		.body.with-details {
 			flex-direction: row;
 		}
@@ -1039,10 +1203,9 @@
 			outline: none;
 		}
 		.details {
+			flex: none;
 			width: 22rem;
-			max-height: none;
-			border-top: 0;
-			border-left: 0;
+			background: var(--color-surface-1);
 		}
 	}
 </style>

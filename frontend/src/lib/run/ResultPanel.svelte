@@ -316,6 +316,15 @@
 		border-radius: var(--radius-lg);
 		color: var(--color-text-faint);
 	}
+	@media (max-width: 767px) {
+		/* Keep the empty placeholder from pushing the controls off a phone screen. */
+		.empty-state {
+			padding: var(--space-1) 0 var(--space-2);
+		}
+		.empty-icon {
+			display: none;
+		}
+	}
 	.none {
 		margin: 0;
 		font-size: var(--text-sm);
