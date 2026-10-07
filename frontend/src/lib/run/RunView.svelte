@@ -386,10 +386,10 @@
 </div>
 
 <style>
-	/* Breakpoints: below 1024px (phones and portrait tablets) the page is one
-	   scroll area with the result on top and everything edge to edge: flat
-	   banners and stacked accordions separated by 1px rules, no card margins.
-	   From 1024px: controls and result as two columns, sections as cards. */
+	/* The controls column is edge to edge at every width: flat banners and
+	   stacked accordions separated by 1px rules, no card margins. Below 1024px
+	   (phones and portrait tablets) the page is one scroll area with the
+	   result on top; from 1024px controls and result are two columns. */
 	.run {
 		min-width: 0;
 		--space-3: 0.75rem;
@@ -718,26 +718,8 @@
 		}
 	}
 
-	/* Desktop: padded column of section cards. */
+	/* Desktop: the same flat column, next to the result card. */
 	@media (min-width: 1024px) {
-		.controls {
-			gap: var(--space-3);
-			padding: var(--space-3) var(--page-pad) 0;
-		}
-		.toolbar {
-			margin-inline: calc(-1 * var(--page-pad));
-		}
-		.notice {
-			padding: var(--space-3);
-			border: 1px solid var(--color-border);
-			border-radius: var(--radius);
-		}
-		.err-box {
-			border-color: var(--color-danger);
-		}
-		.empty {
-			padding: 0;
-		}
 		.result {
 			margin-block: var(--space-3);
 		}
