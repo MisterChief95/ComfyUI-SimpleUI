@@ -51,6 +51,29 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             await client.post_json("/queue", {})
         await client.aclose()
 
+    async def test_get_file_reads_temp_results_through_view(self) -> None:
+        seen = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(dict(request.url.params))
+            if request.url.params["filename"] == "gone.png":
+                return httpx.Response(404)
+            return httpx.Response(
+                200, content=b"bytes", headers={"content-type": "image/png"}
+            )
+
+        client = ComfyClient(
+            "http://127.0.0.1:8188", transport=httpx.MockTransport(handler)
+        )
+        self.assertEqual(
+            await client.get_file("a b.png", "sub", "temp"), (b"bytes", "image/png")
+        )
+        self.assertIsNone(await client.get_file("gone.png", "", "temp"))
+        self.assertEqual(
+            seen[0], {"filename": "a b.png", "subfolder": "sub", "type": "temp"}
+        )
+        await client.aclose()
+
     async def test_ws_url_follows_scheme_and_keeps_client_id(self) -> None:
         a, b = ComfyClient("http://h:8188"), ComfyClient("https://h/comfy/")
         self.assertEqual(a.ws_url("simpleui"), "ws://h:8188/ws?clientId=simpleui")

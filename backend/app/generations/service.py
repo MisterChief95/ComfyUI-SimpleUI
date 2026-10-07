@@ -227,7 +227,7 @@ class GenerationService:
                 if prompt_id:
                     self.store.update(row["owner_id"], row["id"], prompt_id=prompt_id)
             if prompt_id and prompt_id in history_entries:
-                associated = self._apply_history(row, history_entries[prompt_id])
+                associated = await self._apply_history(row, history_entries[prompt_id])
                 if not history_retention.get(row["owner_id"], True) and associated:
                     self.store.purge_snapshot(row["owner_id"], row["id"])
             elif prompt_id and prompt_id in queue_entries:
@@ -302,7 +302,7 @@ class GenerationService:
             "this ComfyUI installation has no verified per-job cancellation"
         )
 
-    def _apply_history(self, row: dict[str, Any], entry: Any) -> bool:
+    async def _apply_history(self, row: dict[str, Any], entry: Any) -> bool:
         entry = entry if isinstance(entry, dict) else {}
         outputs = entry.get("outputs") if isinstance(entry.get("outputs"), dict) else {}
         status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
@@ -354,23 +354,37 @@ class GenerationService:
                         unknown += 1
                         continue
                     preview = descriptor.get("type") == "temp"
-                    path = PurePosixPath(
-                        str(descriptor.get("subfolder") or ""), descriptor["filename"]
-                    ).as_posix()
-                    if preview:
-                        continue
+                    subfolder = str(descriptor.get("subfolder") or "")
+                    path = PurePosixPath(subfolder, descriptor["filename"]).as_posix()
                     if self.media is None:
                         saved += 1
                         continue
                     try:
-                        self.media.capture_output(
-                            row["owner_id"],
-                            row["id"],
-                            path,
-                            output_node=str(node_id),
-                            ordinal=ordinal,
-                            preview=False,
-                        )
+                        if preview:
+                            # Preview Image results live in ComfyUI's temp
+                            # folder, which the API does not disclose: read
+                            # them through /view and keep a private copy.
+                            fetched = await self._fetch_temp(descriptor, subfolder)
+                            if fetched is None:
+                                unknown += 1  # ComfyUI already cleaned it up
+                                continue
+                            self.media.capture_preview(
+                                row["owner_id"],
+                                row["id"],
+                                path,
+                                fetched,
+                                output_node=str(node_id),
+                                ordinal=ordinal,
+                            )
+                        else:
+                            self.media.capture_output(
+                                row["owner_id"],
+                                row["id"],
+                                path,
+                                output_node=str(node_id),
+                                ordinal=ordinal,
+                                preview=False,
+                            )
                         saved += 1
                     except Exception as exc:  # noqa: BLE001 - recorded on the row, not raised
                         failures += 1
@@ -410,6 +424,15 @@ class GenerationService:
         if failures == 0:
             self.store.clear_error(row["owner_id"], row["id"], "output_capture")
         return failures == 0 and unknown == 0
+
+    async def _fetch_temp(
+        self, descriptor: dict[str, Any], subfolder: str
+    ) -> bytes | None:
+        get_file = getattr(self.upstream, "get_file", None)
+        if get_file is None:
+            raise RuntimeError("ComfyUI client cannot read temp results")
+        result = await get_file(descriptor["filename"], subfolder, "temp")
+        return None if result is None else result[0]
 
     @staticmethod
     def _queue_entries(queue: Any) -> dict[str, tuple[str, Any]]:

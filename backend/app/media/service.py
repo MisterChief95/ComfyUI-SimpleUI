@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import zipfile
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -521,7 +522,7 @@ class MediaService:
         ordinal: int | None = None,
         preview: bool = False,
     ) -> str | None:
-        """Copy a verified output into private storage; previews intentionally create no card."""
+        """Copy a verified output into private storage; ``preview=True`` stores nothing (temp results go through ``capture_preview``)."""
         if preview:
             return None
         source = self._configured_source()
@@ -542,12 +543,77 @@ class MediaService:
             (source[0], relative, owner_id, source[0], relative, owner_id),
         ):
             raise MediaError("That output file already belongs to another profile.")
+        return self._capture(
+            owner_id,
+            generation_id,
+            source[0],
+            relative,
+            version,
+            path.suffix.lower(),
+            lambda temporary: shutil.copyfile(path, temporary),
+            output_node=output_node,
+            ordinal=ordinal,
+        )
+
+    def capture_preview(
+        self,
+        owner_id: str,
+        generation_id: str,
+        name: str,
+        data: bytes,
+        *,
+        output_node: str | None = None,
+        ordinal: int | None = None,
+    ) -> str:
+        """Store a temp-folder result (Preview Image) fetched from ComfyUI as a private card.
+
+        The bytes come from ComfyUI's ``/view`` (the temp directory is not
+        discoverable and is shared, restart-cleaned storage), so nothing on the
+        filesystem is trusted: ``name`` only labels the attempt and supplies the
+        extension. The key is the generation plus the content hash, so a
+        replayed history entry makes one card, and a temp filename that ComfyUI
+        reuses after a restart can never collide with another profile's file.
+        """
+        suffix = PurePosixPath(name).suffix.lower()
+        if suffix not in IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | AUDIO_EXTENSIONS:
+            raise MediaError("Unsupported preview file type.")
+        source = self._configured_source()
+
+        def write(temporary: Path) -> None:
+            temporary.write_bytes(data)
+
+        return self._capture(
+            owner_id,
+            generation_id,
+            source[0],
+            f"preview/{generation_id}/{name}",
+            "sha256:" + hashlib.sha256(data).hexdigest(),
+            suffix,
+            write,
+            output_node=output_node,
+            ordinal=ordinal,
+        )
+
+    def _capture(
+        self,
+        owner_id: str,
+        generation_id: str | None,
+        source_id: str,
+        relative: str,
+        version: str,
+        suffix: str,
+        write: Callable[[Path], None],
+        *,
+        output_node: str | None,
+        ordinal: int | None,
+    ) -> str:
+        """Idempotently materialise one result in the private capture store."""
         attempt = self.db.query_one(
             "SELECT * FROM capture_attempts WHERE owner_id = ? AND IFNULL(generation_id, '') = IFNULL(?, '') AND source_id = ? AND relative_path = ? AND IFNULL(output_node, '') = IFNULL(?, '') AND IFNULL(ordinal, -1) = IFNULL(?, -1) AND file_version = ?",
             (
                 owner_id,
                 generation_id,
-                source[0],
+                source_id,
                 relative,
                 output_node,
                 ordinal,
@@ -566,7 +632,7 @@ class MediaService:
                     attempt_id,
                     owner_id,
                     generation_id,
-                    source[0],
+                    source_id,
                     relative,
                     version,
                     output_node,
@@ -574,12 +640,12 @@ class MediaService:
                     now_ms(),
                 ),
             )
-        target_relative = f"{owner_id}/{attempt_id}{path.suffix.lower()}"
+        target_relative = f"{owner_id}/{attempt_id}{suffix}"
         target = self.captures / target_relative
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_suffix(target.suffix + ".part")
         try:
-            shutil.copyfile(path, temporary)
+            write(temporary)
             os.replace(temporary, target)
             media_id = self._index(
                 owner_id,
