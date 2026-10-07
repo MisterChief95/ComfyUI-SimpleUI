@@ -204,12 +204,17 @@
 				{/if}
 				{#if groups.stale.length > 0}
 					<div class="notice">
-						{groups.stale.length} saved correction{groups.stale.length === 1 ? '' : 's'} no longer apply
-						to this workflow and {groups.stale.length === 1 ? 'is' : 'are'} ignored. Save
-						{groups.stale.length === 1 ? 'it' : 'them'} again in the designer, or
-						<button type="button" class="link" onclick={() => void run.resetStaleCorrections()}
-							>reset this workflow's corrections</button
-						>.
+						{groups.stale.length} old saved correction{groups.stale.length === 1 ? '' : 's'} for controls
+						that were removed or rewired {groups.stale.length === 1 ? 'is' : 'are'}
+						being ignored.
+						<button
+							type="button"
+							class="link"
+							onclick={() =>
+								void run.removeStaleCorrections(groups.stale.map((d) => d.field ?? ''))}
+							>Remove {groups.stale.length === 1 ? 'it' : 'them'}</button
+						>
+						(your other corrections are kept).
 					</div>
 				{/if}
 				{#if warnings.length > 0 || groups.info.length > 0}

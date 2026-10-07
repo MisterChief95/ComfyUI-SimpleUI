@@ -176,10 +176,15 @@ export class RunState {
 		return `simpleui:draft:${session.info?.profile?.id ?? 'default'}:${this.workflowId}`;
 	}
 
-	/** Drop this workflow's saved corrections and refetch the derived controls. */
-	async resetStaleCorrections(): Promise<void> {
+	/** Delete only the saved corrections that no longer apply, then refetch the controls. */
+	async removeStaleCorrections(selectors: readonly string[]): Promise<void> {
 		try {
-			await api(`/workflows/${this.workflowId}/corrections`, { method: 'DELETE' });
+			for (const selector of new Set(selectors)) {
+				await api(
+					`/workflows/${this.workflowId}/corrections?scope=workflow&selector=${encodeURIComponent(selector)}`,
+					{ method: 'DELETE' }
+				);
+			}
 			this.schema = await api<ControlSchema>(`/workflows/${this.workflowId}/controls`);
 		} catch (cause) {
 			this.notice = describeApiError(cause);
