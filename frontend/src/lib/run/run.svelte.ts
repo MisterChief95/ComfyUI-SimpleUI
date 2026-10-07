@@ -176,6 +176,16 @@ export class RunState {
 		return `simpleui:draft:${session.info?.profile?.id ?? 'default'}:${this.workflowId}`;
 	}
 
+	/** Drop this workflow's saved corrections and refetch the derived controls. */
+	async resetStaleCorrections(): Promise<void> {
+		try {
+			await api(`/workflows/${this.workflowId}/corrections`, { method: 'DELETE' });
+			this.schema = await api<ControlSchema>(`/workflows/${this.workflowId}/controls`);
+		} catch (cause) {
+			this.notice = describeApiError(cause);
+		}
+	}
+
 	async load(): Promise<void> {
 		if (!settingsState.data) await settingsState.load();
 		this.loading = true;
