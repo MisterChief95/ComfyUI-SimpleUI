@@ -693,8 +693,7 @@
 			grid-row: 1;
 			cursor: col-resize;
 			touch-action: none;
-			margin: var(--space-2) 0;
-			background: linear-gradient(var(--color-border), var(--color-border)) center / 2px 100%
+			background: linear-gradient(var(--color-border), var(--color-border)) center / 1px 100%
 				no-repeat;
 		}
 		.body > :global(.divider):hover,
@@ -710,21 +709,10 @@
 			grid-column: 3;
 			grid-row: 1;
 			min-height: 0;
-			margin: var(--space-2) var(--page-pad) var(--space-2) 0;
-			padding: var(--space-3);
-			border: 1px solid var(--color-border);
-			border-radius: var(--radius-lg);
-			box-shadow: var(--shadow-1);
-		}
-	}
-
-	/* Desktop: the same flat column, next to the result card. */
-	@media (min-width: 1024px) {
-		.result {
-			margin-block: var(--space-3);
-		}
-		.body > :global(.divider) {
-			margin-block: var(--space-3);
+			/* Flat, like the sections: a full-height column behind the divider. */
+			padding: var(--space-3) max(var(--page-pad), env(safe-area-inset-right)) var(--space-3)
+				var(--space-3);
+			border-bottom: 0;
 		}
 	}
 </style>
