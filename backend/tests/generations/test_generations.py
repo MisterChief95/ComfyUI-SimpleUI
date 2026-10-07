@@ -53,6 +53,8 @@ class FakeUpstream:
         self.queue = {"queue_running": [], "queue_pending": []}
         self.history = {}
         self.cancelled = []
+        self.viewed = []
+        self.files = {}
 
     async def submit_prompt(self, graph, **kwargs):
         self.submit_count += 1
@@ -70,10 +72,15 @@ class FakeUpstream:
     async def cancel_pending(self, prompt_id):
         self.cancelled.append(prompt_id)
 
+    async def get_file(self, filename, subfolder, kind):
+        self.viewed.append((filename, subfolder, kind))
+        return self.files.get((subfolder, filename))
+
 
 class FakeMedia:
     def __init__(self) -> None:
         self.keys = set()
+        self.previews = []
         self.calls = 0
         self.fail = False
 
@@ -85,6 +92,17 @@ class FakeMedia:
             raise OSError("No space left on device")
         self.keys.add((owner_id, generation_id, output_node, ordinal, path))
         return str(len(self.keys))
+
+    def capture_preview(
+        self, owner_id, generation_id, name, data, *, output_node, ordinal
+    ):
+        self.calls += 1
+        if self.fail:
+            raise OSError("No space left on device")
+        self.previews.append(
+            (owner_id, generation_id, name, data, output_node, ordinal)
+        )
+        return str(len(self.previews))
 
 
 class GenerationTestCase(unittest.IsolatedAsyncioTestCase):
@@ -286,6 +304,66 @@ class EventTests(GenerationTestCase):
 
 
 class ReconciliationTests(GenerationTestCase):
+    def preview_history(self, prompt_id):
+        return {
+            prompt_id: {
+                "outputs": {
+                    "9": {
+                        "images": [
+                            {
+                                "filename": "tmp_00001_.png",
+                                "subfolder": "",
+                                "type": "temp",
+                            }
+                        ]
+                    }
+                },
+                "status": {"status_str": "success", "completed": True},
+            }
+        }
+
+    async def test_preview_image_output_is_read_through_view_and_captured(
+        self,
+    ) -> None:
+        prompt_id = PROMPTS["image"]
+        row = await self.submit()
+        self.upstream.files[("", "tmp_00001_.png")] = (b"png-bytes", "image/png")
+        self.upstream.history = self.preview_history(prompt_id)
+        await self.service.reconcile()
+        self.assertEqual(self.upstream.viewed, [("tmp_00001_.png", "", "temp")])
+        self.assertEqual(
+            self.media.previews,
+            [("default", row["id"], "tmp_00001_.png", b"png-bytes", "9", 0)],
+        )
+        self.assertEqual(self.media.keys, set())  # nothing read from the output folder
+        final = self.store.get("default", row["id"])
+        self.assertEqual(
+            (final["status"], final["output_state"]), ("succeeded", "ready")
+        )
+
+    async def test_a_preview_comfyui_already_cleaned_up_is_unavailable_not_retried(
+        self,
+    ) -> None:
+        row = await self.submit()
+        self.upstream.history = self.preview_history(PROMPTS["image"])
+        await self.service.reconcile()
+        final = self.store.get("default", row["id"])
+        self.assertEqual(final["output_state"], "unavailable")
+        self.assertEqual(self.media.previews, [])
+
+    async def test_a_failed_preview_capture_stays_pending_for_retry(self) -> None:
+        row = await self.submit()
+        self.upstream.files[("", "tmp_00001_.png")] = (b"png-bytes", "image/png")
+        self.upstream.history = self.preview_history(PROMPTS["image"])
+        self.media.fail = True
+        await self.service.reconcile()
+        self.assertEqual(
+            self.store.get("default", row["id"])["output_state"], "pending"
+        )
+        self.media.fail = False
+        await self.service.reconcile()
+        self.assertEqual(self.store.get("default", row["id"])["output_state"], "ready")
+
     async def test_audio_key_in_history_is_captured(self) -> None:
         prompt_id = PROMPTS["audio"]
         self.upstream.response = {"prompt_id": prompt_id, "node_errors": {}}
@@ -431,7 +509,7 @@ class ReconciliationTests(GenerationTestCase):
         self.upstream.history = history("history_image.json")
         await self.service.reconcile()
         # Replayed terminal delivery through the same association code.
-        self.service._apply_history(
+        await self.service._apply_history(
             self.store.get("default", row["id"]),
             self.upstream.history[PROMPTS["image"]],
         )

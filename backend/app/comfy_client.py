@@ -297,6 +297,42 @@ class ComfyClient:
             raise ComfyUnavailable("upstream_error", "Preview too large")
         return response.content, kind
 
+    async def get_file(
+        self,
+        filename: str,
+        subfolder: str,
+        kind: str,
+        *,
+        max_bytes: int = 64_000_000,
+    ) -> tuple[bytes, str] | None:
+        """GET one file through ComfyUI's ``/view``; ``None`` when ComfyUI no longer has it.
+
+        This is how temp-folder results (Preview Image) are read: the temp
+        directory is not discoverable through the API, but ``/view`` serves it
+        by name (``type=temp``). A single attempt: the caller retries on its
+        next reconcile tick.
+        """
+        try:
+            response = await self._client.get(
+                "/view",
+                params={"filename": filename, "subfolder": subfolder, "type": kind},
+            )
+        except httpx.TimeoutException:
+            raise ComfyUnavailable(
+                "upstream_timeout", "ComfyUI did not respond"
+            ) from None
+        except httpx.HTTPError:
+            raise ComfyUnavailable(
+                "upstream_unreachable", f"ComfyUI is not reachable at {self.safe_url}"
+            ) from None
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            raise ComfyUnavailable("upstream_error", "ComfyUI could not serve the file")
+        if len(response.content) > max_bytes:
+            raise ComfyUnavailable("upstream_error", "Output file too large")
+        return response.content, response.headers.get("content-type", "")
+
     async def free_memory(self) -> None:
         """Ask ComfyUI to unload models and free VRAM (empty 200; applied asynchronously)."""
         await self._post("/free", {"unload_models": True, "free_memory": True})

@@ -156,6 +156,49 @@ class CaptureTest(MediaTestCase):
         self.assertEqual(self.gallery(), [])
         self.assertEqual(self.db.query("SELECT * FROM capture_attempts"), [])
 
+    def test_a_fetched_preview_becomes_a_private_idempotent_card(self) -> None:
+        data = self.produced.read_bytes()
+
+        def preview(owner=DEFAULT_PROFILE_ID, generation=None):
+            return self.media.capture_preview(
+                owner,
+                generation or self.generation,
+                "sub/tmp_00001_.png",
+                data,
+                output_node="9",
+                ordinal=0,
+            )
+
+        first = preview()
+        self.assertEqual(first, preview())
+        self.assertEqual(len(self.gallery()), 1)
+        located = self.media.locate(DEFAULT_PROFILE_ID, first)
+        self.assertTrue(located.path.is_relative_to(self.media.captures))
+        self.assertEqual(located.path.read_bytes(), data)
+        self.assertEqual(located.row["generation_id"], self.generation)
+
+    def test_a_reused_temp_filename_never_collides_across_profiles(self) -> None:
+        self.add_other_profile()
+        other_generation = self.repo.create_generation(
+            OTHER, client_request_key="k2", request_fingerprint="f2"
+        )
+        data = self.produced.read_bytes()
+        mine = self.media.capture_preview(
+            DEFAULT_PROFILE_ID, self.generation, "tmp_00001_.png", data
+        )
+        theirs = self.media.capture_preview(
+            OTHER, other_generation, "tmp_00001_.png", data
+        )
+        self.assertNotEqual(mine, theirs)
+        self.assertIsNone(self.media.locate(OTHER, mine))
+
+    def test_a_preview_with_an_unsupported_extension_is_refused(self) -> None:
+        with self.assertRaises(MediaError):
+            self.media.capture_preview(
+                DEFAULT_PROFILE_ID, self.generation, "evil.exe", b"MZ"
+            )
+        self.assertEqual(self.gallery(), [])
+
     def test_a_full_disk_keeps_the_execution_record_and_allows_retry(self) -> None:
         def no_space(*args, **kwargs):
             raise OSError(errno.ENOSPC, "No space left on device")
