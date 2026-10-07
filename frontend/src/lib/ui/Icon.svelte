@@ -48,7 +48,16 @@
 		sliders: 'M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4',
 		select: 'M4 4h16v16H4zM8 12l3 3 5-6',
 		compare: 'M4 4h16v16H4zM12 4v16',
-		filter: 'M3 5h18l-7 8v6l-4 2v-8z'
+		filter: 'M3 5h18l-7 8v6l-4 2v-8z',
+		'arrow-up': 'M12 19V5M5 12l7-7 7 7',
+		info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01',
+		list: 'M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01',
+		sparkles:
+			'M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z',
+		slideshow: 'M3 4h18v13H3zM10 8l5 2.5-5 2.5zM8 21h8',
+		pause: 'M8 5v14M16 5v14',
+		'zoom-in': 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-4.3-4.3M11 8v6M8 11h6',
+		'zoom-out': 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-4.3-4.3M8 11h6'
 	} as const;
 
 	export type IconName = keyof typeof PATHS;

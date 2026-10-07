@@ -37,7 +37,7 @@
 	</div>
 {/snippet}
 
-<section class="card section" class:off={!on} class:expanded={open} id={`sec-${section.id}`}>
+<section class="section" class:off={!on} class:expanded={open} id={`sec-${section.id}`}>
 	<div class="headrow">
 		<button
 			type="button"
@@ -100,16 +100,23 @@
 </section>
 
 <style>
+	/* Flat, edge-to-edge accordion. The header bar sticks under the toolbar
+	   while its section scrolls past. */
 	.section {
-		padding: 0;
+		background: var(--color-surface-1);
+		border-bottom: 1px solid var(--color-border);
 		/* Room for the sticky jump chips when scrolled into view. */
-		scroll-margin-top: calc(var(--toolbar-h, 3rem) + var(--space-2));
+		scroll-margin-top: var(--toolbar-h, 3rem);
 	}
 	.headrow {
+		position: sticky;
+		top: var(--toolbar-h, 0px);
+		z-index: 1;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding-right: var(--space-3);
+		padding-right: max(var(--page-pad), env(safe-area-inset-right));
+		background: var(--color-surface-2);
 	}
 	.expanded .headrow {
 		border-bottom: 1px solid var(--color-border);
@@ -128,12 +135,11 @@
 		gap: var(--space-2);
 		width: 100%;
 		min-height: var(--touch-target);
-		padding: 0 var(--space-3);
+		padding: 0 var(--page-pad);
 		font: inherit;
 		color: var(--color-text);
 		background: transparent;
 		border: 0;
-		border-radius: var(--radius-lg);
 		cursor: pointer;
 		text-align: left;
 	}
@@ -149,14 +155,14 @@
 		rotate: 90deg;
 	}
 	.head:hover {
-		background: var(--color-surface-2);
+		background: var(--color-surface-3);
 	}
 	.count {
 		margin-left: auto;
 		font-size: var(--text-xs);
 		font-variant-numeric: tabular-nums;
 		padding: 0.15rem 0.45rem;
-		background: var(--color-surface-2);
+		background: var(--color-surface-3);
 		border-radius: var(--radius-sm);
 	}
 	.badge {
@@ -166,7 +172,7 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-3);
-		padding: var(--space-2) var(--space-3) var(--space-3);
+		padding: var(--space-2) var(--page-pad) var(--space-3);
 	}
 	.cell {
 		min-width: 0;
