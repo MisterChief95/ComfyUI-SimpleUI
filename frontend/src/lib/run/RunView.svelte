@@ -20,6 +20,8 @@
 	import SectionCard from './SectionCard.svelte';
 	import { RunState } from './run.svelte';
 	import { statusInfo } from './status';
+	import { settingsState } from '$lib/settings.svelte';
+	import { justSucceeded, pageTitle, playCompletionSound } from './completion';
 	import { groupWarnings } from './warnings';
 	import { runShortcut } from './shortcuts';
 	import { RANDOM_SEED } from './values';
@@ -33,6 +35,15 @@
 	onDestroy(() => run.dispose());
 
 	const info = $derived(statusInfo(run.tracker.latest));
+	// Chime once when the generation we are following finishes (setting: completion_sound).
+	let watched: { id: string; status: string } | null = null;
+	$effect(() => {
+		const latest = run.tracker.latest;
+		const next = latest ? { id: latest.id, status: latest.status } : null;
+		if (justSucceeded(watched, next) && settingsState.data?.profile.completion_sound === true)
+			playCompletionSound();
+		watched = next;
+	});
 	let toolbarH = $state(0);
 	// Result column width in px (tablet/desktop); null = the 40% default. Per-device preference.
 	const WIDTH_KEY = 'simpleui.resultWidth';
@@ -110,7 +121,10 @@
 </script>
 
 <svelte:window {onkeydown} />
-<svelte:head><title>{run.name ?? 'Generate'} · SimpleUI</title></svelte:head>
+<svelte:head
+	><title>{pageTitle(run.name, run.tracker.latest?.status ?? null, run.tracker.progress)}</title
+	></svelte:head
+>
 
 <div class="page-full run">
 	<header class="top">
