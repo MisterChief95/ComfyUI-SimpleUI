@@ -249,14 +249,40 @@
 		setPreview(null);
 	});
 
-	async function upload(event: Event): Promise<void> {
+	function pick(event: Event): void {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
-		if (!file) return;
+		input.value = '';
+		if (file) void upload(file);
+	}
+
+	/** Accept only what the picker would: a dropped/pasted file of this control's media kind. */
+	function acceptable(file: File | null | undefined): file is File {
+		if (!file) return false;
+		if (uploadKind === 'image') return file.type.startsWith('image/');
+		return (
+			file.type.startsWith(`${uploadKind}/`) || /\.(mkv|webm|mp4|mov|avi|m4v)$/i.test(file.name)
+		);
+	}
+	let dragging = $state(false);
+	function ondrop(event: DragEvent): void {
+		dragging = false;
+		const file = event.dataTransfer?.files?.[0];
+		if (disabled || uploading || !acceptable(file)) return;
+		event.preventDefault();
+		void upload(file);
+	}
+	function onpaste(event: ClipboardEvent): void {
+		const file = event.clipboardData?.files?.[0];
+		if (disabled || uploading || !acceptable(file)) return;
+		event.preventDefault();
+		void upload(file);
+	}
+
+	async function upload(file: File): Promise<void> {
 		uploadError = null;
 		if (preview) {
 			setPreview(file);
-			input.value = '';
 			return;
 		}
 		pending?.abort();
@@ -277,7 +303,6 @@
 				pending = null;
 				uploading = false;
 			}
-			input.value = '';
 		}
 	}
 
@@ -467,13 +492,28 @@
 			/>
 		{/if}
 	{:else if component === 'file'}
-		<div class="file">
+		<div
+			class="file"
+			class:dragging
+			role="group"
+			aria-label="File drop area"
+			ondragover={(e) => {
+				if (!disabled && !uploading) {
+					e.preventDefault();
+					dragging = true;
+				}
+			}}
+			ondragleave={() => (dragging = false)}
+			{ondrop}
+			{onpaste}
+		>
 			{#if previewUrl && uploadKind === 'image'}
 				<img class="thumb" src={previewUrl} alt={fileName || 'Selected image'} />
 			{/if}
 			<div class="file-body">
 				<p class="current" title={text}>
-					{#if uploading}Uploading…{:else if hasFile}{fileName || text}{:else}No file selected{/if}
+					{#if uploading}Uploading…{:else if hasFile}{fileName || text}{:else}No file selected —
+						drop or paste one{/if}
 				</p>
 				<div class="row">
 					<input
@@ -482,7 +522,7 @@
 						type="file"
 						accept={uploadAccept}
 						disabled={disabled || uploading}
-						onchange={upload}
+						onchange={pick}
 					/>
 					{#if hasFile}
 						<button
@@ -588,6 +628,12 @@
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-2);
+		border-radius: var(--radius);
+		outline: 2px dashed transparent;
+		outline-offset: 2px;
+	}
+	.file.dragging {
+		outline-color: var(--color-accent);
 	}
 	.thumb {
 		flex: none;
