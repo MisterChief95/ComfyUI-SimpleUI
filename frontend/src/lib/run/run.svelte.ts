@@ -31,6 +31,8 @@ import {
 } from './values';
 
 export const MORE_ID = '__more';
+/** Matches the server's per-profile pending-job cap (generations/store.py). */
+export const MAX_BATCH = 8;
 const PERSIST_MS = 300;
 
 export interface ViewSection {
@@ -69,6 +71,8 @@ export class RunState {
 	modifiedOnly = $state(false);
 	open = $state<Record<string, boolean>>({});
 	submitting = $state(false);
+	/** Jobs to queue per click (1..MAX_BATCH); only above 1 while a visible seed is random (-1). */
+	batch = $state(1);
 	submitError = $state<string | null>(null);
 	cancelling = $state(false);
 	cancelError = $state<string | null>(null);
@@ -102,6 +106,18 @@ export class RunState {
 			? null
 			: `${this.invalid.size} control${this.invalid.size === 1 ? ' has an invalid value' : 's have invalid values'}`
 	);
+	/** A visible seed left at -1: each queued job then gets its own fresh seed. */
+	hasRandomSeed = $derived.by(() => {
+		const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
+		return (this.schema?.controls ?? []).some(
+			(control) =>
+				control.component === 'seed' &&
+				!hidden.has(control.binding_id) &&
+				String(this.valueFor(control)) === RANDOM_SEED
+		);
+	});
+	/** Batch is ignored unless every job would differ (a fixed seed would repeat the cached result). */
+	count = $derived(this.hasRandomSeed ? Math.min(MAX_BATCH, Math.max(1, this.batch)) : 1);
 	canGenerate = $derived(
 		this.schema !== null &&
 			this.blockingReason === null &&
@@ -424,51 +440,63 @@ export class RunState {
 		this.submitError = null;
 		this.cancelError = null;
 		this.notice = null;
+		const total = this.count;
+		let queued = 0;
 		try {
-			const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
-			const byId = new Map(schema.controls.map((control) => [control.binding_id, control]));
-			const edits: Record<string, EditValue> = Object.fromEntries(
-				Object.entries(this.draft).filter(([id]) => {
-					const control = byId.get(id);
-					return control ? isSubmitted(control, hidden) : !hidden.has(id);
-				})
-			);
-			// A gallery pick is explicit, so it is sent even when the layout hides its
-			// control; otherwise the "Selected for ..." notice would promise an input
-			// the run silently ignores.
-			const inputs = this.mediaInput
-				? { [this.mediaInput.binding_id]: { source: 'media', id: this.mediaInput.id } }
-				: {};
-			// A seed left at -1 becomes a fresh random one; anything else stays fixed.
-			for (const control of schema.controls) {
-				if (control.component !== 'seed' || hidden.has(control.binding_id)) continue;
-				if (String(this.valueFor(control)) !== RANDOM_SEED) continue;
-				const c = control.constraints;
-				edits[control.binding_id] = randomExactInt(
-					c?.exact_min ?? (c?.min != null ? String(Math.trunc(c.min)) : '0'),
-					c?.exact_max ?? (c?.max != null ? String(Math.trunc(c.max)) : DEFAULT_SEED_MAX)
-				);
+			for (; queued < total; queued++) {
+				const detail = await this.submitOne(schema);
+				// Follow the first job (the one that runs now); the rest wait in the queue panel.
+				if (queued === 0) await this.tracker.adopt(detail);
 			}
-			// ponytail: a fresh key per click; GenerationService already guarantees a key
-			// that did reach the server is never resubmitted upstream.
-			const requestKey =
-				typeof crypto.randomUUID === 'function'
-					? crypto.randomUUID()
-					: `${Date.now()}-${Math.random()}`;
-			const detail = await apiJson<GenerationDetail>('/generations', 'POST', {
-				workflow_id: this.workflowId,
-				request_key: requestKey,
-				edits,
-				inputs,
-				seed_policy: 'fixed',
-				style_ids: this.styleIds
-			});
-			await this.tracker.adopt(detail);
 		} catch (cause) {
-			this.submitError = describeApiError(cause);
+			const message = describeApiError(cause);
+			if (queued === 0) this.submitError = message;
+			else this.notice = `Queued ${queued} of ${total}: ${message}`;
 		} finally {
 			this.submitting = false;
 		}
+	}
+
+	/** Build one submission (a random seed is re-drawn each time) and POST it. */
+	private async submitOne(schema: ControlSchema): Promise<GenerationDetail> {
+		const hidden = new Set(this.resolved?.hidden.map((control) => control.binding_id));
+		const byId = new Map(schema.controls.map((control) => [control.binding_id, control]));
+		const edits: Record<string, EditValue> = Object.fromEntries(
+			Object.entries(this.draft).filter(([id]) => {
+				const control = byId.get(id);
+				return control ? isSubmitted(control, hidden) : !hidden.has(id);
+			})
+		);
+		// A gallery pick is explicit, so it is sent even when the layout hides its
+		// control; otherwise the "Selected for ..." notice would promise an input
+		// the run silently ignores.
+		const inputs = this.mediaInput
+			? { [this.mediaInput.binding_id]: { source: 'media', id: this.mediaInput.id } }
+			: {};
+		// A seed left at -1 becomes a fresh random one; anything else stays fixed.
+		for (const control of schema.controls) {
+			if (control.component !== 'seed' || hidden.has(control.binding_id)) continue;
+			if (String(this.valueFor(control)) !== RANDOM_SEED) continue;
+			const c = control.constraints;
+			edits[control.binding_id] = randomExactInt(
+				c?.exact_min ?? (c?.min != null ? String(Math.trunc(c.min)) : '0'),
+				c?.exact_max ?? (c?.max != null ? String(Math.trunc(c.max)) : DEFAULT_SEED_MAX)
+			);
+		}
+		// ponytail: a fresh key per job; GenerationService already guarantees a key
+		// that did reach the server is never resubmitted upstream.
+		const requestKey =
+			typeof crypto.randomUUID === 'function'
+				? crypto.randomUUID()
+				: `${Date.now()}-${Math.random()}`;
+		return apiJson<GenerationDetail>('/generations', 'POST', {
+			workflow_id: this.workflowId,
+			request_key: requestKey,
+			edits,
+			inputs,
+			seed_policy: 'fixed',
+			style_ids: this.styleIds
+		});
 	}
 
 	async cancel(): Promise<void> {
