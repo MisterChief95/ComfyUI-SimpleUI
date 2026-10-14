@@ -22,7 +22,7 @@ import secrets
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from sqlite3 import IntegrityError, Row
 from typing import Any
 
@@ -962,21 +962,17 @@ class Repository:
             return f"AND {linked} AND w.id = ?)", (path.split("/")[1],)
         if re.fullmatch(r"Date/[0-9]{4}(?:/[0-9]{2}){0,2}", path):
             parts = [int(part) for part in path.split("/")[1:]]
-            start = datetime(*parts, *([1] * (3 - len(parts))), tzinfo=timezone.utc)
+            start = datetime(*parts, *([1] * (3 - len(parts))), tzinfo=UTC)
             if len(parts) == 1:
-                end = datetime(parts[0] + 1, 1, 1, tzinfo=timezone.utc)
+                end = datetime(parts[0] + 1, 1, 1, tzinfo=UTC)
             elif len(parts) == 2:
                 year, month = parts
-                end = datetime(
-                    year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc
-                )
+                end = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=UTC)
             else:
                 end = start + timedelta(days=1)
             return "AND media.created_ms >= ? AND media.created_ms < ?", (
-                (start - datetime(1970, 1, 1, tzinfo=timezone.utc))
-                // timedelta(milliseconds=1),
-                (end - datetime(1970, 1, 1, tzinfo=timezone.utc))
-                // timedelta(milliseconds=1),
+                (start - datetime(1970, 1, 1, tzinfo=UTC)) // timedelta(milliseconds=1),
+                (end - datetime(1970, 1, 1, tzinfo=UTC)) // timedelta(milliseconds=1),
             )
         raise ValueError("Invalid virtual folder path")
 

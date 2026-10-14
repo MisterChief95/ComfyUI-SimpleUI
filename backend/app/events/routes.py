@@ -65,7 +65,7 @@ async def generation_events(websocket: WebSocket) -> None:
                 event = await asyncio.wait_for(
                     subscription.receive(), timeout=RECONCILE_POLL_S
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # GEN-003: this app runs no perpetual background poller (by
                 # design -- see GenerationService.reconcile_if_due), and nothing
                 # else drives reconciliation for a generation the frontend is
