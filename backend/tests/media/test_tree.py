@@ -1,6 +1,6 @@
 """Computed gallery folders share owner isolation and the gallery keyset query."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.storage import DEFAULT_PROFILE_ID, Repository
 
@@ -17,7 +17,7 @@ class MediaTreeTest(MediaApiTestCase):
         self.generation = self.generation_for(
             DEFAULT_PROFILE_ID, self.workflow, "owned"
         )
-        self.start = int(datetime(2026, 10, 3, tzinfo=timezone.utc).timestamp() * 1000)
+        self.start = int(datetime(2026, 10, 3, tzinfo=UTC).timestamp() * 1000)
         self.images = [
             self.add_media(
                 f"private/path/{i}.png", self.start + i, generation=self.generation
