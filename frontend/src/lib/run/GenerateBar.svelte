@@ -44,11 +44,11 @@
 					inputmode="numeric"
 					value={run.batch}
 					disabled={run.submitting}
-					onchange={(e) => {
+					oninput={(e) => {
 						const n = Math.trunc(Number(e.currentTarget.value));
-						run.batch = Number.isFinite(n) ? Math.min(MAX_BATCH, Math.max(1, n)) : 1;
-						e.currentTarget.value = String(run.batch);
+						if (Number.isFinite(n)) run.batch = Math.min(MAX_BATCH, Math.max(1, n));
 					}}
+					onchange={(e) => (e.currentTarget.value = String(run.batch))}
 				/>
 			</label>
 		{/if}
