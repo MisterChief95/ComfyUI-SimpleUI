@@ -3,7 +3,7 @@
 	// phone, because the page is a flex column that ends here).
 	import Icon from '$lib/ui/Icon.svelte';
 	import { isTerminal } from './status';
-	import type { RunState } from './run.svelte';
+	import { MAX_BATCH, type RunState } from './run.svelte';
 
 	let { run }: { run: RunState } = $props();
 
@@ -33,6 +33,25 @@
 				{run.cancelling ? 'Cancelling…' : 'Cancel'}
 			</button>
 		{/if}
+		{#if run.hasRandomSeed}
+			<label class="batch" title="Jobs to queue per click, each with its own random seed">
+				<span>Batch</span>
+				<input
+					type="number"
+					min="1"
+					max={MAX_BATCH}
+					step="1"
+					inputmode="numeric"
+					value={run.batch}
+					disabled={run.submitting}
+					oninput={(e) => {
+						const n = Math.trunc(Number(e.currentTarget.value));
+						if (Number.isFinite(n)) run.batch = Math.min(MAX_BATCH, Math.max(1, n));
+					}}
+					onchange={(e) => (e.currentTarget.value = String(run.batch))}
+				/>
+			</label>
+		{/if}
 		<button
 			type="button"
 			class="btn btn-primary generate"
@@ -41,7 +60,7 @@
 			onclick={() => run.submit()}
 		>
 			<Icon name="generate" size={16} />
-			{run.submitting ? 'Submitting…' : 'Generate'}
+			{run.submitting ? 'Submitting…' : run.count > 1 ? `Generate ×${run.count}` : 'Generate'}
 		</button>
 	</div>
 </div>
@@ -81,6 +100,16 @@
 	}
 	.btn {
 		white-space: nowrap;
+	}
+	.batch {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
+	}
+	.batch input {
+		width: 4rem;
 	}
 	.generate {
 		flex: 2 1 10rem;
