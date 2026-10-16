@@ -12,6 +12,8 @@
 	import { lastWorkflow } from './lastWorkflow.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
 	import { navCollapsed } from './navCollapsed.svelte';
+	import { activityState } from '$lib/run/activity.svelte';
+	import { badge } from '$lib/run/activity';
 
 	// The one place to add a destination. Generate returns to the last run page.
 	const items = $derived<{ match: string; href: string; label: string; icon: IconName }[]>([
@@ -39,6 +41,15 @@
 
 	const profile = $derived(session.info?.profile ?? null);
 	const multiUser = $derived(session.info?.multi_user ?? false);
+
+	// Running/waiting count on Generate, from any page. Restarts per profile so one
+	// profile's counts never show for another.
+	const profileId = $derived(profile?.id ?? null);
+	$effect(() => {
+		if (profileId === null) return;
+		return activityState.start();
+	});
+	const activity = $derived(badge(activityState.activity));
 </script>
 
 {#if profile && multiUser}
@@ -66,6 +77,11 @@
 				>
 					<Icon name={item.icon} size={20} />
 					<span class="label">{item.label}</span>
+					{#if item.match === '/generation' && activity}
+						<span class="activity" role="status" aria-label={activity.label} title={activity.label}>
+							{activity.text}
+						</span>
+					{/if}
 				</a>
 			</li>
 		{/each}
@@ -156,6 +172,21 @@
 	li {
 		flex: 1 1 0;
 		min-width: 0;
+	}
+	.activity {
+		position: absolute;
+		top: 0.3rem;
+		left: calc(50% + 0.4rem);
+		min-width: 1.1rem;
+		padding: 0 0.3rem;
+		border-radius: 999px;
+		background: var(--color-accent);
+		color: var(--color-accent-text);
+		font-size: 0.625rem;
+		font-weight: 700;
+		line-height: 1.1rem;
+		text-align: center;
+		pointer-events: none;
 	}
 	a {
 		position: relative;
@@ -282,6 +313,12 @@
 
 	/* ---- desktop: labelled rail ---- */
 	@media (min-width: 1200px) {
+		nav:not(.collapsed) .activity {
+			left: auto;
+			right: 0.75rem;
+			top: 50%;
+			transform: translateY(-50%);
+		}
 		nav {
 			min-width: 0;
 			padding: var(--space-3) 0.75rem;
