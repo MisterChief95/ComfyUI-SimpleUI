@@ -577,6 +577,14 @@
 	.chips .chip {
 		flex: none;
 	}
+	/* Fade the right edge so a cut-off chip reads as "scroll for more"; the end padding
+	   keeps the last chip clear of the fade once scrolled all the way. */
+	@media (max-width: 767px) {
+		.chips {
+			padding-inline-end: 1.5rem;
+			mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+		}
+	}
 	.jump {
 		display: flex;
 		gap: var(--space-1);
