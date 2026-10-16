@@ -3,7 +3,8 @@
 	// recent-outputs strip with "Reuse settings".
 	import Icon from '$lib/ui/Icon.svelte';
 	import Thumbnail from '$lib/media/Thumbnail.svelte';
-	import { api, describeApiError } from '$lib/api';
+	import { api, apiJson, describeApiError } from '$lib/api';
+	import Star from '$lib/media/Star.svelte';
 	import type { GenerationDetail } from '$lib/contracts';
 	import Viewer from '$lib/media/Viewer.svelte';
 	import { GalleryState } from '$lib/media/gallery.svelte';
@@ -19,6 +20,22 @@
 	const outputs = $derived(
 		shown?.generation_id === latest?.id ? tracker.outputs : tracker.pickedOutputs
 	);
+	// Favorite changes made here; the tracker's items are snapshots, so remember them locally.
+	let favoriteOverride = $state<Record<string, boolean>>({});
+	const isFavorite = $derived(
+		shown ? (favoriteOverride[shown.id] ?? Boolean(shown.favorite)) : false
+	);
+	async function toggleFavorite(): Promise<void> {
+		if (!shown) return;
+		const id = shown.id;
+		const favorite = !isFavorite;
+		try {
+			await apiJson(`/media/${id}`, 'PUT', { favorite });
+			favoriteOverride = { ...favoriteOverride, [id]: favorite };
+		} catch (cause) {
+			copyMessage = describeApiError(cause);
+		}
+	}
 	const outputIndex = $derived(outputs.findIndex((item) => item.id === shown?.id));
 	const info = $derived(statusInfo(latest));
 	const failure = $derived(
@@ -191,6 +208,22 @@
 			</nav>
 		{/if}
 		<div class="row wrap tools">
+			<button
+				type="button"
+				class="btn"
+				aria-pressed={isFavorite}
+				aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+				title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+				onclick={() => void toggleFavorite()}
+			>
+				<Star filled={isFavorite} size={16} />
+				{isFavorite ? 'Favorited' : 'Favorite'}
+			</button>
+			{#if shown.state !== 'unavailable'}
+				<a class="btn" href={`/api/media/${shown.id}/download`} download>
+					<Icon name="download" size={16} /> Download
+				</a>
+			{/if}
 			<button
 				type="button"
 				class="btn"
