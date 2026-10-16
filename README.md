@@ -68,6 +68,22 @@ committed virtualenv; create one from `backend/requirements.txt` first), then
 (`npm test` runs the pure-logic `node --test` suites and needs Node ≥ 22). Python lint and
 format: `ruff check` and `ruff format --check`.
 
+### Pre-commit hooks
+
+`.pre-commit-config.yaml` runs the same lint and format checks as CI (`.github/workflows/lint.yml`)
+on each commit: `ruff check` and `ruff format` (pinned to the CI version) for Python, and
+`npm run lint` and `npm run format:check` for `frontend/` when frontend files change. One-time setup:
+
+```
+pip install pre-commit   # or: pipx install pre-commit
+cd frontend && npm ci && cd ..
+pre-commit install
+```
+
+Run all hooks manually with `pre-commit run --all-files`. If `format:check` or `ruff format` fails, run
+`npm run format` (in `frontend/`) or `ruff format` and re-stage. Type checks and tests (`npm run check`,
+`npm test`) are left to CI. When bumping ruff, update both the workflow and the `rev` in the config.
+
 ## Running it
 
 1. Configure ComfyUI's URL via `SIMPLEUI_COMFY_URL` (default `http://127.0.0.1:8188`), and

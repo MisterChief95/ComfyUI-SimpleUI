@@ -1,0 +1,22 @@
+# Mirrors .github/workflows/lint.yml. Setup: see README.md ("Pre-commit hooks").
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8 # keep in sync with the ruff version in .github/workflows/lint.yml
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: frontend lint (npm run lint)
+        entry: npm --prefix frontend run lint
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      - id: frontend-format-check
+        name: frontend format check (npm run format:check)
+        entry: npm --prefix frontend run format:check
+        language: system
+        files: ^frontend/
+        pass_filenames: false
