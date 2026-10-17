@@ -34,8 +34,11 @@
 			</button>
 		{/if}
 		{#if run.hasRandomSeed}
-			<label class="batch" title="Jobs to queue per click, each with its own random seed">
-				<span>Batch</span>
+			<label
+				class="batch"
+				title="Times to run per click, each with its own random seed (not the same as Batch size)"
+			>
+				<span>Repeat</span>
 				<input
 					type="number"
 					min="1"
