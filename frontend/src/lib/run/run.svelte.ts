@@ -4,7 +4,6 @@ import { tick } from 'svelte';
 import { readJson, writeJson } from '$lib/ui/storage';
 import { replaceState } from '$app/navigation';
 import { api, apiJson, ApiRequestError, describeApiError } from '$lib/api';
-import { friendlySchema } from '$lib/controls/labels';
 import type {
 	ControlDescriptor,
 	ControlSchema,
@@ -209,9 +208,7 @@ export class RunState {
 					{ method: 'DELETE' }
 				);
 			}
-			this.schema = await api<ControlSchema>(`/workflows/${this.workflowId}/controls`).then(
-				friendlySchema
-			);
+			this.schema = await api<ControlSchema>(`/workflows/${this.workflowId}/controls`);
 		} catch (cause) {
 			this.notice = describeApiError(cause);
 		}
@@ -223,7 +220,7 @@ export class RunState {
 		this.loadError = null;
 		const [workflows, schema, layout] = await Promise.allSettled([
 			api<Page<WorkflowInfo>>('/workflows?limit=200'),
-			api<ControlSchema>(`/workflows/${this.workflowId}/controls`).then(friendlySchema),
+			api<ControlSchema>(`/workflows/${this.workflowId}/controls`),
 			api<WorkflowLayout>(`/workflows/${this.workflowId}/layout`)
 		]);
 		if (workflows.status === 'fulfilled') this.workflows = workflows.value.items;
