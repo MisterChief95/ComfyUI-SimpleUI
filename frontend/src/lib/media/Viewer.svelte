@@ -5,7 +5,6 @@
 	// and (opt-in, per device) vertical swipe: up = next, down = previous.
 	import { onMount } from 'svelte';
 	import { api, describeApiError } from '$lib/api';
-	import { friendlySchema } from '$lib/controls/labels';
 	import { goto } from '$app/navigation';
 	import { startSlideshow } from './viewerPlayback';
 	import { on } from 'svelte/events';
@@ -78,7 +77,7 @@
 		sendControls = [];
 		if (!id) return;
 		try {
-			const schema = await api<ControlSchema>(`/workflows/${id}/controls`).then(friendlySchema);
+			const schema = await api<ControlSchema>(`/workflows/${id}/controls`);
 			sendControls = schema.controls.filter((c) => c.component === 'file');
 			if (sendControls.length === 1) sendBinding = sendControls[0].binding_id;
 		} catch (cause) {

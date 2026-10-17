@@ -12,7 +12,6 @@
 // back to the saved snapshot is clean) or any draft differs from the schema.
 import { tick } from 'svelte';
 import { api, apiJson, ApiRequestError, describeApiError } from '$lib/api';
-import { friendlySchema } from '$lib/controls/labels';
 import type {
 	Correction,
 	ControlDescriptor,
@@ -173,7 +172,7 @@ export class Designer {
 		try {
 			const id = this.workflowId;
 			const [schema, layout, corrections, list] = await Promise.all([
-				api<ControlSchema>(`/workflows/${id}/controls`).then(friendlySchema),
+				api<ControlSchema>(`/workflows/${id}/controls`),
 				api<WorkflowLayout>(`/workflows/${id}/layout`),
 				api<Correction[]>(`/workflows/${id}/corrections`),
 				api<Page<WorkflowInfo>>('/workflows?limit=200').catch(() => null)
@@ -210,7 +209,7 @@ export class Designer {
 	private async refreshSchema(): Promise<void> {
 		const id = this.workflowId;
 		const [schema, corrections] = await Promise.all([
-			api<ControlSchema>(`/workflows/${id}/controls`).then(friendlySchema),
+			api<ControlSchema>(`/workflows/${id}/controls`),
 			api<Correction[]>(`/workflows/${id}/corrections`)
 		]);
 		this.schema = schema;
